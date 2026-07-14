@@ -283,10 +283,13 @@
           <path d="M86 ${64 + dy} q-9 -8 -17 -1 q-4 9 5 12 q13 2 12 -11z" fill="url(#pSkinH)"/>
           <path d="M66 ${66 + dy} l0 46" stroke="#5e4c2c" stroke-width="2.4" opacity="0.7"/>
           <path d="M58 ${86 + dy} h7 M67 ${86 + dy} h7 M59 ${97 + dy} h6 M67 ${97 + dy} h6 M60 ${108 + dy} h5 M67 ${108 + dy} h5" stroke="#5e4c2c" stroke-width="2" opacity="0.6"/>
-          <g fill="#4a3c22" opacity="0.55">
-            <ellipse cx="52" cy="${74 + dy}" rx="3.4" ry="2.2"/><ellipse cx="82" cy="${78 + dy}" rx="4" ry="2.4"/><ellipse cx="58" cy="${112 + dy}" rx="3.4" ry="2"/>
-            <ellipse cx="76" cy="${104 + dy}" rx="2.8" ry="2"/><ellipse cx="48" cy="${94 + dy}" rx="2.8" ry="2"/><ellipse cx="86" cy="${94 + dy}" rx="2.8" ry="1.8"/>
+          <g fill="#241806" opacity="0.7">
+            <ellipse cx="52" cy="${74 + dy}" rx="4.6" ry="3"/><ellipse cx="82" cy="${78 + dy}" rx="5.4" ry="3.4"/><ellipse cx="58" cy="${112 + dy}" rx="4.6" ry="2.8"/>
+            <ellipse cx="76" cy="${104 + dy}" rx="3.8" ry="2.8"/><ellipse cx="48" cy="${94 + dy}" rx="3.8" ry="2.8"/><ellipse cx="86" cy="${94 + dy}" rx="3.8" ry="2.4"/>
           </g>
+          <path d="M50 ${56 + dy} L62 ${48 + dy} L58 ${60 + dy}z M84 ${56 + dy} L72 ${48 + dy} L76 ${60 + dy}z" fill="url(#pSkinD)"/>
+          <path d="M48 ${78 + dy} L54 ${98 + dy} M86 ${78 + dy} L80 ${98 + dy}" stroke="#2e2008" stroke-width="3.4" opacity="0.75" fill="none"/>
+          <path d="M54 ${80 + dy} l5 3 M53 ${87 + dy} l5 3 M80 ${80 + dy} l-5 3 M81 ${87 + dy} l-5 3" stroke="#2e2008" stroke-width="2.2" opacity="0.6" fill="none"/>
           <path d="M48 ${120 + dy} h38 l3.4 12 q-10 6 -22 6 q-12 0 -22 -6z" fill="#3a3e44" stroke="#22262a" stroke-width="1.6"/>
           <path d="M52 ${124 + dy} h30" stroke="#565b61" stroke-width="2"/>
           <path d="M82 ${52 + dy} q14 -2 16 12 q1 8 -6 12 l-10 -4 q4 -10 0 -20z" fill="#4a4f55" stroke="#22262a" stroke-width="1.6"/>
@@ -295,6 +298,8 @@
           <path d="M48 ${20 + dy} q4 -12 18 -12 q14 0 18 12 q2 7 -1 12 l-34 0 q-3 -5 -1 -12z" fill="url(#pSkin)"/>
           <path d="M46 ${30 + dy} q20 -7 42 0 l-2.4 5 q-18 -5 -37 0z" fill="url(#pSkinD)"/>
           <path d="M50 ${14 + dy} q6 -3.4 12 -2.4 M62 ${10 + dy} q6 -1.2 11 1.2" stroke="#75633f" stroke-width="2.4" fill="none" opacity="0.8"/>
+          <path d="M53 ${13 + dy} Q44 ${4 + dy} 47 ${-6 + dy} q8 4 10 15z" fill="url(#pMand)" stroke="#4a3a20" stroke-width="1"/>
+          <path d="M81 ${13 + dy} Q90 ${4 + dy} 87 ${-6 + dy} q-8 4 -10 15z" fill="url(#pMand)" stroke="#4a3a20" stroke-width="1"/>
           <ellipse cx="58" cy="${33 + dy}" rx="4" ry="2.8" fill="#1c1408"/><ellipse cx="76" cy="${33 + dy}" rx="4" ry="2.8" fill="#1c1408"/>
           <circle cx="58.5" cy="${33 + dy}" r="1.9" fill="url(#pEye)"/><circle cx="75.5" cy="${33 + dy}" r="1.9" fill="url(#pEye)"/>
           <ellipse cx="67" cy="${44 + dy}" rx="9" ry="${6 + mand * 0.5}" fill="#3a1012"/>
@@ -310,31 +315,32 @@
           ${bleg(72, p.l2, p.l2b, false)}${barm(84, p.ra, p.rab, false, true)}`;
       };
       const BDEFS = `<defs>
-        <linearGradient id="pSkin" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#b09a62"/><stop offset="100%" stop-color="#7a6640"/></linearGradient>
-        <linearGradient id="pSkinH" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#cbb87e"/><stop offset="100%" stop-color="#9a8654"/></linearGradient>
-        <linearGradient id="pSkinD" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#7a6640"/><stop offset="100%" stop-color="#54452a"/></linearGradient>
+        <linearGradient id="pSkin" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#8a7040"/><stop offset="100%" stop-color="#503c1e"/></linearGradient>
+        <linearGradient id="pSkinH" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#a8894e"/><stop offset="100%" stop-color="#6e5630"/></linearGradient>
+        <linearGradient id="pSkinD" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#54401f"/><stop offset="100%" stop-color="#2e2008"/></linearGradient>
         <linearGradient id="pMand" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#c4ae74"/><stop offset="100%" stop-color="#e2d2a0"/></linearGradient>
         <linearGradient id="bladeG" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#d7dbe0"/><stop offset="100%" stop-color="#8b9299"/></linearGradient>
         <radialGradient id="pEye" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#ffe9a0"/><stop offset="60%" stop-color="#ffcf4a"/><stop offset="100%" stop-color="#a06010"/></radialGradient>
       </defs>`;
-      const rotFrame = (inner, deg) => `<g transform="rotate(${deg} 65 108)">${inner}</g>`;
+      const rotFrame = (inner, deg) => `<g transform="rotate(${deg} 65 114)">${inner}</g>`;
+      const foldF = (inner, k, ty) => `<g transform="translate(0 ${ty}) scale(1 ${k})">${inner}</g>`; // compress: the beast FOLDS (#35)
       const BFRAMES = [
-        beastFrame({}), beastFrame({ dy: 2.6, mand: 4, ds: 2 }),                                                                 // idle heave, mandible flex
-        beastFrame({ l1: 28, l1b: -14, l2: -22, l2b: 18, la: -18, lab: 8, ra: 20, rab: -10, ds: 4 }),                            // run cycle (6)
-        beastFrame({ l1: 16, l1b: 4, l2: -10, l2b: 8, la: -8, ra: 10, dy: 1.6, ds: 2 }),
-        beastFrame({ l1: 4, l1b: 8, l2: 2, l2b: -2, la: 4, ra: 2, dy: 3, ds: 0 }),
-        beastFrame({ l1: -22, l1b: 20, l2: 28, l2b: -14, la: 20, lab: -10, ra: -18, rab: 8, ds: -4 }),
-        beastFrame({ l1: -10, l1b: 8, l2: 16, l2b: 4, la: 10, ra: -8, dy: 1.6, ds: -2 }),
-        beastFrame({ l1: 2, l1b: -2, l2: 4, l2b: 8, la: 2, ra: 4, dy: 3, ds: 0 }),
-        beastFrame({ dy: -4, mand: 8, l1: 34, l1b: -20, l2: -26, l2b: 26, la: -50, lab: -20, ra: -62, rab: -28, ds: -6 }),        // lunge: blades forward, mandibles flared
-        rotFrame(beastFrame({ la: -66, lab: -18, ra: -74, rab: -12, l1: -28, l1b: 20, l2: -36, l2b: 26, mand: 2 }), -74),         // wall cling A
-        rotFrame(beastFrame({ la: -48, lab: -30, ra: -88, rab: -6, l1: -40, l1b: 30, l2: -22, l2b: 16, mand: 2, dy: 2 }), -74),   // wall crawl B
+        rotFrame(beastFrame({}), 4), rotFrame(beastFrame({ dy: 2.6, mand: 4, ds: 2 }), 5),                                       // hunched idle
+        rotFrame(beastFrame({ l1: 28, l1b: -14, l2: -22, l2b: 18, la: -26, lab: 14, ra: 28, rab: -16, ds: 4 }), 9),               // loping run (6)
+        rotFrame(beastFrame({ l1: 16, l1b: 4, l2: -10, l2b: 8, la: -12, ra: 14, dy: 2.2, ds: 2 }), 8),
+        rotFrame(beastFrame({ l1: 4, l1b: 8, l2: 2, l2b: -2, la: 6, ra: 2, dy: 4.2, ds: 0 }), 7),
+        rotFrame(beastFrame({ l1: -22, l1b: 20, l2: 28, l2b: -14, la: 28, lab: -16, ra: -26, rab: 14, ds: -4 }), 9),
+        rotFrame(beastFrame({ l1: -10, l1b: 8, l2: 16, l2b: 4, la: 14, ra: -12, dy: 2.2, ds: -2 }), 8),
+        rotFrame(beastFrame({ l1: 2, l1b: -2, l2: 4, l2b: 8, la: 2, ra: 6, dy: 4.2, ds: 0 }), 7),
+        beastFrame({ dy: -4, mand: 8, l1: 34, l1b: -20, l2: -26, l2b: 26, la: -50, lab: -20, ra: -62, rab: -28, ds: -6 }),        // lunge
+        rotFrame(foldF(beastFrame({ la: -66, lab: -18, ra: -74, rab: -12, l1: -28, l1b: 20, l2: -36, l2b: 26, mand: 2 }), 0.85, 16), -74),   // wall cling (part-folded)
+        rotFrame(foldF(beastFrame({ la: -48, lab: -30, ra: -88, rab: -6, l1: -40, l1b: 30, l2: -22, l2b: 16, mand: 2, dy: 2 }), 0.85, 16), -74),
         rotFrame(beastFrame({ l1: 42, l1b: 55, l2: 36, l2b: 50, la: -38, lab: -30, ra: -44, rab: -34, mand: 5 }), 14),            // body drop
-        rotFrame(beastFrame({ la: -66, lab: -20, ra: -76, rab: -10, l1: -30, l1b: 22, l2: -38, l2b: 28, mand: 2 }), 180),         // ceiling cling A
-        rotFrame(beastFrame({ la: -48, lab: -32, ra: -90, rab: -4, l1: -42, l1b: 32, l2: -24, l2b: 18, mand: 2, dy: 2 }), 180),   // ceiling crawl B
+        rotFrame(foldF(beastFrame({ la: -78, lab: -34, ra: -84, rab: -28, l1: -52, l1b: 46, l2: -58, l2b: 50, mand: 2 }), 0.64, 40), 180),   // ceiling: FOLDED tight
+        rotFrame(foldF(beastFrame({ la: -60, lab: -44, ra: -96, rab: -18, l1: -60, l1b: 54, l2: -46, l2b: 40, mand: 2, dy: 2 }), 0.64, 40), 180),
         beastFrame({ l1: 18, l1b: 28, l2: 14, l2b: 32, la: 6, ra: 6, dy: 5, mand: 3 }),                                           // land recovery
       ];
-      loadSprite("stalker", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="${130 * 15}" height="216">${BDEFS}${BFRAMES.map((f, i) => `<g transform="translate(${i * 130} 4)">${f}</g>`).join("")}</svg>`),
+      loadSprite("stalker", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="${130 * 15}" height="228">${BDEFS}${BFRAMES.map((f, i) => `<g transform="translate(${i * 130} 14)">${f}</g>`).join("")}</svg>`),
         { sliceX: 15, anims: { idle: { from: 0, to: 1, speed: 2, loop: true }, run: { from: 2, to: 7, speed: 13, loop: true }, jump: 8, cling: { from: 9, to: 10, speed: 6, loop: true }, drop: 11, ceil: { from: 12, to: 13, speed: 6, loop: true }, land: 14, climb: { from: 0, to: 1, speed: 3, loop: true } } });
 
       loadSprite("redglow", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80"><defs><radialGradient id="rg" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#ff5040" stop-opacity="0.55"/><stop offset="100%" stop-color="#ff5040" stop-opacity="0"/></radialGradient></defs><circle cx="40" cy="40" r="40" fill="url(#rg)"/></svg>`));
@@ -720,7 +726,7 @@
           sc: 0.5, shadowY: 66, cardScale: 0.66, areaY: 0.82,
           blurb: ["Blaster (J/X) + Bomb (K/Y)", "Standard jump", "Fragile — 3 HP", "He is faster. Outsmart him."] },
         stalker: { name: "The STALKER — Beast", sprite: "stalker", color: [216, 140, 70], speed: 345, jumpForce: 800, doubleJump: true, maxHp: 4, mode: "melee", wallClimb: true,
-          sc: 0.5, shadowY: 102, glow: [11, -71], cardScale: 0.58, areaY: 0.72,
+          sc: 0.42, shadowY: 106, glow: [11, -67], cardScale: 0.52, areaY: 0.72,
           blurb: ["Claw lunge (J/X)", "Faster • wall-climb • dbl jump", "Tough — 4 HP", "Run him down."] },
       };
 
