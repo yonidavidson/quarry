@@ -32,6 +32,79 @@
       const TS = 48; // tile size in px
       setGravity(2100);
 
+      // =====================================================================
+      // JUICE: sound (tiny Web Audio synth — no asset files)
+      // =====================================================================
+      let _ac = null;
+      function ac() {
+        if (!_ac) { try { _ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} }
+        if (_ac && _ac.state === "suspended") _ac.resume();
+        return _ac;
+      }
+      // Play a sequence of [freq, dur, type?, vol?, slideTo?] notes back-to-back.
+      function seq(notes) {
+        const a = ac();
+        if (!a) return;
+        let t = a.currentTime;
+        for (const [f, d, ty, v, slide] of notes) {
+          const o = a.createOscillator(), g = a.createGain();
+          o.type = ty || "square";
+          o.frequency.setValueAtTime(f, t);
+          if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(1, slide), t + d);
+          g.gain.setValueAtTime(v || 0.12, t);
+          g.gain.exponentialRampToValueAtTime(0.0008, t + d);
+          o.connect(g).connect(a.destination);
+          o.start(t); o.stop(t + d + 0.02);
+          t += d;
+        }
+      }
+      const SFX = {
+        jump: () => seq([[360, 0.12, "square", 0.12, 620]]),
+        jump2: () => seq([[520, 0.12, "square", 0.11, 900]]),
+        shoot: () => seq([[720, 0.09, "sawtooth", 0.09, 240]]),
+        claw: () => seq([[200, 0.13, "square", 0.13, 90]]),
+        kill: () => seq([[150, 0.2, "triangle", 0.16, 55]]),
+        pickup: () => seq([[659, 0.07, "square", 0.12], [988, 0.12, "square", 0.12]]),
+        hurt: () => seq([[180, 0.26, "sawtooth", 0.18, 70]]),
+        win: () => seq([[523, 0.1], [659, 0.1], [784, 0.1], [1046, 0.24]]),
+        lose: () => seq([[392, 0.14], [311, 0.14], [233, 0.32, "sawtooth"]]),
+      };
+
+      // =====================================================================
+      // JUICE: particles, floating text, dust, screen flash
+      // =====================================================================
+      function burst(p, col, n = 12, spd = 220, sz = 7) {
+        for (let i = 0; i < n; i++) {
+          const v = vec2(rand(-1, 1), rand(-1, 1)).unit().scale(rand(spd * 0.35, spd));
+          add([
+            rect(rand(sz * 0.5, sz), rand(sz * 0.5, sz)),
+            pos(p), anchor("center"), color(col),
+            opacity(1), lifespan(0.5, { fade: 0.4 }), z(20),
+            { v, update() { this.move(this.v); this.v = this.v.scale(0.9); this.v.y += 700 * dt(); } },
+          ]);
+        }
+      }
+      function dust(p) {
+        for (let i = 0; i < 7; i++) {
+          const v = vec2(rand(-1, 1), rand(-1.1, -0.15)).unit().scale(rand(50, 140));
+          add([
+            circle(rand(2, 4)), pos(p.add(rand(-10, 10), 0)), anchor("center"),
+            color(155, 165, 185), opacity(0.75), lifespan(0.4, { fade: 0.35 }), z(5),
+            { v, update() { this.move(this.v); this.v = this.v.scale(0.9); } },
+          ]);
+        }
+      }
+      function popText(p, str, col) {
+        add([
+          text(str, { size: 20 }), pos(p), anchor("center"), color(col),
+          opacity(1), lifespan(0.6, { fade: 0.5 }), z(30),
+          { update() { this.move(0, -46); } },
+        ]);
+      }
+      function flash(col, a = 0.45) {
+        add([rect(width(), height()), pos(0, 0), fixed(), color(col), opacity(a), lifespan(0.35, { fade: 0.35 }), z(200)]);
+      }
+
       // Two playable "sides" with distinct skills (the core Hunter/Hunted idea).
       const SIDES = {
         human: {
@@ -42,7 +115,7 @@
           jumpForce: 720,
           doubleJump: false,
           maxHp: 3,
-          mode: "ranged", // blaster projectile
+          mode: "ranged",
           blurb: ["Ranged blaster (J / X)", "Standard jump", "Fragile — 3 HP", "Keep your distance."],
         },
         stalker: {
@@ -53,7 +126,7 @@
           jumpForce: 780,
           doubleJump: true,
           maxHp: 4,
-          mode: "melee", // claw lunge
+          mode: "melee",
           blurb: ["Claw lunge (J / X)", "Double jump • faster", "Tough — 4 HP", "Hunt them down, up close."],
         },
       };
@@ -78,6 +151,7 @@
 
       const LEVEL_W = MAP[0].length * TS;
       const LEVEL_H = MAP.length * TS;
+      const wrapv = (v, m) => ((v % m) + m) % m;
 
       // ---- Reusable enemy factory: a drone that patrols left/right ----------
       function spawnEnemy(x, y) {
@@ -103,16 +177,33 @@
         ]);
       }
 
+      // Parallax starfield — fixed to the screen, scrolled by camera fraction.
+      function addStarfield() {
+        for (let i = 0; i < 70; i++) {
+          const base = vec2(rand(0, width()), rand(0, height()));
+          const factor = rand(0.08, 0.4);
+          const sz = rand(1, 3);
+          const star = add([
+            rect(sz, sz), pos(base), fixed(), z(-20),
+            color(120, 140, 190), opacity(rand(0.25, 0.85)),
+          ]);
+          star.onUpdate(() => {
+            const cam = getCamPos();
+            star.pos.x = wrapv(base.x - cam.x * factor, width());
+            star.pos.y = wrapv(base.y - cam.y * factor, height());
+          });
+        }
+      }
+
       // =======================================================================
       // MENU / CHARACTER SELECT
       // =======================================================================
       scene("select", () => {
-        add([text("QUARRY", { size: 64, font: "sans-serif" }), pos(width() / 2, 70), anchor("center"), color(240, 244, 252)]);
+        addStarfield();
+        add([text("QUARRY", { size: 64 }), pos(width() / 2, 70), anchor("center"), color(240, 244, 252)]);
         add([
           text("The world wants you dead either way. Choose your side.", { size: 20 }),
-          pos(width() / 2, 118),
-          anchor("center"),
-          color(150, 160, 180),
+          pos(width() / 2, 118), anchor("center"), color(150, 160, 180),
         ]);
 
         const keys = ["human", "stalker"];
@@ -122,12 +213,8 @@
           const s = SIDES[key];
           const cx = width() / 2 + (i === 0 ? -170 : 170);
           const card = add([
-            rect(300, 250, { radius: 14 }),
-            pos(cx, 300),
-            anchor("center"),
-            color(24, 28, 40),
-            outline(4, rgb(55, 62, 82)),
-            "card",
+            rect(300, 250, { radius: 14 }), pos(cx, 300), anchor("center"),
+            color(24, 28, 40), outline(4, rgb(55, 62, 82)), scale(1), "card",
           ]);
           card.add([text(s.name.toUpperCase(), { size: 18, width: 260, align: "center" }), pos(0, -95), anchor("center"), color(...s.color)]);
           card.add([rect(70, 70, { radius: 8 }), pos(0, -30), anchor("center"), color(...s.color), outline(3, rgb(0, 0, 0))]);
@@ -144,11 +231,13 @@
             c.color = i === sel ? rgb(34, 44, 66) : rgb(24, 28, 40);
             c.outline.color = i === sel ? rgb(120, 200, 255) : rgb(55, 62, 82);
             c.outline.width = i === sel ? 5 : 4;
+            const target = i === sel ? vec2(1.06, 1.06) : vec2(1, 1);
+            tween(c.scale, target, 0.12, (v) => c.scale = v, easings.easeOutQuad);
           });
         }
         refresh();
 
-        const moveSel = (d) => { sel = (sel + d + keys.length) % keys.length; refresh(); };
+        const moveSel = (d) => { sel = (sel + d + keys.length) % keys.length; SFX.pickup(); refresh(); };
         onKeyPress("left", () => moveSel(-1));
         onKeyPress("right", () => moveSel(1));
         onKeyPress("a", () => moveSel(-1));
@@ -156,7 +245,7 @@
         onGamepadButtonPress("dpad-left", () => moveSel(-1));
         onGamepadButtonPress("dpad-right", () => moveSel(1));
 
-        const start = () => go("game", keys[sel]);
+        const start = () => { SFX.jump(); go("game", keys[sel]); };
         onKeyPress("enter", start);
         onKeyPress("space", start);
         onGamepadButtonPress("south", start);
@@ -176,7 +265,11 @@
         let facing = 1;
         let jumpsLeft = maxJumps;
         let lastAtk = 0;
+        let airTime = 0;
         let spawn = vec2(0, 0);
+        let camReady = false;
+
+        addStarfield();
 
         // --- Build the world from the map ---
         MAP.forEach((row, r) => {
@@ -189,7 +282,11 @@
             } else if (ch === "^") {
               add([rect(TS, TS / 2), pos(x, y + TS / 4), anchor("center"), color(205, 70, 80), outline(2, rgb(70, 20, 26)), area(), "danger"]);
             } else if (ch === "$") {
-              add([circle(10), pos(x, y), anchor("center"), color(250, 210, 80), outline(2, rgb(120, 90, 20)), area(), z(3), "energy"]);
+              add([
+                circle(10), pos(x, y), anchor("center"), color(250, 210, 80), outline(2, rgb(120, 90, 20)),
+                area(), scale(1), z(3), "energy",
+                { seed: x, update() { this.scale = vec2(1 + Math.sin(time() * 4 + this.seed) * 0.14); } },
+              ]);
             } else if (ch === "e") {
               spawnEnemy(x, y);
             } else if (ch === ">") {
@@ -202,21 +299,23 @@
 
         // --- Player ---
         const player = add([
-          rect(30, 42, { radius: 5 }),
-          pos(spawn),
-          anchor("center"),
-          color(...CFG.color),
-          outline(3, rgb(0, 0, 0)),
-          area(),
-          body({ jumpForce: CFG.jumpForce }),
-          opacity(1),
-          z(6),
-          "player",
+          rect(30, 42, { radius: 5 }), pos(spawn), anchor("center"),
+          color(...CFG.color), outline(3, rgb(0, 0, 0)),
+          area(), body({ jumpForce: CFG.jumpForce }), opacity(1), scale(1), z(6), "player",
         ]);
-        // little eye so facing reads
         const eye = add([rect(6, 6), pos(0, 0), anchor("center"), color(...CFG.accent), z(7)]);
 
-        player.onGround(() => { jumpsLeft = maxJumps; });
+        // squash & stretch helper
+        function squash(sx, sy) {
+          player.scale = vec2(sx, sy);
+          tween(player.scale, vec2(1, 1), 0.18, (v) => player.scale = v, easings.easeOutQuad);
+        }
+
+        player.onGround(() => {
+          jumpsLeft = maxJumps;
+          if (airTime > 0.16) { squash(1.3, 0.72); dust(player.pos.add(0, 20)); shake(2); }
+          airTime = 0;
+        });
 
         // --- HUD ---
         const hud = add([text("", { size: 20 }), pos(16, 14), fixed(), z(100), color(235, 240, 250)]);
@@ -226,62 +325,61 @@
         }
         updateHUD();
 
+        function killEnemy(e) {
+          addKaboom(e.pos, { scale: 0.6 });
+          burst(e.pos, rgb(220, 90, 95), 14, 240, 7);
+          popText(e.pos, "+1", rgb(255, 150, 150));
+          shake(4); SFX.kill();
+          destroy(e); score += 1; updateHUD();
+        }
+
         // --- Damage handling ---
         function hurt(fromFall) {
           if (invuln && !fromFall) return;
           hp -= 1;
-          shake(7);
+          shake(9); flash(rgb(200, 40, 40), 0.5); SFX.hurt();
+          burst(player.pos, rgb(...CFG.color), 12, 200, 6);
           updateHUD();
-          if (fromFall) {
-            player.pos = spawn.clone();
-            player.vel = vec2(0, 0);
-          }
-          if (hp <= 0) {
-            go("over", { win: false, side: sideKey, score });
-            return;
-          }
+          if (fromFall) { player.pos = spawn.clone(); player.vel = vec2(0, 0); }
+          if (hp <= 0) { SFX.lose(); go("over", { win: false, side: sideKey, score }); return; }
           invuln = true;
           const blink = loop(0.09, () => { player.opacity = player.opacity === 1 ? 0.35 : 1; });
           wait(1.1, () => { blink.cancel(); player.opacity = 1; invuln = false; });
         }
 
-        player.onCollide("energy", (c) => { destroy(c); score += 1; updateHUD(); });
+        player.onCollide("energy", (c) => {
+          burst(c.pos, rgb(250, 215, 90), 10, 170, 6);
+          popText(c.pos, "+1", rgb(255, 240, 170));
+          SFX.pickup(); destroy(c); score += 1; updateHUD();
+        });
         player.onCollide("danger", () => hurt());
         player.onCollide("enemy", () => hurt());
-        player.onCollide("exit", () => go("over", { win: true, side: sideKey, score }));
+        player.onCollide("exit", () => { SFX.win(); go("over", { win: true, side: sideKey, score }); });
 
         // --- Attacks ---
         function shoot() {
+          SFX.shoot();
+          // muzzle flash
+          add([circle(9), pos(player.pos.x + facing * 24, player.pos.y - 4), anchor("center"), color(190, 235, 255), opacity(0.85), lifespan(0.08, { fade: 0.08 }), z(8)]);
           const b = add([
-            rect(18, 6, { radius: 3 }),
-            pos(player.pos.x + facing * 24, player.pos.y - 4),
-            anchor("center"),
-            color(150, 225, 255),
-            outline(2, rgb(20, 70, 100)),
-            area(),
-            move(vec2(facing, 0), 760),
-            offscreen({ destroy: true }),
-            z(5),
-            "bullet",
+            rect(18, 6, { radius: 3 }), pos(player.pos.x + facing * 24, player.pos.y - 4), anchor("center"),
+            color(150, 225, 255), outline(2, rgb(20, 70, 100)), area(),
+            move(vec2(facing, 0), 760), offscreen({ destroy: true }), z(5), "bullet",
           ]);
-          b.onCollide("enemy", (e) => { destroy(e); destroy(b); score += 1; updateHUD(); });
+          b.onCollide("enemy", (e) => { destroy(b); killEnemy(e); });
           b.onCollide("platform", () => destroy(b));
         }
 
         function claw() {
+          SFX.claw();
           player.move(facing * 200, 0); // lunge
+          squash(1.25, 0.85);
           const hb = add([
-            rect(54, 42, { radius: 6 }),
-            pos(player.pos.x + facing * 36, player.pos.y - 2),
-            anchor("center"),
-            color(255, 205, 120),
-            opacity(0.35),
-            area(),
-            lifespan(0.14),
-            z(5),
-            "claw",
+            rect(54, 42, { radius: 6 }), pos(player.pos.x + facing * 36, player.pos.y - 2), anchor("center"),
+            color(255, 205, 120), opacity(0.4), area(), lifespan(0.14, { fade: 0.14 }), z(5), "claw",
           ]);
-          hb.onCollide("enemy", (e) => { destroy(e); score += 1; updateHUD(); });
+          burst(hb.pos, rgb(255, 210, 140), 6, 150, 5);
+          hb.onCollide("enemy", (e) => killEnemy(e));
         }
 
         function attack() {
@@ -292,7 +390,14 @@
 
         // --- Jump ---
         function jump() {
-          if (jumpsLeft > 0) { player.jump(CFG.jumpForce); jumpsLeft -= 1; }
+          if (jumpsLeft > 0) {
+            const mid = jumpsLeft < maxJumps;
+            player.jump(CFG.jumpForce);
+            jumpsLeft -= 1;
+            squash(0.72, 1.3);
+            dust(player.pos.add(0, 20));
+            mid ? SFX.jump2() : SFX.jump();
+          }
         }
         ["space", "up", "w"].forEach((key) => onKeyPress(key, jump));
         onGamepadButtonPress("south", jump);
@@ -310,6 +415,8 @@
         }
 
         player.onUpdate(() => {
+          if (!player.isGrounded()) airTime += dt();
+
           let dx = 0;
           if (isKeyDown("left") || isKeyDown("a")) dx -= 1;
           if (isKeyDown("right") || isKeyDown("d")) dx += 1;
@@ -318,12 +425,14 @@
           const stick = getGamepadStick("left");
           if (stick && Math.abs(stick.x) > 0.3) dx += stick.x;
           dx = clamp(dx, -1, 1);
-          if (Math.abs(dx) > 0.05) {
-            player.move(dx * CFG.speed, 0);
-            facing = dx > 0 ? 1 : -1;
-          }
+          if (Math.abs(dx) > 0.05) { player.move(dx * CFG.speed, 0); facing = dx > 0 ? 1 : -1; }
           eye.pos = player.pos.add(facing * 7, -6);
-          setCamPos(camTarget());
+
+          // smooth (eased) camera follow
+          const target = camTarget();
+          if (!camReady) { setCamPos(target); camReady = true; }
+          else setCamPos(getCamPos().lerp(target, Math.min(1, dt() * 8)));
+
           if (player.pos.y > LEVEL_H + 260) hurt(true);
         });
       });
@@ -334,9 +443,15 @@
       scene("over", ({ win, side, score }) => {
         const s = SIDES[side];
         add([rect(width(), height()), pos(0, 0), color(...(win ? [16, 30, 22] : [30, 16, 18]))]);
+        addStarfield();
         add([text(win ? "YOU ESCAPED" : "HUNTED DOWN", { size: 56 }), pos(width() / 2, 200), anchor("center"), color(win ? rgb(120, 240, 160) : rgb(240, 120, 120))]);
         add([text(`${s.name}   •   Energy collected: ${score}`, { size: 22 }), pos(width() / 2, 270), anchor("center"), color(210, 216, 230)]);
-        add([text("ENTER / A — play again      ESC-menu: press M", { size: 17 }), pos(width() / 2, 340), anchor("center"), color(150, 160, 180)]);
+        add([text("ENTER / A — play again      M — menu", { size: 17 }), pos(width() / 2, 340), anchor("center"), color(150, 160, 180)]);
+
+        if (win) {
+          // little celebratory pops
+          for (let i = 0; i < 5; i++) wait(i * 0.18, () => addKaboom(vec2(rand(200, width() - 200), rand(120, 380)), { scale: 0.5 }));
+        }
 
         const again = () => go("game", side);
         onKeyPress("enter", again);
