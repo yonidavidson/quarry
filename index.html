@@ -418,6 +418,46 @@
       };
       window.__netCancel = () => { try { NET.pc && NET.pc.close(); } catch (e) {} NET.pc = NET.dc = null; NET.connected = false; netUIHide(); };
 
+      // =====================================================================
+      // LIVE TICKER (issue #12): who's playing / who's winning, bottom bar.
+      // Local + P2P events always work. GLOBAL presence activates when the
+      // LIVE config below is filled with a (free) Supabase project:
+      //   1. supabase.com -> new project -> SQL: create table events
+      //      (id bigint generated always as identity primary key,
+      //       created_at timestamptz default now(), msg text not null);
+      //      alter table events enable row level security;
+      //      create policy "read" on events for select using (true);
+      //      create policy "write" on events for insert with check (true);
+      //   2. Fill url + anonKey. That's it — events flow for everyone.
+      // =====================================================================
+      const LIVE = { url: "", anonKey: "" };
+      const TICKER = { items: [], push(msg) { this.items.push({ msg, at: Date.now() }); if (this.items.length > 6) this.items.shift(); } };
+      function liveSend(msg) {
+        TICKER.push(msg);
+        if (!LIVE.url) return;
+        try { fetch(`${LIVE.url}/rest/v1/events`, { method: "POST", headers: { apikey: LIVE.anonKey, Authorization: `Bearer ${LIVE.anonKey}`, "Content-Type": "application/json", Prefer: "return=minimal" }, body: JSON.stringify({ msg }) }).catch(() => {}); } catch (e) {}
+      }
+      async function livePoll() {
+        if (!LIVE.url) return;
+        try {
+          const r = await fetch(`${LIVE.url}/rest/v1/events?select=msg,created_at&order=id.desc&limit=5`, { headers: { apikey: LIVE.anonKey, Authorization: `Bearer ${LIVE.anonKey}` } });
+          const rows = await r.json();
+          rows.reverse().forEach((row) => { if (!TICKER.items.some((i) => i.msg === row.msg)) TICKER.push(row.msg); });
+        } catch (e) {}
+      }
+      if (LIVE.url) setInterval(livePoll, 15000);
+      const CODENAME = "Hunter-" + Math.abs((Date.now() * 2654435761) % 899 + 100); // anonymous fun name
+      // bottom bar that alternates between controls hint and live events
+      function addTicker(controlsLine) {
+        add([rect(width(), 24), pos(0, height() - 24), fixed(), z(196), color(12, 12, 14), opacity(0.85)]);
+        const bar = add([text("", { size: 13 }), pos(12, height() - 18), fixed(), z(200), color(150, 140, 124)]);
+        bar.onUpdate(() => {
+          const showEvents = TICKER.items.length && Math.floor(time() / 8) % 2 === 1;
+          if (showEvents) { bar.text = "◆ " + TICKER.items.slice(-3).map((i) => i.msg).join("   •   "); bar.color = rgb(220, 180, 110); }
+          else { bar.text = controlsLine; bar.color = rgb(150, 140, 124); }
+        });
+      }
+
       // Weapon registry — one held at a time, pools per side (issue #13)
       const WEAPONS = {
         blaster: { side: "human", name: "Blaster", cd: 0.32 },
@@ -521,7 +561,8 @@
           return card;
         });
         add([text("← →  choose      ENTER / A  start      (controller supported)", { size: 15 }), pos(width() / 2, 486), anchor("center"), color(150, 140, 124)]);
-        add([text("O — online 2P: hunt a real friend over WebRTC", { size: 15 }), pos(width() / 2, 512), anchor("center"), color(220, 170, 90)]);
+        add([text("O — online 2P: hunt a real friend over WebRTC", { size: 15 }), pos(width() / 2, 506), anchor("center"), color(220, 170, 90)]);
+        addTicker("QUARRY — the world wants you dead either way.");
         addOverlay();
         onKeyPress("o", () => netUI(`<h3>ONLINE 2P — hunt each other</h3>
           <p>Host picks a side; the joiner gets the other. Exchange two codes over any chat.</p>
@@ -700,7 +741,8 @@
           bombBar.onUpdate(() => { bombBar.width = 120 * clamp((time() - lastBomb) / 1.1, 0, 1); });
         }
         const ctrl = CFG.bomb ? "Bomb: K/Y   " : "Wall: into-wall+Up   ";
-        add([text("Move ←→/AD   Jump Space   Attack J/X   " + ctrl + "Climb ↑↓   Door: E   Pause: Esc   Mute: N", { size: 13 }), pos(16, 520), fixed(), z(200), color(150, 140, 124)]);
+        addTicker("Move ←→/AD   Jump Space   Attack J/X   " + ctrl + "Climb ↑↓   Door: E   Pause: Esc   Mute: N");
+        liveSend(`${CODENAME} enters the hunt as ${sideKey === "human" ? "JACK" : "the BEAST"}${NET.connected ? " (online duel!)" : ""}`);
         const updateHUD = () => {
           pips.forEach((p, i) => (p.opacity = i < hp ? 1 : 0.18));
           energyTxt.text = "" + score;
@@ -731,7 +773,7 @@
           if (invuln && !fromFall) return;
           hp -= 1; shake(9); flash(rgb(180, 40, 30), 0.5); SFX.hurt(); burst(player.pos, rgb(...CFG.color), 12, 200, 6); updateHUD();
           if (fromFall) { player.pos = spawn.clone(); player.vel = vec2(0, 0); }
-          if (hp <= 0) { netSend({ t: "dead" }); SFX.lose(); go("over", { win: false, side: sideKey, score, online: NET.connected, how: NET.connected ? "They hunted you down." : undefined }); return; }
+          if (hp <= 0) { liveSend(`${CODENAME} was hunted down (${score} energy)`); netSend({ t: "dead" }); SFX.lose(); go("over", { win: false, side: sideKey, score, online: NET.connected, how: NET.connected ? "They hunted you down." : undefined }); return; }
           invuln = true; const blink = loop(0.09, () => (player.opacity = player.opacity === 1 ? 0.35 : 1)); wait(1.1, () => { blink.cancel(); player.opacity = 1; invuln = false; });
         }
         player.onCollide("energy", (c) => { burst(c.pos, rgb(120, 220, 150), 10, 170, 6); popText(c.pos, "+1", rgb(180, 240, 190)); SFX.pickup(); destroy(c); score += 1; updateHUD(); });
@@ -742,10 +784,11 @@
           spawnCrate(old, dropAt); netSend({ t: "crate", w: old, x: dropAt.x, y: dropAt.y });
           SFX.pickup(); popText(player.pos.add(0, -34), WEAPONS[weapon].name + "!", rgb(240, 220, 160));
           burst(dropAt.add(0, -10), rgb(240, 220, 160), 8, 140, 5); updateHUD();
+          TICKER.push(`You armed the ${WEAPONS[weapon].name}`);
         });
         player.onCollide("danger", () => hurt());
         player.onCollide("enemy", () => hurt());
-        player.onCollide("exit", () => { netSend({ t: "escaped" }); SFX.win(); go("over", { win: true, side: sideKey, score, online: NET.connected, how: NET.connected ? "You escaped the hunt." : undefined }); });
+        player.onCollide("exit", () => { liveSend(`${CODENAME} ESCAPED as ${sideKey === "human" ? "JACK" : "the BEAST"} with ${score} energy`); netSend({ t: "escaped" }); SFX.win(); go("over", { win: true, side: sideKey, score, online: NET.connected, how: NET.connected ? "You escaped the hunt." : undefined }); });
 
         function mkBullet(dirY, opts = {}) {
           const b = add([rect(opts.len || 18, opts.h || 5, { radius: 2 }), pos(player.pos.x + facing * 24, player.pos.y - 4), anchor("center"),
@@ -838,6 +881,7 @@
           if (n.hp <= 0) {
             addKaboom(n.pos, { scale: 0.8 }); burst(n.pos, rgb(...NCFG.color), 22, 300, 9);
             popText(n.pos, "+5 HUNTER DOWN", rgb(255, 200, 140)); score += 5; updateHUD();
+            liveSend(`${CODENAME} downed the hunter (+5)`);
             destroy(n); nemesis = null;
             wait(rand(12, 18), () => { if (get("player").length) spawnNemesis(true); });
           } else { n.flash = time() + 0.15; }

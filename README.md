@@ -1,36 +1,51 @@
 # QUARRY
 
-A tiny browser platformer about being the **hunter** *and* the **hunted** — inspired by the asymmetric design of the 1996 classic *Hunter Hunted*, but with its own theme and code.
+A browser hunt-or-be-hunted platformer inspired by the asymmetric design of the 1996 classic *Hunter Hunted* — original theme, art, and code.
 
-Pick a side. The world wants you dead either way.
+**[▶ Play it now](https://yonidavidson.github.io/quarry/)** — one HTML file, no install. Works with keyboard or a plugged-in gamepad (Switch Pro Controller included).
 
-| | 🔵 **Gair — Human** | 🔴 **The Stalker — Alien** |
+## Pick a side
+
+| | 🔵 **JACK — Human** | 🔴 **The STALKER — Beast** |
 |---|---|---|
-| **Edge** | Ranged blaster — kill from a distance | Claw lunge — hunt up close |
-| **Mobility** | Standard jump | Double jump • faster |
+| **Edge** | Blaster + throwable bombs | Claw lunge up close |
+| **Mobility** | Standard jump | **Faster than you** • double jump • wall-climb |
 | **Toughness** | Fragile (3 HP) | Tough (4 HP) |
-| **Playstyle** | Keep your distance | Get in their face |
 
-Dodge spikes, don't fall into pits, destroy the roaming drones, grab energy, and reach the green exit.
+Whichever side you pick, **the other side hunts you** across the complex — an AI nemesis that patrols, spots you, chases across floors, and attacks. When the heartbeat starts, run.
 
-## Play
+## The world wants you dead too
 
-**[▶ Play it here](https://yonidavidson.github.io/quarry/)** — or just open `index.html` in any modern browser. No build step, no install.
+Multi-floor industrial complex: spikes, patrol drones, sewage pools that slow your wading, ladders, climbable chain-nets, teleport doors, flickering lamps, steam vents, ceiling drips. Grab energy cells, find the glowing **EXIT**.
+
+**Random weapons** spawn on pads — you can hold only one; swapping drops your current where you stand. Human pool: Blaster / Scattergun / Rail Lance. Beast pool: Claws / Bone Scythe / Barb Whip. The hunter arms itself too.
+
+## Online 2P — hunt a real friend
+
+Press **O** on the menu. Host picks a side, gets a code; friend pastes it and sends back an answer code; paste that and you're in the same world hunting each other. Pure P2P over WebRTC (Google STUN, no server, no accounts). First to kill the other — or escape — wins.
 
 ## Controls
 
-| Action | Keyboard | Controller |
-|--------|----------|------------|
-| Move | ← → / A D | D-pad / left stick |
-| Jump | Space / W / ↑ | A / bottom button |
-| Attack | J / X | B / X button |
-| Restart | R | — |
+| Action | Keyboard | Gamepad |
+|--------|----------|---------|
+| Move / climb | ←→↑↓ / WASD | stick / d-pad |
+| Jump | Space | A |
+| Attack | J / X | B / X |
+| Bomb (Jack) | K / C | Y |
+| Door | E | d-pad up |
+| Pause / Mute / Restart | Esc / N / R | — |
 
-Plug in a **Switch Pro Controller** (or any gamepad) and it just works, via the browser Gamepad API.
+Wall-climb (Beast): hold into a wall + Up. Coyote time, jump buffering, and variable jump height are all in — the controls are forgiving on purpose.
+
+## Live ticker
+
+The bottom bar shows live events — who entered the hunt, hunter takedowns, escapes. Works locally and across an online duel. Global presence (see everyone playing, worldwide) activates by filling the `LIVE` config in `index.html` with a free Supabase project — setup SQL is in the comment right above it (issue #12).
 
 ## Built with
 
-- [KAPLAY](https://kaplayjs.com) — modern 2D game framework (the maintained successor to Kaboom.js), loaded from a CDN.
+- [KAPLAY](https://kaplayjs.com) (successor to Kaboom.js) from CDN
+- All art: inline SVG (hand-authored sprite strips with real run/idle/jump animation)
+- All audio: Web Audio synthesis — layered noise + tones through a generated impulse-response reverb; ambient machinery hum
 - One self-contained `index.html`. That's the whole game.
 
 ## License
