@@ -22,6 +22,24 @@
       setGravity(2100);
       const svg = (s) => "data:image/svg+xml," + encodeURIComponent(s);
 
+      // post-processing: film grain + vignette + color grade (#18)
+      try {
+        loadShader("grade", null, `
+          uniform float u_time;
+          vec4 frag(vec2 pos, vec2 uv, vec4 color, sampler2D tex) {
+            vec4 c = texture2D(tex, uv);
+            float l = dot(c.rgb, vec3(0.299, 0.587, 0.114));
+            c.rgb = mix(c.rgb * vec3(0.93, 0.97, 1.07), c.rgb * vec3(1.07, 1.01, 0.92), l);
+            float d = distance(uv, vec2(0.5, 0.46));
+            c.rgb *= 1.0 - 0.4 * smoothstep(0.45, 0.9, d);
+            float g = fract(sin(dot(uv + fract(u_time), vec2(12.9898, 78.233))) * 43758.5453);
+            c.rgb += (g - 0.5) * 0.045;
+            c.rgb *= 0.975 + 0.025 * sin(uv.y * 1696.0);
+            return c;
+          }`);
+        onLoad(() => { try { usePostEffect("grade", () => ({ u_time: time() })); } catch (e) {} });
+      } catch (e) {}
+
       // favicon (Stalker eyes)
       (() => {
         const l = document.createElement("link");
@@ -40,11 +58,34 @@
       // interior back-wall panel (tiled across the whole level)
       loadSprite("wall", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128"><rect width="128" height="128" fill="#191b1f"/><g stroke="#111316" stroke-width="2"><line x1="0" y1="64" x2="128" y2="64"/><line x1="64" y1="0" x2="64" y2="128"/></g><g stroke="#262a2f" stroke-width="1" opacity="0.7"><line x1="0" y1="66" x2="128" y2="66"/><line x1="66" y1="0" x2="66" y2="128"/></g><g fill="#111316"><circle cx="10" cy="10" r="2"/><circle cx="118" cy="10" r="2"/><circle cx="10" cy="118" r="2"/><circle cx="118" cy="118" r="2"/><circle cx="64" cy="64" r="2"/></g><ellipse cx="30" cy="92" rx="26" ry="15" fill="#131418" opacity="0.6"/><ellipse cx="100" cy="38" rx="22" ry="13" fill="#131418" opacity="0.5"/><path d="M42 2 l5 124" stroke="#3a2c20" stroke-width="2" opacity="0.14"/></svg>`));
 
+      loadSprite("wall2", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128"><rect width="128" height="128" fill="#17191d"/><g stroke="#101216" stroke-width="2"><line x1="0" y1="64" x2="128" y2="64"/><line x1="64" y1="0" x2="64" y2="128"/></g><g stroke="#23272c" stroke-width="1" opacity="0.7"><line x1="0" y1="66" x2="128" y2="66"/><line x1="66" y1="0" x2="66" y2="128"/></g><rect x="14" y="14" width="36" height="22" rx="3" fill="#101216"/><g stroke="#23272c" stroke-width="2"><line x1="18" y1="19" x2="46" y2="19"/><line x1="18" y1="25" x2="46" y2="25"/><line x1="18" y1="31" x2="46" y2="31"/></g><path d="M88 70 l6 40" stroke="#3a2c20" stroke-width="3" opacity="0.2"/><ellipse cx="96" cy="100" rx="24" ry="14" fill="#121418" opacity="0.6"/></svg>`));
       loadSprite("girder", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="26" height="128"><rect x="4" width="18" height="128" fill="#2b2f33"/><rect x="4" width="4" height="128" fill="#3a3f44"/><rect x="18" width="4" height="128" fill="#1e2124"/><g fill="#15171a"><circle cx="13" cy="12" r="2"/><circle cx="13" cy="44" r="2"/><circle cx="13" cy="76" r="2"/><circle cx="13" cy="108" r="2"/></g></svg>`));
 
       loadSprite("pipeV", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="20" height="48"><rect x="4" width="12" height="48" fill="#3a3f44"/><rect x="4" width="4" height="48" fill="#4a5055"/><rect x="13" width="3" height="48" fill="#22262a"/><rect x="1" y="20" width="18" height="8" rx="2" fill="#2b3034"/></svg>`));
 
-      loadSprite("tile", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48"><rect width="48" height="48" fill="#34383b"/><rect width="48" height="6" fill="#474c4f"/><rect y="6" width="48" height="2" fill="#22262a"/><rect y="43" width="48" height="5" fill="#20242a"/><ellipse cx="26" cy="30" rx="13" ry="7" fill="#2b2e30" opacity="0.55"/><path d="M11 8 l3 32" stroke="#5e3d24" stroke-width="3" opacity="0.45"/><g fill="#20242a"><circle cx="6" cy="12" r="2"/><circle cx="42" cy="12" r="2"/><circle cx="6" cy="39" r="2"/><circle cx="42" cy="39" r="2"/></g></svg>`));
+      // platform tiles: neighbor-aware variants (M mid, L/R caps, S single) — kills repetition (#18)
+      const tileSVG = (leftCap, rightCap) => {
+        const chevrons = (x0, w) => { let s = ""; for (let x = x0; x < x0 + w; x += 12) s += `<path d="M${x} 6 l6 -6 6 0 -6 6z" fill="#c8992e" opacity="0.85"/>`; return `<rect x="${x0}" width="${w}" height="6" fill="#181a1c"/>` + s; };
+        return `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48">
+          <rect width="48" height="48" fill="#3a3f44"/>
+          <rect width="48" height="2" fill="#6a727a"/><rect y="2" width="48" height="5" fill="#4c5257"/><rect y="7" width="48" height="2" fill="#24282c"/>
+          <rect y="42" width="48" height="6" fill="#24282c"/>
+          <path d="M14 12 l2 28 M34 11 l-2 29" stroke="#2e3338" stroke-width="2"/>
+          <ellipse cx="24" cy="28" rx="14" ry="8" fill="#31363b" opacity="0.6"/>
+          <path d="M9 10 l3 30" stroke="#5e3d24" stroke-width="3" opacity="0.35"/>
+          <g fill="#20242a"><circle cx="6" cy="13" r="2"/><circle cx="42" cy="13" r="2"/><circle cx="6" cy="38" r="2"/><circle cx="42" cy="38" r="2"/></g>
+          ${leftCap ? `<rect width="4" height="48" fill="#5b636b"/><rect x="4" width="2" height="48" fill="#24282c"/>${chevrons(0, 22)}` : ""}
+          ${rightCap ? `<rect x="44" width="4" height="48" fill="#5b636b"/><rect x="42" width="2" height="48" fill="#24282c"/>${chevrons(26, 22)}` : ""}
+        </svg>`;
+      };
+      loadSprite("tileM", svg(tileSVG(false, false)));
+      loadSprite("tileL", svg(tileSVG(true, false)));
+      loadSprite("tileR", svg(tileSVG(false, true)));
+      loadSprite("tileS", svg(tileSVG(true, true)));
+      loadSprite("bracket", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26"><path d="M2 0 L24 0 L2 24 Z" fill="#2e3338"/><path d="M2 0 L24 0 L2 24" stroke="#454c52" stroke-width="2" fill="none"/><circle cx="7" cy="6" r="2" fill="#1c2023"/></svg>`));
+      loadSprite("stain", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="60" height="44"><defs><radialGradient id="st" cx="50%" cy="40%" r="55%"><stop offset="0%" stop-color="#0c0d0f" stop-opacity="0.55"/><stop offset="100%" stop-color="#0c0d0f" stop-opacity="0"/></radialGradient></defs><ellipse cx="30" cy="20" rx="30" ry="20" fill="url(#st)"/><path d="M22 30 q2 10 1 13 M34 32 q1 8 3 11" stroke="#0c0d0f" stroke-width="3" opacity="0.35" fill="none"/></svg>`));
+      loadSprite("pipeH", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="192" height="18"><rect y="3" width="192" height="10" fill="#2c3136"/><rect y="3" width="192" height="3" fill="#3d444a"/><rect y="11" width="192" height="2" fill="#1b1f23"/><g fill="#24292e"><rect x="30" width="8" height="18" rx="2"/><rect x="110" width="8" height="18" rx="2"/><rect x="170" width="8" height="18" rx="2"/></g><path d="M70 13 q2 6 1 9" stroke="#5e3d24" stroke-width="2" opacity="0.5" fill="none"/></svg>`));
+      loadSprite("depthfog", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="8" height="540"><defs><linearGradient id="dg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#000" stop-opacity="0"/><stop offset="55%" stop-color="#000" stop-opacity="0.08"/><stop offset="100%" stop-color="#0a0806" stop-opacity="0.42"/></linearGradient></defs><rect width="8" height="540" fill="url(#dg)"/></svg>`));
 
       loadSprite("ladder", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48"><rect x="10" width="5" height="48" fill="#4a4030"/><rect x="33" width="5" height="48" fill="#4a4030"/><g fill="#5a4f3a"><rect x="10" y="5" width="28" height="4"/><rect x="10" y="21" width="28" height="4"/><rect x="10" y="37" width="28" height="4"/></g><g fill="#2e281c"><rect x="10" y="5" width="28" height="1"/><rect x="10" y="21" width="28" height="1"/><rect x="10" y="37" width="28" height="1"/></g></svg>`));
 
@@ -383,7 +424,11 @@
         d.style.display = "flex";
         d.innerHTML = `<div style="max-width:640px;width:92%;background:#191a1e;border:2px solid #55503f;border-radius:12px;padding:24px">${html}</div>`;
       }
-      function netUIHide() { const d = document.getElementById("netui"); if (d) d.style.display = "none"; }
+      function netUIHide() { const d = document.getElementById("netui"); if (d) d.style.display = "none"; refocusGame(); }
+      // keyboard lives on the canvas — refocus it whenever DOM steals focus (#17)
+      function refocusGame() { const c = document.querySelector("canvas"); if (c) { c.setAttribute("tabindex", "0"); c.focus(); } }
+      document.addEventListener("pointerdown", () => { const n = document.getElementById("netui"); if (!n || n.style.display === "none") setTimeout(refocusGame, 0); });
+      window.addEventListener("focus", () => { const n = document.getElementById("netui"); if (!n || n.style.display === "none") refocusGame(); });
       const NETSTYLE = `style="width:100%;height:86px;background:#0e0f12;color:#cfc8b0;border:1px solid #444;border-radius:6px;margin:6px 0;font-family:monospace;font-size:11px"`;
       const NETBTN = `style="background:#c8992e;color:#141414;border:none;border-radius:6px;padding:8px 16px;font-family:monospace;font-weight:bold;cursor:pointer;margin-right:8px"`;
       window.__netHostStart = async (side) => {
@@ -613,14 +658,32 @@
 
         // --- sky + interior wall + structure ---
         add([sprite("sky"), pos(0, 0), fixed(), z(-100)]);
-        for (let wy = 0; wy < LEVEL_H; wy += 128) for (let wx = 0; wx < LEVEL_W; wx += 128) add([sprite("wall"), pos(wx, wy), anchor("topleft"), z(-45), opacity(0.9)]);
+        for (let wy = 0; wy < LEVEL_H; wy += 128) for (let wx = 0; wx < LEVEL_W; wx += 128) {
+          const v = ((wx / 128 + wy / 128) * 2654435761) % 7 < 2 ? "wall2" : "wall"; // deterministic variety
+          add([sprite(v), pos(wx, wy), anchor("topleft"), z(-45), opacity(0.9)]);
+          if (((wx / 128) * 31 + (wy / 128) * 17) % 9 === 3) add([sprite("stain"), pos(wx + 34, wy + 60), anchor("center"), z(-44), opacity(0.8)]);
+        }
+        // long pipe runs crossing the complex (silhouette depth layer)
+        for (const py of [150, 420, 700]) for (let px = -40; px < LEVEL_W; px += 192) add([sprite("pipeH"), pos(px, py + (px / 192 % 2 ? 2 : 0)), anchor("topleft"), z(-38), opacity(0.85)]);
         for (let gx = 40; gx < LEVEL_W; gx += 360) for (let gy = 0; gy < LEVEL_H; gy += 128) add([sprite("girder"), pos(gx, gy), anchor("topleft"), z(-30), opacity(0.8)]);
+        // depth fog: dark pools at the bottom of the frame, air up top
+        add([sprite("depthfog"), pos(0, 0), fixed(), z(-25), scale(width() / 8, 1)]);
         addFog(); addDust();
 
         // --- build solids/hazards/pickups from GRID ---
         GRID.forEach((row, r) => row.forEach((ch, c) => {
           const x = c * TS + TS / 2, y = r * TS + TS / 2;
-          if (ch === "=") add([sprite("tile"), pos(x, y), anchor("center"), area(), body({ isStatic: true }), z(2), "platform"]);
+          if (ch === "=") {
+            const L = row[c - 1] === "=", R = row[c + 1] === "=";
+            const variant = L && R ? "tileM" : !L && R ? "tileL" : L && !R ? "tileR" : "tileS";
+            add([sprite(variant), pos(x, y), anchor("center"), area(), body({ isStatic: true }), z(2), "platform"]);
+            // support brackets under floating platform caps
+            const below = GRID[r + 1] && GRID[r + 1][c];
+            if (below !== "=" && r < GRID.length - 1) {
+              if (!L) add([sprite("bracket"), pos(x - TS / 2 + 2, y + TS / 2), anchor("topleft"), z(1), opacity(0.9)]);
+              if (!R) add([sprite("bracket"), pos(x + TS / 2 - 2, y + TS / 2), anchor("topleft"), z(1), opacity(0.9), { add() { this.flipX = true; this.pos.x -= 26; } }]);
+            }
+          }
           else if (ch === "H") add([sprite("ladder"), pos(x, y), anchor("center"), area(), z(1), "ladder"]);
           else if (ch === "N") add([sprite("net"), pos(x, y), anchor("center"), area(), z(1), "ladder", "net"]);
           else if (ch === "^") add([sprite("spikes"), pos(x, r * TS + TS), anchor("bot"), area(), z(3), "danger"]);
