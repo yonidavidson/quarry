@@ -329,6 +329,95 @@
       // =====================================================================
       // SIDES
       // =====================================================================
+      // =====================================================================
+      // NET (issue #11): WebRTC 2P — manual code exchange, Google STUN
+      // =====================================================================
+      const NET = { pc: null, dc: null, role: null, mySide: null, connected: false, onMsg: null, ping: 0 };
+      const b64e = (s) => btoa(unescape(encodeURIComponent(s)));
+      const b64d = (s) => decodeURIComponent(escape(atob(s.trim())));
+      const iceDone = (pc) => new Promise((res) => {
+        if (pc.iceGatheringState === "complete") return res();
+        pc.addEventListener("icegatheringstatechange", () => pc.iceGatheringState === "complete" && res());
+        setTimeout(res, 4000); // STUN can stall; ship what we have
+      });
+      function netSend(o) { if (NET.dc && NET.dc.readyState === "open") NET.dc.send(JSON.stringify(o)); }
+      function wireDC(dc) {
+        dc.onopen = () => {
+          NET.connected = true;
+          if (NET.role === "host") { netSend({ t: "hello", side: NET.mySide }); netUIHide(); go("game", NET.mySide); }
+        };
+        dc.onmessage = (e) => {
+          const m = JSON.parse(e.data);
+          if (m.t === "hello") { NET.mySide = m.side === "human" ? "stalker" : "human"; netUIHide(); go("game", NET.mySide); }
+          else if (m.t === "ping") netSend({ t: "pong", ts: m.ts });
+          else if (m.t === "pong") NET.ping = Math.round(performance.now() - m.ts);
+          if (NET.onMsg) NET.onMsg(m);
+        };
+        dc.onclose = () => { NET.connected = false; };
+      }
+      async function netHost(side) {
+        NET.role = "host"; NET.mySide = side;
+        const pc = (NET.pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] }));
+        wireDC((NET.dc = pc.createDataChannel("game")));
+        await pc.setLocalDescription(await pc.createOffer());
+        await iceDone(pc);
+        return b64e(JSON.stringify(pc.localDescription));
+      }
+      async function netHostAccept(answerCode) { await NET.pc.setRemoteDescription(JSON.parse(b64d(answerCode))); }
+      async function netJoin(offerCode) {
+        NET.role = "guest";
+        const pc = (NET.pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] }));
+        pc.ondatachannel = (e) => wireDC((NET.dc = e.channel));
+        await pc.setRemoteDescription(JSON.parse(b64d(offerCode)));
+        await pc.setLocalDescription(await pc.createAnswer());
+        await iceDone(pc);
+        return b64e(JSON.stringify(pc.localDescription));
+      }
+      // DOM overlay for code exchange (canvas text input is miserable)
+      function netUI(html) {
+        let d = document.getElementById("netui");
+        if (!d) {
+          d = document.createElement("div"); d.id = "netui"; document.body.appendChild(d);
+          d.style.cssText = "position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(8,8,10,0.88);z-index:50;font-family:monospace;color:#e6dcc8";
+        }
+        d.style.display = "flex";
+        d.innerHTML = `<div style="max-width:640px;width:92%;background:#191a1e;border:2px solid #55503f;border-radius:12px;padding:24px">${html}</div>`;
+      }
+      function netUIHide() { const d = document.getElementById("netui"); if (d) d.style.display = "none"; }
+      const NETSTYLE = `style="width:100%;height:86px;background:#0e0f12;color:#cfc8b0;border:1px solid #444;border-radius:6px;margin:6px 0;font-family:monospace;font-size:11px"`;
+      const NETBTN = `style="background:#c8992e;color:#141414;border:none;border-radius:6px;padding:8px 16px;font-family:monospace;font-weight:bold;cursor:pointer;margin-right:8px"`;
+      window.__netHostStart = async (side) => {
+        const code = await netHost(side);
+        netUI(`<h3>HOSTING as ${side === "human" ? "JACK" : "the BEAST"}</h3>
+          <p>1. Send this code to your friend (any chat):</p>
+          <textarea ${NETSTYLE} readonly onclick="this.select()">${code}</textarea>
+          <button ${NETBTN} onclick="navigator.clipboard.writeText(document.querySelector('#netui textarea').value)">Copy</button>
+          <p>2. Paste their ANSWER code here:</p>
+          <textarea ${NETSTYLE} id="ansIn"></textarea>
+          <button ${NETBTN} onclick="__netHostFinish()">Connect</button>
+          <button ${NETBTN} onclick="__netCancel()">Cancel</button><p id="netStat"></p>`);
+      };
+      window.__netHostFinish = async () => {
+        try { await netHostAccept(document.getElementById("ansIn").value); document.getElementById("netStat").textContent = "Connecting…"; }
+        catch (e) { document.getElementById("netStat").textContent = "Bad code: " + e.message; }
+      };
+      window.__netJoinStart = () => {
+        netUI(`<h3>JOIN a hunt</h3><p>1. Paste the HOST code:</p>
+          <textarea ${NETSTYLE} id="offIn"></textarea>
+          <button ${NETBTN} onclick="__netJoinGen()">Generate answer</button>
+          <button ${NETBTN} onclick="__netCancel()">Cancel</button><div id="ansOut"></div><p id="netStat"></p>`);
+      };
+      window.__netJoinGen = async () => {
+        try {
+          const ans = await netJoin(document.getElementById("offIn").value);
+          document.getElementById("ansOut").innerHTML = `<p>2. Send this ANSWER back to the host, then wait:</p>
+            <textarea ${NETSTYLE} readonly onclick="this.select()">${ans}</textarea>
+            <button ${NETBTN} onclick="navigator.clipboard.writeText(document.querySelector('#ansOut textarea').value)">Copy</button>`;
+          document.getElementById("netStat").textContent = "Waiting for host to connect…";
+        } catch (e) { document.getElementById("netStat").textContent = "Bad code: " + e.message; }
+      };
+      window.__netCancel = () => { try { NET.pc && NET.pc.close(); } catch (e) {} NET.pc = NET.dc = null; NET.connected = false; netUIHide(); };
+
       // Weapon registry — one held at a time, pools per side (issue #13)
       const WEAPONS = {
         blaster: { side: "human", name: "Blaster", cd: 0.32 },
@@ -431,8 +520,15 @@
           s.blurb.forEach((line, j) => card.add([text("• " + line, { size: 14, width: 260 }), pos(-128, 34 + j * 24), anchor("left"), color(198, 190, 176)]));
           return card;
         });
-        add([text("← →  choose      ENTER / A  start      (controller supported)", { size: 15 }), pos(width() / 2, 500), anchor("center"), color(150, 140, 124)]);
+        add([text("← →  choose      ENTER / A  start      (controller supported)", { size: 15 }), pos(width() / 2, 486), anchor("center"), color(150, 140, 124)]);
+        add([text("O — online 2P: hunt a real friend over WebRTC", { size: 15 }), pos(width() / 2, 512), anchor("center"), color(220, 170, 90)]);
         addOverlay();
+        onKeyPress("o", () => netUI(`<h3>ONLINE 2P — hunt each other</h3>
+          <p>Host picks a side; the joiner gets the other. Exchange two codes over any chat.</p>
+          <button ${NETBTN} onclick="__netHostStart('human')">Host as JACK</button>
+          <button ${NETBTN} onclick="__netHostStart('stalker')">Host as BEAST</button>
+          <button ${NETBTN} onclick="__netJoinStart()">Join</button>
+          <button ${NETBTN} onclick="__netCancel()">Cancel</button>`));
         const refresh = () => cards.forEach((c, i) => { c.color = i === sel ? rgb(40, 38, 34) : rgb(26, 26, 28); c.outline.color = i === sel ? rgb(220, 170, 70) : rgb(58, 58, 62); c.outline.width = i === sel ? 5 : 4; tween(c.scale, i === sel ? vec2(1.06) : vec2(1), 0.12, (v) => (c.scale = v), easings.easeOutQuad); });
         refresh();
         const moveSel = (d) => { sel = (sel + d + keys.length) % keys.length; SFX.pickup(); refresh(); };
@@ -476,7 +572,7 @@
           else if (ch === "N") add([sprite("net"), pos(x, y), anchor("center"), area(), z(1), "ladder", "net"]);
           else if (ch === "^") add([sprite("spikes"), pos(x, r * TS + TS), anchor("bot"), area(), z(3), "danger"]);
           else if (ch === "$") add([sprite("cell"), pos(x, y), anchor("center"), area({ scale: 1.1 }), scale(1), z(3), "energy", { seed: x, update() { this.scale = vec2(1 + Math.sin(time() * 4 + this.seed) * 0.12); } }]);
-          else if (ch === "e") spawnEnemy(x, y);
+          else if (ch === "e") { if (!NET.connected) spawnEnemy(x, y); } // online: the other player IS the hunter
           else if (ch === ">") {
             add([sprite("exit"), pos(x, r * TS + TS), anchor("bot"), area(), z(3), "exit"]);
             add([sprite("exitsign"), pos(x, r * TS - 78), anchor("center"), z(3), { s: 0, update() { this.opacity = 0.8 + Math.sin(time() * 2.5) * 0.2; } }]);
@@ -553,9 +649,12 @@
           cr.add([sprite("lamp"), pos(0, -12), anchor("center"), scale(0.35), opacity(0.35), z(-2)]);
           return cr;
         }
-        for (let i = 0; i < 3; i++) spawnCrate(choose(WPOOL(sideKey)));
-        for (let i = 0; i < 2; i++) spawnCrate(choose(WPOOL(NKEY2)));
-        loop(25, () => { if (get("wcrate").length < 5) spawnCrate(choose(WPOOL(rand() < 0.6 ? sideKey : NKEY2))); });
+        function spawnCrateSynced(wkey, at) { const cr = spawnCrate(wkey, at); netSend({ t: "crate", w: wkey, x: cr.pos.x, y: cr.pos.y }); return cr; }
+        if (!NET.connected || NET.role === "host") { // online: host owns crate spawns
+          for (let i = 0; i < 3; i++) spawnCrateSynced(choose(WPOOL(sideKey)));
+          for (let i = 0; i < 2; i++) spawnCrateSynced(choose(WPOOL(NKEY2)));
+          loop(25, () => { if (get("wcrate").length < 5) spawnCrateSynced(choose(WPOOL(rand() < 0.6 ? sideKey : NKEY2))); });
+        }
 
         // --- player ---
         const player = add([sprite(CFG.sprite, { anim: "idle" }), pos(spawn), anchor("center"), area({ scale: vec2(0.6, 0.82) }), body({ jumpForce: CFG.jumpForce }), opacity(1), scale(1), z(6), "player"]);
@@ -632,20 +731,21 @@
           if (invuln && !fromFall) return;
           hp -= 1; shake(9); flash(rgb(180, 40, 30), 0.5); SFX.hurt(); burst(player.pos, rgb(...CFG.color), 12, 200, 6); updateHUD();
           if (fromFall) { player.pos = spawn.clone(); player.vel = vec2(0, 0); }
-          if (hp <= 0) { SFX.lose(); go("over", { win: false, side: sideKey, score }); return; }
+          if (hp <= 0) { netSend({ t: "dead" }); SFX.lose(); go("over", { win: false, side: sideKey, score, online: NET.connected, how: NET.connected ? "They hunted you down." : undefined }); return; }
           invuln = true; const blink = loop(0.09, () => (player.opacity = player.opacity === 1 ? 0.35 : 1)); wait(1.1, () => { blink.cancel(); player.opacity = 1; invuln = false; });
         }
         player.onCollide("energy", (c) => { burst(c.pos, rgb(120, 220, 150), 10, 170, 6); popText(c.pos, "+1", rgb(180, 240, 190)); SFX.pickup(); destroy(c); score += 1; updateHUD(); });
         player.onCollide("wcrate", (c) => {
           if (WEAPONS[c.wkey].side !== sideKey || time() - c.born < 1) return; // 1s grace stops swap loops
           const old = weapon; weapon = c.wkey;
-          const dropAt = c.pos.clone(); destroy(c); spawnCrate(old, dropAt);
+          const dropAt = c.pos.clone(); netSend({ t: "crateTake", x: c.pos.x, y: c.pos.y }); destroy(c);
+          spawnCrate(old, dropAt); netSend({ t: "crate", w: old, x: dropAt.x, y: dropAt.y });
           SFX.pickup(); popText(player.pos.add(0, -34), WEAPONS[weapon].name + "!", rgb(240, 220, 160));
           burst(dropAt.add(0, -10), rgb(240, 220, 160), 8, 140, 5); updateHUD();
         });
         player.onCollide("danger", () => hurt());
         player.onCollide("enemy", () => hurt());
-        player.onCollide("exit", () => { SFX.win(); go("over", { win: true, side: sideKey, score }); });
+        player.onCollide("exit", () => { netSend({ t: "escaped" }); SFX.win(); go("over", { win: true, side: sideKey, score, online: NET.connected, how: NET.connected ? "You escaped the hunt." : undefined }); });
 
         function mkBullet(dirY, opts = {}) {
           const b = add([rect(opts.len || 18, opts.h || 5, { radius: 2 }), pos(player.pos.x + facing * 24, player.pos.y - 4), anchor("center"),
@@ -671,7 +771,11 @@
           hb.onCollide("enemy", (e) => killEnemy(e));
           hb.onCollide("nemesis", (n) => { hitNemesis(n); if (weapon === "whip" && n.exists()) n.move(facing * 320, 0); });
         }
-        function attack() { if (time() - lastAtk < WEAPONS[weapon].cd) return; lastAtk = time(); CFG.mode === "ranged" ? fireRanged() : meleeStrike(); }
+        function attack() {
+          if (time() - lastAtk < WEAPONS[weapon].cd) return; lastAtk = time();
+          CFG.mode === "ranged" ? fireRanged() : meleeStrike();
+          netSend({ t: "atk", kind: weapon, x: Math.round(player.pos.x), y: Math.round(player.pos.y), dir: facing });
+        }
         // debug hook (used by the headless test harness)
         window.__quarry = { give: (w) => { if (WEAPONS[w]) { weapon = w; updateHUD(); } }, weapon: () => weapon, attack };
         function explode(p) {
@@ -687,6 +791,7 @@
           const g = add([sprite("bomb"), pos(player.pos.x + facing * 16, player.pos.y - 6), anchor("center"), area({ scale: 0.7 }), body(), rotate(0), z(5), "bomb"]);
           g.vel = vec2(facing * 360, -430); g.onUpdate(() => { g.angle += facing * 420 * dt(); });
           wait(0.9, () => { if (g.exists()) { const p = g.pos.clone(); destroy(g); explode(p); } });
+          netSend({ t: "atk", kind: "bomb", x: Math.round(player.pos.x), y: Math.round(player.pos.y), dir: facing });
         }
         function useDoor() {
           if (nearDoor && nearDoor.partner && time() - lastDoorTime < 0.1 && time() > doorCd) {
@@ -820,11 +925,65 @@
             if (n.pos.y > LEVEL_H + 200) { n.pos = NEM_SPAWNS[0].clone(); n.vel = vec2(0, 0); n.climbing = false; n.gravityScale = 1; }
           });
         }
-        spawnNemesis(false);
+        if (!NET.connected) spawnNemesis(false);
+
+        // ============= ONLINE 2P (issue #11): remote player sync =============
+        let remote = null, rTarget = null, rHp = SIDES[NKEY].maxHp;
+        if (NET.connected) {
+          remote = add([sprite(NCFG.sprite, { anim: "idle" }), pos(-9999, -9999), anchor("center"), area({ scale: vec2(0.6, 0.82) }), z(6), "remote", { anim: "idle" }]);
+          remote.add([sprite("shadow"), pos(0, NCFG.shadowY), anchor("center"), z(-1), opacity(0.6)]);
+          if (NCFG.glow) {
+            const g = remote.add([sprite("redglow"), pos(NCFG.glow[0], NCFG.glow[1]), anchor("center"), scale(0.55), opacity(0.4), z(1)]);
+            g.onUpdate(() => { g.pos.x = NCFG.glow[0] * (remote.flipX ? -1 : 1); });
+          }
+          remote.onUpdate(() => { if (rTarget) remote.pos = remote.pos.lerp(rTarget, Math.min(1, dt() * 14)); });
+          remote.onCollide("player", () => { if (NCFG.mode === "melee") hurt(); }); // beast body contact hurts
+
+          // link HUD + ping
+          const link = add([text("", { size: 13 }), pos(width() - 14, 14), anchor("topright"), fixed(), z(200), color(120, 220, 140)]);
+          loop(2, () => netSend({ t: "ping", ts: performance.now() }));
+          link.onUpdate(() => { link.text = NET.connected ? `LINK ● ${NET.ping}ms` : "LINK LOST"; link.color = NET.connected ? rgb(120, 220, 140) : rgb(230, 90, 80); });
+
+          // outbound state @20Hz
+          loop(0.05, () => netSend({ t: "s", x: Math.round(player.pos.x), y: Math.round(player.pos.y), f: facing, a: curAnim, hp }));
+
+          function remoteAttack(m) {
+            if (m.kind === "bomb") {
+              const g = add([sprite("bomb"), pos(m.x + m.dir * 16, m.y - 6), anchor("center"), area({ scale: 0.7 }), body(), rotate(0), z(5)]);
+              g.vel = vec2(m.dir * 360, -430);
+              wait(0.9, () => { if (g.exists()) { const p = g.pos.clone(); destroy(g); SFX.boom(); shake(8); burst(p, rgb(240, 170, 80), 16, 280, 8); if (player.pos.dist(p) < 110) hurt(); } });
+            } else if (WEAPONS[m.kind] && WEAPONS[m.kind].side === "human") {
+              const mk = (dy, opts = {}) => {
+                const b = add([rect(opts.len || 18, 5, { radius: 2 }), pos(m.x + m.dir * 24, m.y - 4), anchor("center"), color(255, 130, 110), outline(2, rgb(90, 30, 20)), area(), move(vec2(m.dir, dy).unit(), opts.spd || 780), offscreen({ destroy: true }), z(5), ...(opts.life ? [lifespan(opts.life)] : [])]);
+                b.onCollide("player", () => { if (!opts.pierce) destroy(b); hurt(); });
+                b.onCollide("platform", () => destroy(b));
+              };
+              if (m.kind === "scatter") { mk(-0.14, { life: 0.3, spd: 700 }); mk(0, { life: 0.34, spd: 730 }); mk(0.14, { life: 0.3, spd: 700 }); SFX.scatterS(); }
+              else if (m.kind === "rail") { mk(0, { pierce: true, spd: 1300, len: 36 }); SFX.rail(); }
+              else { mk(0, {}); SFX.shoot(); }
+            } else { // melee swing
+              const [w2, h2, reach] = m.kind === "scythe" ? [84, 60, 44] : m.kind === "whip" ? [110, 18, 66] : [54, 42, 36];
+              const hb = add([rect(w2, h2, { radius: 6 }), pos(m.x + m.dir * reach, m.y - 2), anchor("center"), color(255, 130, 110), opacity(0.3), area(), lifespan(0.14, { fade: 0.14 }), z(5)]);
+              hb.onCollide("player", () => hurt()); SFX.claw();
+            }
+          }
+
+          NET.onMsg = (m) => {
+            if (m.t === "s") { rTarget = vec2(m.x, m.y); remote.flipX = m.f < 0; rHp = m.hp; if (remote.anim !== m.a) { remote.anim = m.a; remote.play(m.a); } }
+            else if (m.t === "atk") remoteAttack(m);
+            else if (m.t === "crate") spawnCrate(m.w, vec2(m.x, m.y));
+            else if (m.t === "crateTake") { const c = get("wcrate").sort((a, b) => a.pos.dist(vec2(m.x, m.y)) - b.pos.dist(vec2(m.x, m.y)))[0]; if (c && c.pos.dist(vec2(m.x, m.y)) < 40) destroy(c); }
+            else if (m.t === "dead") { SFX.win(); go("over", { win: true, side: sideKey, score, online: true, how: "You hunted them down." }); }
+            else if (m.t === "escaped") { SFX.lose(); go("over", { win: false, side: sideKey, score, online: true, how: "Your prey escaped." }); }
+          };
+
+          // watch for disconnect mid-game
+          loop(1, () => { if (!NET.connected) { popText(player.pos.add(0, -50), "LINK LOST", rgb(230, 90, 80)); wait(1.5, () => { NET.onMsg = null; go("select"); }); } });
+        }
 
         // dread feedback: warning text + heartbeat when the hunter is close
         onUpdate(() => {
-          const n = nemesis;
+          const n = nemesis || remote;
           const d = n ? n.pos.dist(player.pos) : 1e9;
           warn.text = "⚠ THE HUNTER IS NEAR";
           warn.opacity = d < 420 ? 0.45 + Math.sin(time() * 6) * 0.3 : 0;
@@ -900,16 +1059,18 @@
       // =====================================================================
       // GAME OVER
       // =====================================================================
-      scene("over", ({ win, side, score }) => {
+      scene("over", ({ win, side, score, online, how }) => {
         const s = SIDES[side];
+        if (online) window.__netCancel(); // close the peer link cleanly
         add([sprite("sky"), pos(0, 0), fixed(), z(-100)]); menuParallax(); addFog(); addDust();
         add([rect(width(), height()), pos(0, 0), fixed(), color(...(win ? [16, 26, 20] : [26, 14, 14])), opacity(0.45), z(-10)]);
         add([sprite(s.sprite, { anim: "idle" }), pos(width() / 2, 130), anchor("center"), scale(2.2)]);
-        add([text(win ? "YOU ESCAPED" : "HUNTED DOWN", { size: 54 }), pos(width() / 2, 250), anchor("center"), color(win ? rgb(150, 220, 160) : rgb(220, 110, 100)), outline(4, rgb(20, 18, 16))]);
-        add([text(`${s.name}   •   Energy collected: ${score}`, { size: 22 }), pos(width() / 2, 312), anchor("center"), color(210, 200, 186)]);
-        add([text("ENTER / A — play again      M — menu", { size: 17 }), pos(width() / 2, 372), anchor("center"), color(160, 150, 134)]);
+        add([text(win ? (online ? "VICTORY" : "YOU ESCAPED") : "HUNTED DOWN", { size: 54 }), pos(width() / 2, 250), anchor("center"), color(win ? rgb(150, 220, 160) : rgb(220, 110, 100)), outline(4, rgb(20, 18, 16))]);
+        if (how) add([text(how, { size: 20 }), pos(width() / 2, 296), anchor("center"), color(200, 188, 170)]);
+        add([text(`${s.name}   •   Energy collected: ${score}`, { size: 22 }), pos(width() / 2, how ? 334 : 312), anchor("center"), color(210, 200, 186)]);
+        add([text(online ? "M — menu (reconnect for a rematch)" : "ENTER / A — play again      M — menu", { size: 17 }), pos(width() / 2, 384), anchor("center"), color(160, 150, 134)]);
         addOverlay();
-        const again = () => go("game", side);
+        const again = () => (online ? go("select") : go("game", side));
         onKeyPress("enter", again); onKeyPress("space", again); onGamepadButtonPress("south", again);
         onKeyPress("m", () => go("select")); onGamepadButtonPress("start", () => go("select"));
       });
