@@ -48,6 +48,24 @@
 
       loadSprite("ladder", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48"><rect x="10" width="5" height="48" fill="#4a4030"/><rect x="33" width="5" height="48" fill="#4a4030"/><g fill="#5a4f3a"><rect x="10" y="5" width="28" height="4"/><rect x="10" y="21" width="28" height="4"/><rect x="10" y="37" width="28" height="4"/></g><g fill="#2e281c"><rect x="10" y="5" width="28" height="1"/><rect x="10" y="21" width="28" height="1"/><rect x="10" y="37" width="28" height="1"/></g></svg>`));
 
+      // climbable chain-net (free 2D climb, like the HH net towers)
+      loadSprite("net", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48">
+        <g stroke="#6a5a40" stroke-width="2.2">
+          <path d="M0 0 L48 48 M16 0 L48 32 M32 0 L48 16 M0 16 L32 48 M0 32 L16 48"/>
+          <path d="M48 0 L0 48 M32 0 L0 32 M16 0 L0 16 M48 16 L16 48 M48 32 L32 48"/>
+        </g>
+        <g stroke="#3a3222" stroke-width="1" opacity="0.8">
+          <path d="M0 0 L48 48 M48 0 L0 48"/>
+        </g>
+        <rect x="0" width="3" height="48" fill="#4a4030"/><rect x="45" width="3" height="48" fill="#4a4030"/></svg>`));
+
+      // glowing EXIT sign
+      loadSprite("exitsign", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="56" height="26">
+        <rect x="2" y="2" width="52" height="22" rx="3" fill="#0d1a12" stroke="#1e3a28" stroke-width="2"/>
+        <rect x="4" y="4" width="48" height="18" rx="2" fill="#123020" opacity="0.9"/>
+        <text x="28" y="18" text-anchor="middle" font-family="monospace" font-size="13" font-weight="bold" fill="#7ef0a0">EXIT</text>
+      </svg>`));
+
       loadSprite("door", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="40" height="66"><rect x="2" y="2" width="36" height="64" rx="4" fill="#2b2f33"/><rect x="6" y="6" width="28" height="56" rx="3" fill="#141314"/><rect x="6" y="6" width="28" height="56" rx="3" fill="none" stroke="#c8992e" stroke-width="2" opacity="0.85"/><ellipse cx="20" cy="34" rx="11" ry="24" fill="#e8b13a" opacity="0.18"/><circle cx="20" cy="8" r="3" fill="#f0c04a"/><g stroke="#c8992e" stroke-width="2" opacity="0.5"><line x1="10" y1="22" x2="30" y2="22"/><line x1="10" y1="46" x2="30" y2="46"/></g></svg>`));
 
       loadSprite("spikes", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="48" height="24"><rect y="18" width="48" height="6" fill="#2f3436"/><g fill="#5a5f61" stroke="#20242a" stroke-width="1"><path d="M2 22 L8 3 L14 22 z"/><path d="M14 22 L20 3 L26 22 z"/><path d="M26 22 L32 3 L38 22 z"/><path d="M38 22 L44 3 L48 22 z"/></g><g stroke="#7a4a28" stroke-width="1" opacity="0.5"><path d="M8 6 l0 12"/><path d="M32 6 l0 12"/></g></svg>`));
@@ -288,6 +306,9 @@
 
       const GRID = RAW.map((r) => r.split(""));
       for (const L of LADDERS) for (let r = L.r0; r <= L.r1; r++) if (GRID[r]) GRID[r][L.c] = "H";
+      // chain-nets: free-climb panels (N) — like ladders but visually nets
+      const NETS = [{ c: 36, r0: 3, r1: 4 }, { c: 50, r0: 3, r1: 4 }, { c: 8, r0: 6, r1: 7 }, { c: 66, r0: 9, r1: 10 }];
+      for (const N of NETS) for (let r = N.r0; r <= N.r1; r++) if (GRID[r] && GRID[r][N.c] === " ") GRID[r][N.c] = "N";
       // Climbable wall stubs (#8): 2-tile walls for the Stalker. A guard skips
       // candidates near enemies/ladders/doors/hazards or without ground below.
       const WALL_CANDIDATES = [
@@ -352,6 +373,7 @@
         const CLIMB = 155;
         let hp = CFG.maxHp, score = 0, invuln = false, facing = 1, jumpsLeft = maxJumps;
         let lastAtk = 0, airTime = 0, spawn = vec2(0, 0), camReady = false, lastBomb = 0;
+        let lastGroundedAt = 0, jumpBufferedAt = -1; // coyote time + jump buffering
         let wallDir = 0, lastWallTime = -1, wallStick = 0;
         let lastLadderTime = -1, ladderCd = 0, onLadderNow = false;
         let nearDoor = null, lastDoorTime = -1, doorCd = 0;
@@ -368,10 +390,15 @@
           const x = c * TS + TS / 2, y = r * TS + TS / 2;
           if (ch === "=") add([sprite("tile"), pos(x, y), anchor("center"), area(), body({ isStatic: true }), z(2), "platform"]);
           else if (ch === "H") add([sprite("ladder"), pos(x, y), anchor("center"), area(), z(1), "ladder"]);
+          else if (ch === "N") add([sprite("net"), pos(x, y), anchor("center"), area(), z(1), "ladder", "net"]);
           else if (ch === "^") add([sprite("spikes"), pos(x, r * TS + TS), anchor("bot"), area(), z(3), "danger"]);
           else if (ch === "$") add([sprite("cell"), pos(x, y), anchor("center"), area({ scale: 1.1 }), scale(1), z(3), "energy", { seed: x, update() { this.scale = vec2(1 + Math.sin(time() * 4 + this.seed) * 0.12); } }]);
           else if (ch === "e") spawnEnemy(x, y);
-          else if (ch === ">") add([sprite("exit"), pos(x, r * TS + TS), anchor("bot"), area(), z(3), "exit"]);
+          else if (ch === ">") {
+            add([sprite("exit"), pos(x, r * TS + TS), anchor("bot"), area(), z(3), "exit"]);
+            add([sprite("exitsign"), pos(x, r * TS - 78), anchor("center"), z(3), { s: 0, update() { this.opacity = 0.8 + Math.sin(time() * 2.5) * 0.2; } }]);
+            add([sprite("lamp"), pos(x, r * TS - 60), anchor("center"), z(-8), color(120, 240, 160), opacity(0.5)]);
+          }
           else if (ch === "@") spawn = vec2(x, y);
         }));
 
@@ -409,7 +436,12 @@
           glow.onUpdate(() => { glow.pos.x = CFG.glow[0] * facing; glow.opacity = 0.3 + Math.sin(time() * 5) * 0.15; });
         }
         const squash = (sx, sy) => { player.scale = vec2(sx, sy); tween(player.scale, vec2(1, 1), 0.18, (v) => (player.scale = v), easings.easeOutQuad); };
-        player.onGround(() => { jumpsLeft = maxJumps; if (airTime > 0.16) { squash(1.28, 0.74); dust(player.pos.add(0, 24)); shake(2); } airTime = 0; });
+        player.onGround(() => {
+          jumpsLeft = maxJumps;
+          if (airTime > 0.16) { squash(1.28, 0.74); dust(player.pos.add(0, CFG.shadowY - 2)); shake(2); }
+          airTime = 0;
+          if (time() - jumpBufferedAt < 0.12) { jumpBufferedAt = -1; jump(); } // buffered jump fires on landing
+        });
 
         // wall / ladder / door detection
         player.onCollideUpdate("platform", (p) => { const dx = p.pos.x - player.pos.x, dy = Math.abs(p.pos.y - player.pos.y); if (Math.abs(dx) > 12 && dy < TS * 0.55) { wallDir = dx > 0 ? 1 : -1; lastWallTime = time(); } });
@@ -481,9 +513,12 @@
             facing = -wallStick; player.flipX = facing < 0; jumpsLeft = maxJumps - 1;
             squash(0.72, 1.3); dust(player.pos.add(wallStick * 8, 12)); SFX.jump2(); return;
           }
-          if (jumpsLeft > 0) { const mid = jumpsLeft < maxJumps; player.jump(CFG.jumpForce); jumpsLeft -= 1; squash(0.74, 1.28); dust(player.pos.add(0, 24)); mid ? SFX.jump2() : SFX.jump(); }
+          if (jumpsLeft > 0) { const mid = jumpsLeft < maxJumps; player.jump(CFG.jumpForce); jumpsLeft -= 1; squash(0.74, 1.28); dust(player.pos.add(0, CFG.shadowY - 2)); mid ? SFX.jump2() : SFX.jump(); }
+          else jumpBufferedAt = time(); // buffer a jump pressed just before landing
         }
-        ["space", "up", "w"].forEach((key) => key === "space" ? onKeyPress(key, jump) : null);
+        const cutJump = () => { if (player.vel.y < -80) player.vel = vec2(player.vel.x, player.vel.y * 0.45); }; // variable jump height
+        ["space", "up", "w"].forEach((key) => onKeyRelease(key, cutJump));
+        onGamepadButtonRelease("south", cutJump);
         onKeyPress("space", jump); onGamepadButtonPress("south", jump);
         ["j", "x"].forEach((key) => onKeyPress(key, attack)); onGamepadButtonPress("west", attack); onGamepadButtonPress("east", attack);
         ["k", "c"].forEach((key) => onKeyPress(key, () => { if (CFG.bomb) throwBomb(); })); onGamepadButtonPress("north", () => { if (CFG.bomb) throwBomb(); });
@@ -608,7 +643,9 @@
         const camTarget = () => vec2(clamp(player.pos.x, width() / 2, Math.max(LEVEL_W - width() / 2, width() / 2)), clamp(player.pos.y, height() / 2, Math.max(LEVEL_H - height() / 2, height() / 2)) - 20);
 
         player.onUpdate(() => {
-          if (!player.isGrounded()) airTime += dt();
+          if (!player.isGrounded()) airTime += dt(); else lastGroundedAt = time();
+          // coyote window: walking off a ledge keeps the ground jump for 90ms, then it's spent
+          if (!player.isGrounded() && !onLadderNow && time() - lastGroundedAt > 0.09 && jumpsLeft === maxJumps) jumpsLeft = maxJumps - 1;
           let dx = 0;
           if (isKeyDown("left") || isKeyDown("a")) dx -= 1;
           if (isKeyDown("right") || isKeyDown("d")) dx += 1;
@@ -626,6 +663,9 @@
             onLadderNow = true; player.gravityScale = 0; jumpsLeft = maxJumps;
             player.vel = vec2(player.vel.x, up ? -CLIMB : down ? CLIMB : 0);
           } else { onLadderNow = false; player.gravityScale = 1; }
+
+          // apex hang: floatier at the top of the jump arc
+          if (!onLadderNow) player.gravityScale = !player.isGrounded() && Math.abs(player.vel.y) < 70 ? 0.72 : 1;
 
           // wall-climb (alien), only when not on a ladder
           wallStick = 0;
