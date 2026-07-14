@@ -794,23 +794,26 @@
       scene("splash", () => {
         add([sprite("sky"), pos(0, 0), fixed(), z(-100)]);
         addFog(); addDust();
-        add([rect(width(), height()), pos(0, 0), fixed(), color(6, 5, 6), opacity(0.45), z(-50)]);
-        // the beast looms out of the dark behind Jack
-        add([sprite("lamp"), pos(640, 300), anchor("center"), scale(3.2), opacity(0.3), color(255, 120, 60), z(-5)]);
-        const beast = add([sprite("stalker", { anim: "idle" }), pos(660, 336), anchor("bot"), scale(1.35), opacity(0), z(2), { u: 0 }]);
+        add([rect(width(), height()), pos(0, 0), fixed(), color(4, 3, 4), opacity(0.55), z(-50)]);
+        // box-art composition (#34): the hunter REARS HUGE over a crouched Jack
+        add([sprite("lamp"), pos(560, 130), anchor("center"), scale(4.2), opacity(0.34), color(255, 110, 50), z(-6)]); // hot backlight behind the beast
+        const beast = add([sprite("stalker", { anim: "jump" }), pos(580, 500), anchor("bot"), scale(1.7), opacity(0), z(2)]); // lunge pose: blades out, mandibles flared
         beast.flipX = true;
-        const jack = add([sprite("human", { anim: "run" }), pos(360, 330), anchor("bot"), scale(0.85), opacity(0), z(3)]);
-        add([sprite("lamp"), pos(340, 250), anchor("center"), scale(1.6), opacity(0.4), z(-4)]);
-        tween(0, 1, 0.7, (v) => { beast.opacity = v; jack.opacity = v; }, easings.easeOutQuad);
-        beast.onUpdate(() => { beast.u += dt(); beast.pos.x = 660 - Math.min(beast.u * 30, 60); }); // it closes in…
-        const title = add([text("QUARRY", { size: 84 }), pos(width() / 2, 150), anchor("center"), color(232, 222, 202), outline(5, rgb(12, 10, 8)), opacity(0)]);
-        const sub = add([text("One hunts. One runs. The world kills both.", { size: 20 }), pos(width() / 2, 210), anchor("center"), color(190, 170, 140), opacity(0)]);
-        tween(0, 1, 0.9, (v) => { title.opacity = v; sub.opacity = v * 0.9; }, easings.easeOutQuad);
-        add([text("press any key", { size: 14 }), pos(width() / 2, 500), anchor("center"), color(130, 120, 104), opacity(0.7), { update() { this.opacity = 0.4 + Math.sin(time() * 4) * 0.3; } }]);
+        const jack = add([sprite("human", { anim: "land" }), pos(400, 512), anchor("bot"), scale(1.0), opacity(0), z(3)]); // crouched low in front
+        jack.flipX = true;
+        add([sprite("lamp"), pos(392, 452), anchor("center"), scale(1.7), opacity(0.42), color(180, 200, 230), z(-4)]); // cold pool on Jack
+        // growl builds… then the ROAR hits
+        tween(0, 1, 0.9, (v) => { beast.opacity = v; jack.opacity = v; }, easings.easeOutQuad);
+        tween(1.7, 1.92, 2.6, (v) => (beast.scale = vec2(-v, v)), easings.easeOutQuad); // it looms closer (negative x keeps the flip)
+        try { tone({ f0: 58, f1: 44, dur: 1.35, type: "sawtooth", vol: 0.2 }); noise({ dur: 1.3, vol: 0.12, type: "lowpass", f0: 300, f1: 120 }); } catch (e) {}
+        wait(1.25, () => { try { SFX.roar(); } catch (e) {} shake(14); flash(rgb(255, 120, 50), 0.16); });
+        const title = add([text("QUARRY", { size: 88 }), pos(width() / 2, 108), anchor("center"), color(236, 224, 200), outline(6, rgb(10, 8, 6)), opacity(0), z(5)]);
+        const sub = add([text("One hunts. One runs. The world kills both.", { size: 20 }), pos(width() / 2, 168), anchor("center"), color(196, 174, 142), opacity(0), z(5)]);
+        tween(0, 1, 1.1, (v) => { title.opacity = v; sub.opacity = v * 0.9; }, easings.easeOutQuad);
+        add([text("press any key", { size: 14 }), pos(width() / 2, 522), anchor("center"), color(130, 120, 104), opacity(0.7), z(5), { update() { this.opacity = 0.4 + Math.sin(time() * 4) * 0.3; } }]);
         addOverlay();
-        try { SFX.roar(); } catch (e) {}
         const skip = () => go("select");
-        wait(2.3, skip);
+        wait(3.2, skip);
         onKeyPress(skip); onMousePress(skip); onGamepadButtonPress("south", skip);
       });
 
