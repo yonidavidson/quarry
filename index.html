@@ -423,11 +423,13 @@
           add([circle(9), pos(player.pos.x + facing * 24, player.pos.y - 4), anchor("center"), color(230, 190, 120), opacity(0.85), lifespan(0.08, { fade: 0.08 }), z(8)]);
           const b = add([rect(18, 5, { radius: 2 }), pos(player.pos.x + facing * 24, player.pos.y - 4), anchor("center"), color(240, 200, 120), outline(2, rgb(90, 60, 20)), area(), move(vec2(facing, 0), 780), offscreen({ destroy: true }), z(5), "bullet"]);
           b.onCollide("enemy", (e) => { destroy(b); killEnemy(e); }); b.onCollide("platform", () => destroy(b));
+          b.onCollide("nemesis", (n) => { destroy(b); hitNemesis(n); });
         }
         function claw() {
           SFX.claw(); player.move(facing * 200, 0); squash(1.24, 0.86); lungeUntil = time() + 0.28;
           const hb = add([rect(54, 42, { radius: 6 }), pos(player.pos.x + facing * 36, player.pos.y - 2), anchor("center"), color(255, 205, 120), opacity(0.35), area(), lifespan(0.14, { fade: 0.14 }), z(5), "claw"]);
           burst(hb.pos, rgb(255, 210, 140), 6, 150, 5); hb.onCollide("enemy", (e) => killEnemy(e));
+          hb.onCollide("nemesis", (n) => hitNemesis(n));
         }
         function attack() { if (time() - lastAtk < 0.32) return; lastAtk = time(); CFG.mode === "ranged" ? shoot() : claw(); }
         function explode(p) {
@@ -436,6 +438,7 @@
           tween(8, 96, 0.28, (r) => (ring.radius = r), easings.easeOutQuad);
           burst(p, rgb(240, 170, 80), 20, 320, 9); burst(p, rgb(90, 90, 92), 14, 240, 8);
           get("enemy").forEach((e) => { if (e.pos.dist(p) < 96) killEnemy(e); });
+          get("nemesis").forEach((n) => { if (n.pos.dist(p) < 110) hitNemesis(n); });
         }
         function throwBomb() {
           if (time() - lastBomb < 1.1) return; lastBomb = time(); SFX.toss();
@@ -465,6 +468,121 @@
         ["k", "c"].forEach((key) => onKeyPress(key, () => { if (CFG.bomb) throwBomb(); })); onGamepadButtonPress("north", () => { if (CFG.bomb) throwBomb(); });
         onKeyPress("e", useDoor); onGamepadButtonPress("dpad-up", useDoor);
         onKeyPress("r", () => go("game", sideKey));
+
+        // =================================================================
+        // NEMESIS — the opposite side hunts YOU across the map (issue #9)
+        // =================================================================
+        const NKEY = sideKey === "human" ? "stalker" : "human";
+        const NCFG = SIDES[NKEY];
+        const solid = (c, r) => GRID[r] && GRID[r][c] === "=";
+        const cellOf = (p) => [Math.floor(p.x / TS), Math.floor(p.y / TS)];
+        const NEM_SPAWNS = [vec2(50 * TS, TS), vec2(70 * TS, 9 * TS), vec2(6 * TS, 3 * TS), vec2(36 * TS, 12 * TS)];
+        let nemesis = null, nemHeartbeat = 0;
+        const warn = add([text("", { size: 18 }), pos(width() / 2, 46), anchor("center"), fixed(), z(200), color(235, 120, 100), outline(3, rgb(20, 10, 10)), opacity(0)]);
+
+        function hitNemesis(n) {
+          if (!n.exists() || time() < n.iframes) return;
+          n.iframes = time() + 0.35; n.hp -= 1;
+          burst(n.pos, rgb(...NCFG.color), 10, 200, 6); shake(4); SFX.kill();
+          if (n.hp <= 0) {
+            addKaboom(n.pos, { scale: 0.8 }); burst(n.pos, rgb(...NCFG.color), 22, 300, 9);
+            popText(n.pos, "+5 HUNTER DOWN", rgb(255, 200, 140)); score += 5; updateHUD();
+            destroy(n); nemesis = null;
+            wait(rand(12, 18), () => { if (get("player").length) spawnNemesis(true); });
+          } else { n.flash = time() + 0.15; }
+        }
+
+        function spawnNemesis(returning) {
+          const far = NEM_SPAWNS.slice().sort((a, b) => b.dist(player.pos) - a.dist(player.pos))[0];
+          nemesis = add([
+            sprite(NCFG.sprite, { anim: "idle" }), pos(far), anchor("center"),
+            area({ scale: vec2(0.6, 0.82) }), body({ jumpForce: NCFG.jumpForce }), opacity(1), z(6), "nemesis",
+            { hp: 3, iframes: 0, flash: 0, dir: choose([-1, 1]), state: "patrol", anim: "idle", atkCd: 0, climbing: false, senseAt: time() + 16 },
+          ]);
+          nemesis.add([sprite("shadow"), pos(0, 26), anchor("center"), z(-1), opacity(0.6)]);
+          if (NKEY === "stalker") {
+            const g = nemesis.add([sprite("redglow"), pos(17, -12), anchor("center"), scale(0.55), opacity(0.4), z(1)]);
+            g.onUpdate(() => { g.pos.x = 17 * (nemesis.flipX ? -1 : 1); g.opacity = 0.3 + Math.sin(time() * 5) * 0.15; });
+          }
+          if (returning) { popText(vec2(width() / 2, 90).add(getCamPos()).sub(width() / 2, height() / 2), "THE HUNTER RETURNS", rgb(235, 120, 100)); SFX.warp(); }
+
+          // the hunter knows its hunting ground — hazards don't hurt it,
+          // only the player's attacks do (otherwise it suicides on spikes)
+          nemesis.onCollide("player", () => hurt());
+
+          nemesis.onUpdate(() => {
+            const n = nemesis; if (!n) return;
+            const toP = player.pos.sub(n.pos), dist = toP.len(), sameFloor = Math.abs(toP.y) < 110;
+            // occasionally "senses" the player from anywhere — keeps pressure on
+            if (time() > n.senseAt) { n.state = "hunt"; n.senseAt = time() + rand(14, 22); }
+            if ((dist < 400 && sameFloor) || dist < 150) n.state = "hunt";
+            else if (n.state === "hunt" && dist > 650) n.state = "patrol";
+
+            const spd = NCFG.speed * (n.state === "hunt" ? 0.92 : 0.55);
+            let vx = 0;
+            const [pc, pr] = cellOf(n.pos);
+
+            if (n.state === "patrol") {
+              vx = n.dir;
+              const aheadC = pc + n.dir;
+              if (solid(aheadC, pr) || (!solid(aheadC, pr + 1) && !solid(aheadC, pr + 2) && n.isGrounded())) n.dir *= -1;
+            } else {
+              vx = toP.x > 14 ? 1 : toP.x < -14 ? -1 : 0; n.dir = vx || n.dir;
+              // player is on another floor: seek a ladder in that direction
+              if (!sameFloor) {
+                const wantUp = toP.y < 0;
+                let best = null, bd = 1e9;
+                for (const L of LADDERS) {
+                  const lx = L.c * TS + TS / 2, ly0 = L.r0 * TS, ly1 = (L.r1 + 1) * TS;
+                  const usable = wantUp ? n.pos.y > ly0 && n.pos.y < ly1 + TS * 2 : n.pos.y < ly1;
+                  const d = Math.abs(lx - n.pos.x);
+                  if (usable && d < bd) { bd = d; best = { lx, wantUp }; }
+                }
+                if (best) {
+                  vx = best.lx > n.pos.x + 8 ? 1 : best.lx < n.pos.x - 8 ? -1 : 0;
+                  if (Math.abs(best.lx - n.pos.x) < 14) { n.climbing = true; n.gravityScale = 0; n.vel = vec2(0, best.wantUp ? -CLIMB : CLIMB); }
+                }
+              }
+              if (n.climbing && sameFloor) { n.climbing = false; n.gravityScale = 1; }
+              // attack in range
+              if (time() > n.atkCd) {
+                if (NCFG.mode === "ranged" && dist < 330 && sameFloor && Math.abs(toP.y) < 46) {
+                  n.atkCd = time() + 1.35; SFX.shoot();
+                  const dirx = toP.x > 0 ? 1 : -1;
+                  const nb = add([rect(18, 5, { radius: 2 }), pos(n.pos.x + dirx * 24, n.pos.y - 4), anchor("center"), color(255, 130, 110), outline(2, rgb(90, 30, 20)), area(), move(vec2(dirx, 0), 700), offscreen({ destroy: true }), z(5), "nbullet"]);
+                  nb.onCollide("player", () => { destroy(nb); hurt(); });
+                  nb.onCollide("platform", () => destroy(nb));
+                } else if (NCFG.mode === "melee" && dist < 90) {
+                  n.atkCd = time() + 0.9; SFX.claw(); n.move((toP.x > 0 ? 1 : -1) * 220, 0);
+                }
+              }
+            }
+            if (!n.climbing) {
+              if (vx !== 0) n.move(vx * spd, 0);
+              // hop over walls when blocked
+              if (n.isGrounded() && vx !== 0 && solid(pc + (vx > 0 ? 1 : -1), pr)) n.jump(NCFG.jumpForce * 0.9);
+            } else if (vx !== 0) n.move(vx * spd * 0.4, 0);
+            n.flipX = n.dir < 0;
+            // anims + hit flash
+            const want = !n.isGrounded() && !n.climbing ? "jump" : Math.abs(vx) > 0 || n.climbing ? "run" : "idle";
+            if (n.anim !== want) { n.anim = want; n.play(want); }
+            n.opacity = time() < n.flash ? 0.5 : 1;
+            if (n.pos.y > LEVEL_H + 200) { n.pos = NEM_SPAWNS[0].clone(); n.vel = vec2(0, 0); n.climbing = false; n.gravityScale = 1; }
+          });
+        }
+        spawnNemesis(false);
+
+        // dread feedback: warning text + heartbeat when the hunter is close
+        onUpdate(() => {
+          const n = nemesis;
+          const d = n ? n.pos.dist(player.pos) : 1e9;
+          warn.text = "⚠ THE HUNTER IS NEAR";
+          warn.opacity = d < 420 ? 0.45 + Math.sin(time() * 6) * 0.3 : 0;
+          if (d < 320 && time() > nemHeartbeat) {
+            nemHeartbeat = time() + (d < 180 ? 0.42 : 0.75);
+            seq([[52, 0.09, "sine", 0.22, 40], [44, 0.14, "sine", 0.14, 30]]);
+          }
+        });
 
         const camTarget = () => vec2(clamp(player.pos.x, width() / 2, Math.max(LEVEL_W - width() / 2, width() / 2)), clamp(player.pos.y, height() / 2, Math.max(LEVEL_H - height() / 2, height() / 2)) - 20);
 
