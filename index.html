@@ -7,7 +7,7 @@
     <style>
       html, body { margin: 0; height: 100%; background: #0b0d14; overflow: hidden; }
       body { display: flex; align-items: center; justify-content: center; }
-      canvas { image-rendering: pixelated; max-width: 100%; max-height: 100%; }
+      canvas { max-width: 100%; max-height: 100%; }
     </style>
   </head>
   <body>
@@ -16,21 +16,141 @@
     <script>
       // ---------------------------------------------------------------------
       // QUARRY — asymmetric hunter/hunted platformer, inspired by "Hunter Hunted".
-      // Pick a side (fragile ranged Human, or tough melee Stalker) and survive a
-      // hostile world of spikes, pits and roaming drones to reach the exit.
+      // Gritty-industrial art style. All graphics are inline SVG (no asset files).
       // ---------------------------------------------------------------------
 
       const k = kaplay({
         width: 960,
         height: 540,
         letterbox: true,
-        background: [14, 16, 24],
+        background: [12, 12, 13],
         global: true,
-        crisp: true,
       });
 
       const TS = 48; // tile size in px
       setGravity(2100);
+
+      // =====================================================================
+      // ART — hand-authored inline SVG sprites (gritty industrial palette)
+      // =====================================================================
+      const svg = (s) => "data:image/svg+xml," + encodeURIComponent(s);
+
+      loadSprite("sky", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="960" height="540">
+        <defs><linearGradient id="s" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#2a2622"/><stop offset="48%" stop-color="#332b26"/>
+          <stop offset="100%" stop-color="#171615"/></linearGradient></defs>
+        <rect width="960" height="540" fill="url(#s)"/></svg>`));
+
+      loadSprite("bgFar", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="480" height="220">
+        <g fill="#20242a">
+          <rect x="18" y="90" width="42" height="130"/><rect x="70" y="120" width="26" height="100"/>
+          <rect x="112" y="64" width="26" height="156"/><rect x="150" y="108" width="52" height="112"/>
+          <rect x="212" y="78" width="22" height="142"/><rect x="246" y="128" width="60" height="92"/>
+          <rect x="322" y="96" width="34" height="124"/><rect x="362" y="54" width="18" height="166"/>
+          <rect x="390" y="116" width="72" height="104"/></g>
+        <g fill="#3a2c20"><rect x="112" y="64" width="26" height="6"/><rect x="362" y="54" width="18" height="6"/></g>
+        <g fill="#e8b13a" opacity="0.45">
+          <rect x="120" y="84" width="4" height="6"/><rect x="222" y="96" width="4" height="6"/>
+          <rect x="366" y="72" width="4" height="6"/><rect x="410" y="130" width="4" height="6"/></g></svg>`));
+
+      loadSprite("bgMid", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="480" height="280">
+        <g fill="#2b3036">
+          <rect x="40" y="60" width="30" height="220"/><rect x="180" y="96" width="46" height="184"/>
+          <rect x="300" y="72" width="26" height="208"/><rect x="360" y="104" width="66" height="176"/>
+          <rect x="0" y="150" width="480" height="20"/></g>
+        <g fill="#3a2c20" opacity="0.7"><rect x="0" y="150" width="480" height="5"/></g>
+        <g fill="#1f2226"><rect x="40" y="60" width="30" height="6"/><rect x="300" y="72" width="26" height="6"/></g></svg>`));
+
+      loadSprite("tile", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48">
+        <rect width="48" height="48" fill="#34383b"/>
+        <rect width="48" height="6" fill="#474c4f"/><rect y="6" width="48" height="2" fill="#22262a"/>
+        <rect y="43" width="48" height="5" fill="#20242a"/>
+        <ellipse cx="26" cy="30" rx="13" ry="7" fill="#2b2e30" opacity="0.55"/>
+        <path d="M11 8 l3 32" stroke="#5e3d24" stroke-width="3" opacity="0.45"/>
+        <path d="M34 9 l-3 28" stroke="#6b4527" stroke-width="2" opacity="0.4"/>
+        <g fill="#20242a"><circle cx="6" cy="12" r="2"/><circle cx="42" cy="12" r="2"/>
+          <circle cx="6" cy="39" r="2"/><circle cx="42" cy="39" r="2"/></g></svg>`));
+
+      loadSprite("spikes", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="48" height="24">
+        <rect y="18" width="48" height="6" fill="#2f3436"/>
+        <g fill="#5a5f61" stroke="#20242a" stroke-width="1">
+          <path d="M2 22 L8 3 L14 22 z"/><path d="M14 22 L20 3 L26 22 z"/>
+          <path d="M26 22 L32 3 L38 22 z"/><path d="M38 22 L44 3 L48 22 z"/></g>
+        <g stroke="#7a4a28" stroke-width="1" opacity="0.5"><path d="M8 6 l0 12"/><path d="M32 6 l0 12"/></g></svg>`));
+
+      loadSprite("cell", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="22" height="28">
+        <circle cx="11" cy="15" r="10" fill="#5ee08a" opacity="0.16"/>
+        <rect x="8" y="0" width="6" height="4" fill="#3a3d3f"/>
+        <rect x="4" y="3" width="14" height="23" rx="3" fill="#2c2f31" stroke="#1c1f21"/>
+        <rect x="7" y="7" width="8" height="15" rx="2" fill="#3aa06a"/>
+        <rect x="7" y="7" width="8" height="6" rx="2" fill="#7ee0a0" opacity="0.5"/></svg>`));
+
+      loadSprite("exit", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="48" height="72">
+        <rect x="4" y="2" width="40" height="70" rx="3" fill="#2c3033"/>
+        <rect x="8" y="6" width="32" height="62" fill="#3c4144" stroke="#20242a" stroke-width="2"/>
+        <g opacity="0.85"><path d="M11 62 l20 -22" stroke="#c8992e" stroke-width="5"/>
+          <path d="M20 64 l14 -16" stroke="#1c1c1c" stroke-width="5"/></g>
+        <circle cx="24" cy="18" r="10" fill="#e8b13a" opacity="0.3"/>
+        <circle cx="24" cy="18" r="5" fill="#f0c04a"/></svg>`));
+
+      loadSprite("drone", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="36" height="34">
+        <rect x="1" y="6" width="9" height="3" fill="#3a3d3f"/><rect x="26" y="6" width="9" height="3" fill="#3a3d3f"/>
+        <path d="M7 10 h22 q5 7 -2 15 h-18 q-7 -8 -2 -15z" fill="#45494b"/>
+        <rect x="7" y="10" width="22" height="4" fill="#565b5d"/>
+        <path d="M11 13 l-1 12" stroke="#6b4527" stroke-width="2" opacity="0.5"/>
+        <circle cx="18" cy="19" r="5.5" fill="#7a1e1e"/><circle cx="18" cy="19" r="2.6" fill="#ef4444"/>
+        <g fill="#232527"><circle cx="9" cy="20" r="1.5"/><circle cx="27" cy="20" r="1.5"/></g></svg>`));
+
+      // Human survivor (Gair), faces right, holding a rifle.
+      loadSprite("human", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="44" height="56">
+        <ellipse cx="22" cy="53" rx="13" ry="3" fill="#000" opacity="0.3"/>
+        <rect x="14" y="38" width="6" height="15" fill="#2f2d28"/><rect x="24" y="38" width="6" height="15" fill="#3a372f"/>
+        <rect x="12" y="51" width="10" height="4" rx="1" fill="#1a1916"/><rect x="24" y="51" width="10" height="4" rx="1" fill="#1a1916"/>
+        <rect x="12" y="20" width="20" height="20" rx="4" fill="#5a5344"/>
+        <rect x="12" y="20" width="20" height="6" rx="3" fill="#6a6250"/>
+        <rect x="12" y="34" width="20" height="3" fill="#33302a"/>
+        <path d="M14 12 a8 8 0 0 1 16 0 z" fill="#4a4438"/>
+        <circle cx="22" cy="13" r="7.5" fill="#b08d6a"/>
+        <rect x="21" y="10" width="10" height="4" rx="2" fill="#e0a23c"/>
+        <rect x="28" y="24" width="6" height="4" fill="#4a4438"/>
+        <rect x="30" y="24" width="14" height="4" rx="1" fill="#26262a"/>
+        <rect x="28" y="27" width="7" height="3" fill="#1e1e22"/></svg>`));
+
+      // Alien Stalker — hunched, clawed, dark carapace with muted-red ridge.
+      loadSprite("stalker", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="48" height="56">
+        <ellipse cx="24" cy="53" rx="15" ry="3" fill="#000" opacity="0.3"/>
+        <path d="M12 34 q-10 4 -12 15 q7 -7 15 -9 z" fill="#3a2c2e"/>
+        <path d="M14 40 l-4 13 6 0 4 -11 z" fill="#2a2022"/><path d="M30 40 l6 13 6 0 -6 -13 z" fill="#31262a"/>
+        <path d="M12 20 q12 -10 24 0 q4 12 -2 22 q-10 6 -20 0 q-6 -10 -2 -22 z" fill="#3a2a2c"/>
+        <path d="M22 12 q4 -6 8 0 q2 11 -2 21 q-2 -13 -6 -21 z" fill="#7a3a3a" opacity="0.85"/>
+        <path d="M26 7 q12 2 12 12 q-2 8 -12 8 q-9 -2 -9 -10 q0 -8 9 -10z" fill="#33262a"/>
+        <circle cx="34" cy="15" r="2.6" fill="#e8b13a"/><circle cx="29" cy="18" r="2" fill="#e8b13a"/>
+        <path d="M37 30 l8 -3 -6 6 z" fill="#8a8375"/><path d="M9 30 l-7 -3 6 6 z" fill="#8a8375"/></svg>`));
+
+      // Radial glows / overlays
+      loadSprite("lamp", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="140" height="140">
+        <defs><radialGradient id="l" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stop-color="#e8b13a" stop-opacity="0.7"/>
+          <stop offset="100%" stop-color="#e8b13a" stop-opacity="0"/></radialGradient></defs>
+        <circle cx="70" cy="70" r="70" fill="url(#l)"/></svg>`));
+
+      loadSprite("fog", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="600" height="180">
+        <defs><radialGradient id="f" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stop-color="#6a5a48" stop-opacity="0.5"/>
+          <stop offset="100%" stop-color="#6a5a48" stop-opacity="0"/></radialGradient></defs>
+        <ellipse cx="300" cy="90" rx="300" ry="80" fill="url(#f)"/></svg>`));
+
+      loadSprite("shadow", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="64" height="22">
+        <defs><radialGradient id="sh" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stop-color="#000" stop-opacity="0.55"/>
+          <stop offset="100%" stop-color="#000" stop-opacity="0"/></radialGradient></defs>
+        <ellipse cx="32" cy="11" rx="32" ry="11" fill="url(#sh)"/></svg>`));
+
+      loadSprite("vignette", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="960" height="540">
+        <defs><radialGradient id="v" cx="50%" cy="46%" r="72%">
+          <stop offset="52%" stop-color="#000" stop-opacity="0"/>
+          <stop offset="100%" stop-color="#000" stop-opacity="0.72"/></radialGradient></defs>
+        <rect width="960" height="540" fill="url(#v)"/></svg>`));
 
       // =====================================================================
       // JUICE: sound (tiny Web Audio synth — no asset files)
@@ -41,7 +161,6 @@
         if (_ac && _ac.state === "suspended") _ac.resume();
         return _ac;
       }
-      // Play a sequence of [freq, dur, type?, vol?, slideTo?] notes back-to-back.
       function seq(notes) {
         const a = ac();
         if (!a) return;
@@ -59,15 +178,15 @@
         }
       }
       const SFX = {
-        jump: () => seq([[360, 0.12, "square", 0.12, 620]]),
-        jump2: () => seq([[520, 0.12, "square", 0.11, 900]]),
-        shoot: () => seq([[720, 0.09, "sawtooth", 0.09, 240]]),
-        claw: () => seq([[200, 0.13, "square", 0.13, 90]]),
-        kill: () => seq([[150, 0.2, "triangle", 0.16, 55]]),
-        pickup: () => seq([[659, 0.07, "square", 0.12], [988, 0.12, "square", 0.12]]),
-        hurt: () => seq([[180, 0.26, "sawtooth", 0.18, 70]]),
-        win: () => seq([[523, 0.1], [659, 0.1], [784, 0.1], [1046, 0.24]]),
-        lose: () => seq([[392, 0.14], [311, 0.14], [233, 0.32, "sawtooth"]]),
+        jump: () => seq([[300, 0.12, "square", 0.11, 520]]),
+        jump2: () => seq([[440, 0.12, "square", 0.1, 760]]),
+        shoot: () => seq([[620, 0.09, "sawtooth", 0.09, 200]]),
+        claw: () => seq([[170, 0.14, "square", 0.13, 80]]),
+        kill: () => seq([[130, 0.22, "triangle", 0.16, 48]]),
+        pickup: () => seq([[587, 0.07, "square", 0.11], [880, 0.12, "square", 0.11]]),
+        hurt: () => seq([[160, 0.28, "sawtooth", 0.18, 60]]),
+        win: () => seq([[440, 0.1], [587, 0.1], [698, 0.1], [880, 0.26]]),
+        lose: () => seq([[330, 0.15], [262, 0.15], [196, 0.34, "sawtooth"]]),
       };
 
       // =====================================================================
@@ -77,9 +196,8 @@
         for (let i = 0; i < n; i++) {
           const v = vec2(rand(-1, 1), rand(-1, 1)).unit().scale(rand(spd * 0.35, spd));
           add([
-            rect(rand(sz * 0.5, sz), rand(sz * 0.5, sz)),
-            pos(p), anchor("center"), color(col),
-            opacity(1), lifespan(0.5, { fade: 0.4 }), z(20),
+            rect(rand(sz * 0.5, sz), rand(sz * 0.5, sz)), pos(p), anchor("center"),
+            color(col), rotate(rand(0, 360)), opacity(1), lifespan(0.5, { fade: 0.4 }), z(40),
             { v, update() { this.move(this.v); this.v = this.v.scale(0.9); this.v.y += 700 * dt(); } },
           ]);
         }
@@ -89,7 +207,7 @@
           const v = vec2(rand(-1, 1), rand(-1.1, -0.15)).unit().scale(rand(50, 140));
           add([
             circle(rand(2, 4)), pos(p.add(rand(-10, 10), 0)), anchor("center"),
-            color(155, 165, 185), opacity(0.75), lifespan(0.4, { fade: 0.35 }), z(5),
+            color(150, 140, 120), opacity(0.7), lifespan(0.4, { fade: 0.35 }), z(38),
             { v, update() { this.move(this.v); this.v = this.v.scale(0.9); } },
           ]);
         }
@@ -97,36 +215,68 @@
       function popText(p, str, col) {
         add([
           text(str, { size: 20 }), pos(p), anchor("center"), color(col),
-          opacity(1), lifespan(0.6, { fade: 0.5 }), z(30),
+          outline(3, rgb(0, 0, 0)), opacity(1), lifespan(0.6, { fade: 0.5 }), z(170),
           { update() { this.move(0, -46); } },
         ]);
       }
       function flash(col, a = 0.45) {
-        add([rect(width(), height()), pos(0, 0), fixed(), color(col), opacity(a), lifespan(0.35, { fade: 0.35 }), z(200)]);
+        add([rect(width(), height()), pos(0, 0), fixed(), color(col), opacity(a), lifespan(0.35, { fade: 0.35 }), z(190)]);
       }
+
+      // =====================================================================
+      // ATMOSPHERE — sky, parallax skyline, fog, dust motes, vignette
+      // =====================================================================
+      const wrapv = (v, m) => ((v % m) + m) % m;
+
+      function parallaxLayer(sprName, w, yPos, factor, zi, op) {
+        const count = Math.ceil(width() / w) + 2;
+        const tiles = [];
+        for (let i = 0; i < count; i++) tiles.push(add([sprite(sprName), pos(i * w, yPos), fixed(), z(zi), opacity(op)]));
+        onUpdate(() => {
+          const off = wrapv(getCamPos().x * factor, w);
+          tiles.forEach((o, i) => (o.pos.x = i * w - off));
+        });
+      }
+
+      function addFog() {
+        for (let i = 0; i < 3; i++) {
+          const f = add([sprite("fog"), pos(rand(0, width()), rand(120, 380)), fixed(), z(-60), opacity(rand(0.35, 0.75)), { spd: rand(6, 16) }]);
+          f.onUpdate(() => { f.pos.x += f.spd * dt(); if (f.pos.x > width() + 320) f.pos.x = -620; });
+        }
+      }
+      function addDust() {
+        loop(0.22, () => {
+          add([
+            rect(rand(1, 3), rand(1, 3)), pos(rand(0, width()), height() + 6), fixed(),
+            color(205, 175, 125), opacity(rand(0.1, 0.35)), z(-50), lifespan(rand(6, 10), { fade: 2 }),
+            { drift: rand(-8, 8), up: rand(10, 24), update() { this.pos.x += this.drift * dt(); this.pos.y -= this.up * dt(); } },
+          ]);
+        });
+      }
+      function addBackdrop(withParallax) {
+        add([sprite("sky"), pos(0, 0), fixed(), z(-100)]);
+        if (withParallax) {
+          parallaxLayer("bgFar", 480, 140, 0.25, -90, 0.9);
+          parallaxLayer("bgMid", 480, 240, 0.5, -80, 0.95);
+        } else {
+          add([sprite("bgFar"), pos(0, 150), fixed(), z(-90), opacity(0.85)]);
+          add([sprite("bgMid"), pos(0, 250), fixed(), z(-80), opacity(0.9)]);
+        }
+        addFog();
+        addDust();
+      }
+      function addOverlay() { add([sprite("vignette"), pos(0, 0), fixed(), z(150)]); }
 
       // Two playable "sides" with distinct skills (the core Hunter/Hunted idea).
       const SIDES = {
         human: {
-          name: "GAIR — Human",
-          color: [90, 165, 255],
-          accent: [200, 225, 255],
-          speed: 260,
-          jumpForce: 720,
-          doubleJump: false,
-          maxHp: 3,
-          mode: "ranged",
+          name: "GAIR — Human", sprite: "human", color: [120, 165, 210],
+          speed: 260, jumpForce: 720, doubleJump: false, maxHp: 3, mode: "ranged",
           blurb: ["Ranged blaster (J / X)", "Standard jump", "Fragile — 3 HP", "Keep your distance."],
         },
         stalker: {
-          name: "The STALKER — Alien",
-          color: [225, 85, 95],
-          accent: [255, 190, 130],
-          speed: 320,
-          jumpForce: 780,
-          doubleJump: true,
-          maxHp: 4,
-          mode: "melee",
+          name: "The STALKER — Alien", sprite: "stalker", color: [200, 100, 100],
+          speed: 320, jumpForce: 780, doubleJump: true, maxHp: 4, mode: "melee",
           blurb: ["Claw lunge (J / X)", "Double jump • faster", "Tough — 4 HP", "Hunt them down, up close."],
         },
       };
@@ -148,108 +298,67 @@
         "=======        ============          =====  ========  =========   ",
         "=======================        ===============================    ",
       ];
-
       const LEVEL_W = MAP[0].length * TS;
       const LEVEL_H = MAP.length * TS;
-      const wrapv = (v, m) => ((v % m) + m) % m;
 
-      // ---- Reusable enemy factory: a drone that patrols left/right ----------
       function spawnEnemy(x, y) {
-        return add([
-          rect(30, 30, { radius: 4 }),
-          pos(x, y),
-          anchor("center"),
-          color(200, 75, 85),
-          outline(3, rgb(70, 22, 28)),
-          area(),
-          z(4),
-          "enemy",
+        const e = add([
+          sprite("drone"), pos(x, y), anchor("center"), area({ scale: 0.85 }), z(4), "enemy",
           {
-            dir: choose([-1, 1]),
-            homeX: x,
-            range: 95,
+            dir: choose([-1, 1]), homeX: x, range: 95,
             update() {
-              this.move(this.dir * 78, 0);
+              this.move(this.dir * 78, 0); this.flipX = this.dir < 0;
               if (this.pos.x > this.homeX + this.range) this.dir = -1;
               if (this.pos.x < this.homeX - this.range) this.dir = 1;
             },
           },
         ]);
-      }
-
-      // Parallax starfield — fixed to the screen, scrolled by camera fraction.
-      function addStarfield() {
-        for (let i = 0; i < 70; i++) {
-          const base = vec2(rand(0, width()), rand(0, height()));
-          const factor = rand(0.08, 0.4);
-          const sz = rand(1, 3);
-          const star = add([
-            rect(sz, sz), pos(base), fixed(), z(-20),
-            color(120, 140, 190), opacity(rand(0.25, 0.85)),
-          ]);
-          star.onUpdate(() => {
-            const cam = getCamPos();
-            star.pos.x = wrapv(base.x - cam.x * factor, width());
-            star.pos.y = wrapv(base.y - cam.y * factor, height());
-          });
-        }
+        e.add([sprite("shadow"), pos(0, 16), anchor("center"), z(-1), opacity(0.4), scale(0.6)]);
+        return e;
       }
 
       // =======================================================================
       // MENU / CHARACTER SELECT
       // =======================================================================
       scene("select", () => {
-        addStarfield();
-        add([text("QUARRY", { size: 64 }), pos(width() / 2, 70), anchor("center"), color(240, 244, 252)]);
-        add([
-          text("The world wants you dead either way. Choose your side.", { size: 20 }),
-          pos(width() / 2, 118), anchor("center"), color(150, 160, 180),
-        ]);
+        addBackdrop(false);
+        add([text("QUARRY", { size: 64 }), pos(width() / 2, 66), anchor("center"), color(228, 218, 200), outline(4, rgb(20, 18, 16))]);
+        add([text("The world wants you dead either way. Choose your side.", { size: 19 }), pos(width() / 2, 116), anchor("center"), color(170, 158, 140)]);
 
         const keys = ["human", "stalker"];
         let sel = 0;
 
         const cards = keys.map((key, i) => {
           const s = SIDES[key];
-          const cx = width() / 2 + (i === 0 ? -170 : 170);
-          const card = add([
-            rect(300, 250, { radius: 14 }), pos(cx, 300), anchor("center"),
-            color(24, 28, 40), outline(4, rgb(55, 62, 82)), scale(1), "card",
-          ]);
-          card.add([text(s.name.toUpperCase(), { size: 18, width: 260, align: "center" }), pos(0, -95), anchor("center"), color(...s.color)]);
-          card.add([rect(70, 70, { radius: 8 }), pos(0, -30), anchor("center"), color(...s.color), outline(3, rgb(0, 0, 0))]);
-          s.blurb.forEach((line, j) => {
-            card.add([text("• " + line, { size: 15, width: 260 }), pos(-125, 30 + j * 26), anchor("left"), color(198, 206, 222)]);
-          });
+          const cx = width() / 2 + (i === 0 ? -172 : 172);
+          const card = add([rect(300, 262, { radius: 12 }), pos(cx, 300), anchor("center"), color(26, 26, 28), outline(4, rgb(58, 58, 62)), scale(1), "card"]);
+          card.add([sprite(s.sprite), pos(0, -66), anchor("center"), scale(1.5)]);
+          card.add([text(s.name.toUpperCase(), { size: 17, width: 270, align: "center" }), pos(0, 6), anchor("center"), color(...s.color)]);
+          s.blurb.forEach((line, j) => card.add([text("• " + line, { size: 14, width: 260 }), pos(-128, 34 + j * 24), anchor("left"), color(198, 190, 176)]));
           return card;
         });
 
-        add([text("← →  choose      ENTER / A  start      (controller supported)", { size: 15 }), pos(width() / 2, 500), anchor("center"), color(130, 140, 160)]);
+        add([text("← →  choose      ENTER / A  start      (controller supported)", { size: 15 }), pos(width() / 2, 500), anchor("center"), color(150, 140, 124)]);
+        addOverlay();
 
         function refresh() {
           cards.forEach((c, i) => {
-            c.color = i === sel ? rgb(34, 44, 66) : rgb(24, 28, 40);
-            c.outline.color = i === sel ? rgb(120, 200, 255) : rgb(55, 62, 82);
+            c.color = i === sel ? rgb(40, 38, 34) : rgb(26, 26, 28);
+            c.outline.color = i === sel ? rgb(220, 170, 70) : rgb(58, 58, 62);
             c.outline.width = i === sel ? 5 : 4;
-            const target = i === sel ? vec2(1.06, 1.06) : vec2(1, 1);
-            tween(c.scale, target, 0.12, (v) => c.scale = v, easings.easeOutQuad);
+            tween(c.scale, i === sel ? vec2(1.06) : vec2(1), 0.12, (v) => (c.scale = v), easings.easeOutQuad);
           });
         }
         refresh();
 
         const moveSel = (d) => { sel = (sel + d + keys.length) % keys.length; SFX.pickup(); refresh(); };
-        onKeyPress("left", () => moveSel(-1));
-        onKeyPress("right", () => moveSel(1));
-        onKeyPress("a", () => moveSel(-1));
-        onKeyPress("d", () => moveSel(1));
-        onGamepadButtonPress("dpad-left", () => moveSel(-1));
-        onGamepadButtonPress("dpad-right", () => moveSel(1));
+        onKeyPress("left", () => moveSel(-1)); onKeyPress("a", () => moveSel(-1));
+        onKeyPress("right", () => moveSel(1)); onKeyPress("d", () => moveSel(1));
+        onGamepadButtonPress("dpad-left", () => moveSel(-1)); onGamepadButtonPress("dpad-right", () => moveSel(1));
 
         const start = () => { SFX.jump(); go("game", keys[sel]); };
-        onKeyPress("enter", start);
-        onKeyPress("space", start);
-        onGamepadButtonPress("south", start);
-        onGamepadButtonPress("start", start);
+        onKeyPress("enter", start); onKeyPress("space", start);
+        onGamepadButtonPress("south", start); onGamepadButtonPress("start", start);
       });
 
       // =======================================================================
@@ -259,164 +368,127 @@
         const CFG = SIDES[sideKey];
         const maxJumps = CFG.doubleJump ? 2 : 1;
 
-        let hp = CFG.maxHp;
-        let score = 0;
-        let invuln = false;
-        let facing = 1;
-        let jumpsLeft = maxJumps;
-        let lastAtk = 0;
-        let airTime = 0;
-        let spawn = vec2(0, 0);
-        let camReady = false;
+        let hp = CFG.maxHp, score = 0, invuln = false, facing = 1;
+        let jumpsLeft = maxJumps, lastAtk = 0, airTime = 0, spawn = vec2(0, 0), camReady = false;
 
-        addStarfield();
+        addBackdrop(true);
 
         // --- Build the world from the map ---
         MAP.forEach((row, r) => {
           for (let c = 0; c < row.length; c++) {
             const ch = row[c];
-            const x = c * TS + TS / 2;
-            const y = r * TS + TS / 2;
+            const x = c * TS + TS / 2, y = r * TS + TS / 2;
             if (ch === "=") {
-              add([rect(TS, TS), pos(x, y), anchor("center"), color(52, 60, 82), outline(2, rgb(28, 33, 48)), area(), body({ isStatic: true }), "platform"]);
+              add([sprite("tile"), pos(x, y), anchor("center"), area(), body({ isStatic: true }), z(2), "platform"]);
             } else if (ch === "^") {
-              add([rect(TS, TS / 2), pos(x, y + TS / 4), anchor("center"), color(205, 70, 80), outline(2, rgb(70, 20, 26)), area(), "danger"]);
+              add([sprite("spikes"), pos(x, r * TS + TS), anchor("bot"), area(), z(3), "danger"]);
             } else if (ch === "$") {
-              add([
-                circle(10), pos(x, y), anchor("center"), color(250, 210, 80), outline(2, rgb(120, 90, 20)),
-                area(), scale(1), z(3), "energy",
-                { seed: x, update() { this.scale = vec2(1 + Math.sin(time() * 4 + this.seed) * 0.14); } },
-              ]);
+              add([sprite("cell"), pos(x, y), anchor("center"), area({ scale: 1.1 }), scale(1), z(3), "energy",
+                { seed: x, update() { this.scale = vec2(1 + Math.sin(time() * 4 + this.seed) * 0.12); } }]);
             } else if (ch === "e") {
               spawnEnemy(x, y);
             } else if (ch === ">") {
-              add([rect(TS * 0.7, TS), pos(x, y), anchor("center"), color(90, 235, 150), outline(3, rgb(20, 90, 55)), area(), z(3), "exit"]);
+              add([sprite("exit"), pos(x, r * TS + TS), anchor("bot"), area(), z(3), "exit"]);
             } else if (ch === "@") {
               spawn = vec2(x, y);
             }
           }
         });
 
+        // decorative amber lamps in the world
+        [[3, 10], [21, 7], [40, 4], [55, 8], [12, 12]].forEach(([cx, cy]) =>
+          add([sprite("lamp"), pos(cx * TS, cy * TS), anchor("center"), z(1), opacity(0.85),
+            { s: rand(0, 6), update() { this.opacity = 0.6 + Math.sin(time() * 3 + this.s) * 0.2; } }]));
+
         // --- Player ---
         const player = add([
-          rect(30, 42, { radius: 5 }), pos(spawn), anchor("center"),
-          color(...CFG.color), outline(3, rgb(0, 0, 0)),
-          area(), body({ jumpForce: CFG.jumpForce }), opacity(1), scale(1), z(6), "player",
+          sprite(CFG.sprite), pos(spawn), anchor("center"),
+          area({ scale: vec2(0.6, 0.82) }), body({ jumpForce: CFG.jumpForce }), opacity(1), scale(1), z(6), "player",
         ]);
-        const eye = add([rect(6, 6), pos(0, 0), anchor("center"), color(...CFG.accent), z(7)]);
+        player.add([sprite("shadow"), pos(0, 26), anchor("center"), z(-1), opacity(0.6)]);
 
-        // squash & stretch helper
         function squash(sx, sy) {
           player.scale = vec2(sx, sy);
-          tween(player.scale, vec2(1, 1), 0.18, (v) => player.scale = v, easings.easeOutQuad);
+          tween(player.scale, vec2(1, 1), 0.18, (v) => (player.scale = v), easings.easeOutQuad);
         }
 
         player.onGround(() => {
           jumpsLeft = maxJumps;
-          if (airTime > 0.16) { squash(1.3, 0.72); dust(player.pos.add(0, 20)); shake(2); }
+          if (airTime > 0.16) { squash(1.28, 0.74); dust(player.pos.add(0, 24)); shake(2); }
           airTime = 0;
         });
 
         // --- HUD ---
-        const hud = add([text("", { size: 20 }), pos(16, 14), fixed(), z(100), color(235, 240, 250)]);
-        add([text("Move: ←→ / A D / stick   Jump: Space / W / A-btn   Attack: J / X / B-btn", { size: 14 }), pos(16, 516), fixed(), z(100), color(120, 130, 150)]);
-        function updateHUD() {
-          hud.text = `${CFG.name}    HP ${Math.max(hp, 0)}/${CFG.maxHp}    Energy ${score}`;
-        }
+        const hud = add([text("", { size: 20 }), pos(16, 14), fixed(), z(200), color(232, 224, 210), outline(3, rgb(20, 18, 16))]);
+        add([text("Move: ←→ / A D / stick   Jump: Space / W / A-btn   Attack: J / X / B-btn", { size: 14 }), pos(16, 518), fixed(), z(200), color(150, 140, 124)]);
+        const updateHUD = () => (hud.text = `${CFG.name}    HP ${Math.max(hp, 0)}/${CFG.maxHp}    Energy ${score}`);
         updateHUD();
 
         function killEnemy(e) {
-          addKaboom(e.pos, { scale: 0.6 });
-          burst(e.pos, rgb(220, 90, 95), 14, 240, 7);
-          popText(e.pos, "+1", rgb(255, 150, 150));
-          shake(4); SFX.kill();
+          burst(e.pos, rgb(80, 84, 86), 12, 200, 8);   // metal debris
+          burst(e.pos, rgb(230, 120, 60), 8, 240, 5);  // sparks
+          popText(e.pos, "+1", rgb(240, 180, 120));
+          shake(5); SFX.kill();
           destroy(e); score += 1; updateHUD();
         }
 
-        // --- Damage handling ---
         function hurt(fromFall) {
           if (invuln && !fromFall) return;
           hp -= 1;
-          shake(9); flash(rgb(200, 40, 40), 0.5); SFX.hurt();
+          shake(9); flash(rgb(180, 40, 30), 0.5); SFX.hurt();
           burst(player.pos, rgb(...CFG.color), 12, 200, 6);
           updateHUD();
           if (fromFall) { player.pos = spawn.clone(); player.vel = vec2(0, 0); }
           if (hp <= 0) { SFX.lose(); go("over", { win: false, side: sideKey, score }); return; }
           invuln = true;
-          const blink = loop(0.09, () => { player.opacity = player.opacity === 1 ? 0.35 : 1; });
+          const blink = loop(0.09, () => (player.opacity = player.opacity === 1 ? 0.35 : 1));
           wait(1.1, () => { blink.cancel(); player.opacity = 1; invuln = false; });
         }
 
-        player.onCollide("energy", (c) => {
-          burst(c.pos, rgb(250, 215, 90), 10, 170, 6);
-          popText(c.pos, "+1", rgb(255, 240, 170));
-          SFX.pickup(); destroy(c); score += 1; updateHUD();
-        });
+        player.onCollide("energy", (c) => { burst(c.pos, rgb(120, 220, 150), 10, 170, 6); popText(c.pos, "+1", rgb(180, 240, 190)); SFX.pickup(); destroy(c); score += 1; updateHUD(); });
         player.onCollide("danger", () => hurt());
         player.onCollide("enemy", () => hurt());
         player.onCollide("exit", () => { SFX.win(); go("over", { win: true, side: sideKey, score }); });
 
-        // --- Attacks ---
         function shoot() {
           SFX.shoot();
-          // muzzle flash
-          add([circle(9), pos(player.pos.x + facing * 24, player.pos.y - 4), anchor("center"), color(190, 235, 255), opacity(0.85), lifespan(0.08, { fade: 0.08 }), z(8)]);
-          const b = add([
-            rect(18, 6, { radius: 3 }), pos(player.pos.x + facing * 24, player.pos.y - 4), anchor("center"),
-            color(150, 225, 255), outline(2, rgb(20, 70, 100)), area(),
-            move(vec2(facing, 0), 760), offscreen({ destroy: true }), z(5), "bullet",
-          ]);
+          add([circle(9), pos(player.pos.x + facing * 24, player.pos.y - 4), anchor("center"), color(230, 190, 120), opacity(0.85), lifespan(0.08, { fade: 0.08 }), z(8)]);
+          const b = add([rect(18, 5, { radius: 2 }), pos(player.pos.x + facing * 24, player.pos.y - 4), anchor("center"), color(240, 200, 120), outline(2, rgb(90, 60, 20)), area(), move(vec2(facing, 0), 780), offscreen({ destroy: true }), z(5), "bullet"]);
           b.onCollide("enemy", (e) => { destroy(b); killEnemy(e); });
           b.onCollide("platform", () => destroy(b));
         }
-
         function claw() {
-          SFX.claw();
-          player.move(facing * 200, 0); // lunge
-          squash(1.25, 0.85);
-          const hb = add([
-            rect(54, 42, { radius: 6 }), pos(player.pos.x + facing * 36, player.pos.y - 2), anchor("center"),
-            color(255, 205, 120), opacity(0.4), area(), lifespan(0.14, { fade: 0.14 }), z(5), "claw",
-          ]);
+          SFX.claw(); player.move(facing * 200, 0); squash(1.24, 0.86);
+          const hb = add([rect(54, 42, { radius: 6 }), pos(player.pos.x + facing * 36, player.pos.y - 2), anchor("center"), color(255, 205, 120), opacity(0.35), area(), lifespan(0.14, { fade: 0.14 }), z(5), "claw"]);
           burst(hb.pos, rgb(255, 210, 140), 6, 150, 5);
           hb.onCollide("enemy", (e) => killEnemy(e));
         }
+        function attack() { if (time() - lastAtk < 0.32) return; lastAtk = time(); CFG.mode === "ranged" ? shoot() : claw(); }
 
-        function attack() {
-          if (time() - lastAtk < 0.32) return;
-          lastAtk = time();
-          if (CFG.mode === "ranged") shoot(); else claw();
-        }
-
-        // --- Jump ---
         function jump() {
           if (jumpsLeft > 0) {
             const mid = jumpsLeft < maxJumps;
-            player.jump(CFG.jumpForce);
-            jumpsLeft -= 1;
-            squash(0.72, 1.3);
-            dust(player.pos.add(0, 20));
+            player.jump(CFG.jumpForce); jumpsLeft -= 1;
+            squash(0.74, 1.28); dust(player.pos.add(0, 24));
             mid ? SFX.jump2() : SFX.jump();
           }
         }
         ["space", "up", "w"].forEach((key) => onKeyPress(key, jump));
         onGamepadButtonPress("south", jump);
         ["j", "x"].forEach((key) => onKeyPress(key, attack));
-        onGamepadButtonPress("west", attack);
-        onGamepadButtonPress("east", attack);
+        onGamepadButtonPress("west", attack); onGamepadButtonPress("east", attack);
         onKeyPress("r", () => go("game", sideKey));
 
-        // --- Per-frame: movement, camera, fall death ---
         function camTarget() {
           const halfW = width() / 2, halfH = height() / 2;
-          const cx = clamp(player.pos.x, halfW, Math.max(LEVEL_W - halfW, halfW));
-          const cy = clamp(player.pos.y, halfH, Math.max(LEVEL_H - halfH, halfH)) - 30;
-          return vec2(cx, cy);
+          return vec2(
+            clamp(player.pos.x, halfW, Math.max(LEVEL_W - halfW, halfW)),
+            clamp(player.pos.y, halfH, Math.max(LEVEL_H - halfH, halfH)) - 30,
+          );
         }
 
         player.onUpdate(() => {
           if (!player.isGrounded()) airTime += dt();
-
           let dx = 0;
           if (isKeyDown("left") || isKeyDown("a")) dx -= 1;
           if (isKeyDown("right") || isKeyDown("d")) dx += 1;
@@ -425,16 +497,16 @@
           const stick = getGamepadStick("left");
           if (stick && Math.abs(stick.x) > 0.3) dx += stick.x;
           dx = clamp(dx, -1, 1);
-          if (Math.abs(dx) > 0.05) { player.move(dx * CFG.speed, 0); facing = dx > 0 ? 1 : -1; }
-          eye.pos = player.pos.add(facing * 7, -6);
+          if (Math.abs(dx) > 0.05) { player.move(dx * CFG.speed, 0); facing = dx > 0 ? 1 : -1; player.flipX = facing < 0; }
 
-          // smooth (eased) camera follow
           const target = camTarget();
           if (!camReady) { setCamPos(target); camReady = true; }
           else setCamPos(getCamPos().lerp(target, Math.min(1, dt() * 8)));
 
           if (player.pos.y > LEVEL_H + 260) hurt(true);
         });
+
+        addOverlay();
       });
 
       // =======================================================================
@@ -442,26 +514,20 @@
       // =======================================================================
       scene("over", ({ win, side, score }) => {
         const s = SIDES[side];
-        add([rect(width(), height()), pos(0, 0), color(...(win ? [16, 30, 22] : [30, 16, 18]))]);
-        addStarfield();
-        add([text(win ? "YOU ESCAPED" : "HUNTED DOWN", { size: 56 }), pos(width() / 2, 200), anchor("center"), color(win ? rgb(120, 240, 160) : rgb(240, 120, 120))]);
-        add([text(`${s.name}   •   Energy collected: ${score}`, { size: 22 }), pos(width() / 2, 270), anchor("center"), color(210, 216, 230)]);
-        add([text("ENTER / A — play again      M — menu", { size: 17 }), pos(width() / 2, 340), anchor("center"), color(150, 160, 180)]);
-
-        if (win) {
-          // little celebratory pops
-          for (let i = 0; i < 5; i++) wait(i * 0.18, () => addKaboom(vec2(rand(200, width() - 200), rand(120, 380)), { scale: 0.5 }));
-        }
+        addBackdrop(false);
+        add([rect(width(), height()), pos(0, 0), fixed(), color(...(win ? [16, 26, 20] : [26, 14, 14])), opacity(0.5), z(-10)]);
+        add([sprite(s.sprite), pos(width() / 2, 130), anchor("center"), scale(2.2)]);
+        add([text(win ? "YOU ESCAPED" : "HUNTED DOWN", { size: 54 }), pos(width() / 2, 250), anchor("center"), color(win ? rgb(150, 220, 160) : rgb(220, 110, 100)), outline(4, rgb(20, 18, 16))]);
+        add([text(`${s.name}   •   Energy collected: ${score}`, { size: 22 }), pos(width() / 2, 312), anchor("center"), color(210, 200, 186)]);
+        add([text("ENTER / A — play again      M — menu", { size: 17 }), pos(width() / 2, 372), anchor("center"), color(160, 150, 134)]);
+        addOverlay();
 
         const again = () => go("game", side);
-        onKeyPress("enter", again);
-        onKeyPress("space", again);
-        onGamepadButtonPress("south", again);
-        onKeyPress("m", () => go("select"));
-        onGamepadButtonPress("start", () => go("select"));
+        onKeyPress("enter", again); onKeyPress("space", again); onGamepadButtonPress("south", again);
+        onKeyPress("m", () => go("select")); onGamepadButtonPress("start", () => go("select"));
       });
 
-      go("select");
+      onLoad(() => go("select"));
     </script>
   </body>
 </html>
