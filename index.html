@@ -431,21 +431,33 @@
       //   2. Fill url + anonKey. That's it — events flow for everyone.
       // =====================================================================
       const LIVE = { url: "", anonKey: "" };
-      const TICKER = { items: [], push(msg) { this.items.push({ msg, at: Date.now() }); if (this.items.length > 6) this.items.shift(); } };
+      // Default global backend: ntfy.sh — free keyless pub/sub, works with zero
+      // setup. Events are anonymous codenames only. Fill LIVE above to switch
+      // to a private Supabase instead.
+      const NTFY_TOPIC = "quarry-yonidavidson-live";
+      const TICKER = { items: [], seen: new Set(), push(msg) { if (this.seen.has(msg)) return; this.seen.add(msg); this.items.push({ msg, at: Date.now() }); if (this.items.length > 6) this.items.shift(); } };
       function liveSend(msg) {
         TICKER.push(msg);
-        if (!LIVE.url) return;
-        try { fetch(`${LIVE.url}/rest/v1/events`, { method: "POST", headers: { apikey: LIVE.anonKey, Authorization: `Bearer ${LIVE.anonKey}`, "Content-Type": "application/json", Prefer: "return=minimal" }, body: JSON.stringify({ msg }) }).catch(() => {}); } catch (e) {}
-      }
-      async function livePoll() {
-        if (!LIVE.url) return;
         try {
-          const r = await fetch(`${LIVE.url}/rest/v1/events?select=msg,created_at&order=id.desc&limit=5`, { headers: { apikey: LIVE.anonKey, Authorization: `Bearer ${LIVE.anonKey}` } });
-          const rows = await r.json();
-          rows.reverse().forEach((row) => { if (!TICKER.items.some((i) => i.msg === row.msg)) TICKER.push(row.msg); });
+          if (LIVE.url) fetch(`${LIVE.url}/rest/v1/events`, { method: "POST", headers: { apikey: LIVE.anonKey, Authorization: `Bearer ${LIVE.anonKey}`, "Content-Type": "application/json", Prefer: "return=minimal" }, body: JSON.stringify({ msg }) }).catch(() => {});
+          else fetch(`https://ntfy.sh/${NTFY_TOPIC}`, { method: "POST", body: msg }).catch(() => {});
         } catch (e) {}
       }
-      if (LIVE.url) setInterval(livePoll, 15000);
+      async function livePoll() {
+        try {
+          if (LIVE.url) {
+            const r = await fetch(`${LIVE.url}/rest/v1/events?select=msg&order=id.desc&limit=5`, { headers: { apikey: LIVE.anonKey, Authorization: `Bearer ${LIVE.anonKey}` } });
+            (await r.json()).reverse().forEach((row) => TICKER.push(row.msg));
+          } else {
+            const r = await fetch(`https://ntfy.sh/${NTFY_TOPIC}/json?poll=1&since=3m`);
+            (await r.text()).trim().split("\n").filter(Boolean).forEach((line) => {
+              try { const m = JSON.parse(line); if (m.event === "message" && m.message) TICKER.push(m.message); } catch (e) {}
+            });
+          }
+        } catch (e) {}
+      }
+      setInterval(livePoll, 20000);
+      setTimeout(livePoll, 2500);
       const CODENAME = "Hunter-" + Math.abs((Date.now() * 2654435761) % 899 + 100); // anonymous fun name
       // bottom bar that alternates between controls hint and live events
       function addTicker(controlsLine) {

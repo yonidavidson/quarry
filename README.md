@@ -37,9 +37,9 @@ Press **O** on the menu. Host picks a side, gets a code; friend pastes it and se
 
 Wall-climb (Beast): hold into a wall + Up. Coyote time, jump buffering, and variable jump height are all in — the controls are forgiving on purpose.
 
-## Live ticker
+## Live ticker — see who's hunting, worldwide
 
-The bottom bar shows live events — who entered the hunt, hunter takedowns, escapes. Works locally and across an online duel. Global presence (see everyone playing, worldwide) activates by filling the `LIVE` config in `index.html` with a free Supabase project — setup SQL is in the comment right above it (issue #12).
+The bottom bar shows live events from **every player everywhere** — who entered the hunt, hunter takedowns, escapes with energy counts. It works out of the box via a free keyless pub/sub channel (ntfy.sh); events are anonymous codenames only (`Hunter-551 escaped as JACK with 21 energy`). Prefer your own private backend? Fill the `LIVE` config in `index.html` with a free Supabase project — setup SQL is in the comment right above it.
 
 ## Built with
 
