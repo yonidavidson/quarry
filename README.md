@@ -18,11 +18,11 @@ Whichever side you pick, **the other side hunts you** across the complex — an 
 
 Multi-floor industrial complex: spikes, patrol drones, sewage pools that slow your wading, ladders, climbable chain-nets, teleport doors, flickering lamps, steam vents, ceiling drips. Grab energy cells, find the glowing **EXIT**.
 
-**Random weapons** spawn on pads — you can hold only one; swapping drops your current where you stand. Human pool: Blaster / Scattergun / Rail Lance. Beast pool: Claws / Bone Scythe / Barb Whip. The hunter arms itself too.
+**Random weapons** spawn on pads — you can hold only one; swapping drops your current where you stand. Human pool: Blaster / Scattergun / Rail Lance / Shotgun / Machine Gun. Beast pool: Claws / Bone Scythe / Barb Whip / Bone Bat. Every weapon has its own attack visuals and sound. The hunter arms itself too.
 
 ## Online 2P — hunt a real friend
 
-Press **O** on the menu. Host picks a side, gets a code; friend pastes it and sends back an answer code; paste that and you're in the same world hunting each other. Pure P2P over WebRTC (Google STUN, no server, no accounts). First to kill the other — or escape — wins.
+Press **O** on the menu. A 3-step wizard walks you through it: pick your name and side, send the invite code, paste the answer back. In-game: floating name tags, **T to chat**, live link/ping indicator. (Two windows on one machine? Keep both visible — a hidden tab pauses its game.) Pure P2P over WebRTC (Google STUN, no server, no accounts). First to kill the other — or escape — wins.
 
 ## Controls
 

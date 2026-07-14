@@ -282,6 +282,7 @@
         <linearGradient id="hornG" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#e8dcc0"/><stop offset="100%" stop-color="#6a5334"/></linearGradient>
         <radialGradient id="eyeG" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#ffd23e"/><stop offset="70%" stop-color="#ff7b2e"/><stop offset="100%" stop-color="#8a2a10"/></radialGradient>
       </defs>`;
+      const rotFrame = (inner, deg) => `<g transform="rotate(${deg} 56 96)">${inner}</g>`;
       const BFRAMES = [
         beastFrame({}), beastFrame({ dy: 2.5, jaw: 6, ts: 3 }),                                                  // idle: heave + jaw
         beastFrame({ l1: 24, l1b: -10, l2: -18, l2b: 14, la: 14, lab: -6, ra: -16, rab: 10, ts: 4 }),            // stride reach
@@ -289,9 +290,12 @@
         beastFrame({ l1: -18, l1b: 16, l2: 24, l2b: -12, la: -16, lab: 10, ra: 14, rab: -8, ts: -4 }),           // stride 2
         beastFrame({ l1: 2, l1b: -2, l2: 6, l2b: 6, la: 4, ra: 4, dy: 3 }),                                      // pass 2
         beastFrame({ dy: -4, jaw: 12, l1: 30, l1b: -18, l2: -24, l2b: 22, la: -55, lab: -25, ra: -60, rab: -30, ts: -6 }), // lunge: claws forward, roar
+        rotFrame(beastFrame({ la: -68, lab: -18, ra: -74, rab: -12, l1: -28, l1b: 20, l2: -36, l2b: 26, jaw: 2 }), -74),   // wall cling A (#26)
+        rotFrame(beastFrame({ la: -50, lab: -30, ra: -88, rab: -6, l1: -40, l1b: 30, l2: -22, l2b: 16, jaw: 2, dy: 2 }), -74), // wall crawl B
+        rotFrame(beastFrame({ l1: 42, l1b: 55, l2: 36, l2b: 50, la: -38, lab: -30, ra: -44, rab: -34, jaw: 5 }), 14),      // body drop (tucked)
       ];
-      loadSprite("stalker", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="${112 * 7}" height="168">${BDEFS}${BFRAMES.map((f, i) => `<g transform="translate(${i * 112} 0)">${f}</g>`).join("")}</svg>`),
-        { sliceX: 7, anims: { idle: { from: 0, to: 1, speed: 2, loop: true }, run: { from: 2, to: 5, speed: 11, loop: true }, jump: 6 } });
+      loadSprite("stalker", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="${112 * 10}" height="192">${BDEFS}${BFRAMES.map((f, i) => `<g transform="translate(${i * 112} 12)">${f}</g>`).join("")}</svg>`),
+        { sliceX: 10, anims: { idle: { from: 0, to: 1, speed: 2, loop: true }, run: { from: 2, to: 5, speed: 11, loop: true }, jump: 6, cling: { from: 7, to: 8, speed: 6, loop: true }, drop: 9 } });
 
       loadSprite("redglow", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80"><defs><radialGradient id="rg" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#ff5040" stop-opacity="0.55"/><stop offset="100%" stop-color="#ff5040" stop-opacity="0"/></radialGradient></defs><circle cx="40" cy="40" r="40" fill="url(#rg)"/></svg>`));
 
@@ -722,6 +726,32 @@
       loadSprite("shadow", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="64" height="22"><defs><radialGradient id="sh" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#000" stop-opacity="0.55"/><stop offset="100%" stop-color="#000" stop-opacity="0"/></radialGradient></defs><ellipse cx="32" cy="11" rx="32" ry="11" fill="url(#sh)"/></svg>`));
 
       // =====================================================================
+      // WELCOME SPLASH (#25): ~2s of mood — the hunt — then the menu
+      // =====================================================================
+      scene("splash", () => {
+        add([sprite("sky"), pos(0, 0), fixed(), z(-100)]);
+        addFog(); addDust();
+        add([rect(width(), height()), pos(0, 0), fixed(), color(6, 5, 6), opacity(0.45), z(-50)]);
+        // the beast looms out of the dark behind Jack
+        add([sprite("lamp"), pos(640, 300), anchor("center"), scale(3.2), opacity(0.3), color(255, 120, 60), z(-5)]);
+        const beast = add([sprite("stalker", { anim: "idle" }), pos(660, 336), anchor("bot"), scale(1.35), opacity(0), z(2), { u: 0 }]);
+        beast.flipX = true;
+        const jack = add([sprite("human", { anim: "run" }), pos(360, 330), anchor("bot"), scale(0.85), opacity(0), z(3)]);
+        add([sprite("lamp"), pos(340, 250), anchor("center"), scale(1.6), opacity(0.4), z(-4)]);
+        tween(0, 1, 0.7, (v) => { beast.opacity = v; jack.opacity = v; }, easings.easeOutQuad);
+        beast.onUpdate(() => { beast.u += dt(); beast.pos.x = 660 - Math.min(beast.u * 30, 60); }); // it closes in…
+        const title = add([text("QUARRY", { size: 84 }), pos(width() / 2, 150), anchor("center"), color(232, 222, 202), outline(5, rgb(12, 10, 8)), opacity(0)]);
+        const sub = add([text("One hunts. One runs. The world kills both.", { size: 20 }), pos(width() / 2, 210), anchor("center"), color(190, 170, 140), opacity(0)]);
+        tween(0, 1, 0.9, (v) => { title.opacity = v; sub.opacity = v * 0.9; }, easings.easeOutQuad);
+        add([text("press any key", { size: 14 }), pos(width() / 2, 500), anchor("center"), color(130, 120, 104), opacity(0.7), { update() { this.opacity = 0.4 + Math.sin(time() * 4) * 0.3; } }]);
+        addOverlay();
+        try { SFX.roar(); } catch (e) {}
+        const skip = () => go("select");
+        wait(2.3, skip);
+        onKeyPress(skip); onMousePress(skip); onGamepadButtonPress("south", skip);
+      });
+
+      // =====================================================================
       // MENU
       // =====================================================================
       scene("select", () => {
@@ -935,7 +965,7 @@
         });
 
         // wall / ladder / door detection
-        player.onCollideUpdate("platform", (p) => { const dx = p.pos.x - player.pos.x, dy = Math.abs(p.pos.y - player.pos.y); if (Math.abs(dx) > 12 && dy < TS * 0.55) { wallDir = dx > 0 ? 1 : -1; lastWallTime = time(); } });
+        player.onCollideUpdate("platform", (p) => { const dx = p.pos.x - player.pos.x, dy = Math.abs(p.pos.y - player.pos.y); if (Math.abs(dx) > 12 && dy < TS * 0.85) { wallDir = dx > 0 ? 1 : -1; lastWallTime = time(); } });
         player.onCollideUpdate("ladder", () => { lastLadderTime = time(); });
         player.onCollideUpdate("water", () => { lastWaterAt = time(); });
         player.onCollideUpdate("door", (d) => { nearDoor = d; lastDoorTime = time(); });
@@ -1378,8 +1408,10 @@
             }
           }
 
-          // animation state
+          // animation state (beast gets cling/crawl on walls + tucked drop, #26)
           if (time() < lungeUntil) setAnim("jump");
+          else if (CFG.wallClimb && wallStick !== 0 && !player.isGrounded()) setAnim("cling");
+          else if (CFG.wallClimb && !player.isGrounded() && !onLadderNow && player.vel.y > 280) setAnim("drop");
           else if (!player.isGrounded() && !onLadderNow) setAnim("jump");
           else if (Math.abs(dx) > 0.05 || (onLadderNow && (up || down))) setAnim("run");
           else setAnim("idle");
@@ -1414,7 +1446,7 @@
         onKeyPress("m", () => go("select")); onGamepadButtonPress("start", () => go("select"));
       });
 
-      onLoad(() => go("select"));
+      onLoad(() => go("splash"));
     </script>
   </body>
 </html>
