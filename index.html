@@ -188,6 +188,15 @@
 
       loadSprite("bomb", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="18" height="20"><rect x="8" y="0" width="2" height="4" fill="#7a4a28"/><circle cx="9" cy="2" r="1.6" fill="#e8b13a"/><circle cx="9" cy="12" r="7" fill="#2a2c2e" stroke="#131416"/><circle cx="6" cy="9" r="2" fill="#44484a" opacity="0.7"/></svg>`));
 
+      // weapon pickup pad + per-weapon glyphs (issue #13)
+      loadSprite("pad", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="40" height="10"><rect width="40" height="10" rx="2" fill="#22262a"/><g fill="#c8992e" opacity="0.8"><rect x="2" y="2" width="6" height="6"/><rect x="14" y="2" width="6" height="6"/><rect x="26" y="2" width="6" height="6"/></g><g fill="#131416"><rect x="8" y="2" width="6" height="6"/><rect x="20" y="2" width="6" height="6"/><rect x="32" y="2" width="6" height="6"/></g></svg>`));
+      loadSprite("wpn-blaster", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="28" height="24"><rect x="2" y="10" width="18" height="5" rx="1" fill="#26262a"/><rect x="18" y="9" width="8" height="3" fill="#3a3a40"/><rect x="4" y="14" width="5" height="6" fill="#1e1e22"/></svg>`));
+      loadSprite("wpn-scatter", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="28" height="24"><rect x="2" y="9" width="14" height="7" rx="2" fill="#2e2622"/><rect x="14" y="8" width="12" height="4" fill="#3a3026"/><rect x="14" y="13" width="12" height="4" fill="#3a3026"/><rect x="4" y="15" width="5" height="6" fill="#1e1a16"/></svg>`));
+      loadSprite("wpn-rail", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="28" height="24"><rect x="1" y="11" width="26" height="3" rx="1" fill="#2a3038"/><rect x="20" y="9" width="7" height="7" rx="3" fill="#4a90b8" opacity="0.8"/><rect x="3" y="14" width="5" height="6" fill="#1e2226"/><circle cx="27" cy="12.5" r="2" fill="#8ad0f0"/></svg>`));
+      loadSprite("wpn-claws", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="28" height="24"><g stroke="#cfc0a8" stroke-width="3" stroke-linecap="round" fill="none"><path d="M6 4 q6 8 4 16"/><path d="M14 3 q6 9 4 17"/><path d="M22 4 q5 8 3 16"/></g></svg>`));
+      loadSprite("wpn-scythe", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="28" height="24"><path d="M4 20 L20 4" stroke="#4a3424" stroke-width="3"/><path d="M20 4 q8 2 6 12 q-2 -6 -9 -7z" fill="#cfc0a8"/></svg>`));
+      loadSprite("wpn-whip", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="28" height="24"><path d="M4 20 q2 -12 10 -12 q10 0 8 8 q-2 6 -8 4" stroke="#6a4a2a" stroke-width="3" fill="none" stroke-linecap="round"/><g fill="#cfc0a8"><circle cx="9" cy="12" r="1.5"/><circle cx="17" cy="9" r="1.5"/><circle cx="21" cy="15" r="1.5"/></g></svg>`));
+
       loadSprite("lamp", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="140" height="140"><defs><radialGradient id="l" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#e8b13a" stop-opacity="0.7"/><stop offset="100%" stop-color="#e8b13a" stop-opacity="0"/></radialGradient></defs><circle cx="70" cy="70" r="70" fill="url(#l)"/></svg>`));
 
       loadSprite("fog", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="600" height="180"><defs><radialGradient id="f" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#6a5a48" stop-opacity="0.5"/><stop offset="100%" stop-color="#6a5a48" stop-opacity="0"/></radialGradient></defs><ellipse cx="300" cy="90" rx="300" ry="80" fill="url(#f)"/></svg>`));
@@ -263,6 +272,17 @@
       // =====================================================================
       // SIDES
       // =====================================================================
+      // Weapon registry — one held at a time, pools per side (issue #13)
+      const WEAPONS = {
+        blaster: { side: "human", name: "Blaster", cd: 0.32 },
+        scatter: { side: "human", name: "Scattergun", cd: 0.7 },
+        rail: { side: "human", name: "Rail Lance", cd: 0.95 },
+        claws: { side: "stalker", name: "Claws", cd: 0.32 },
+        scythe: { side: "stalker", name: "Bone Scythe", cd: 0.55 },
+        whip: { side: "stalker", name: "Barb Whip", cd: 0.5 },
+      };
+      const WPOOL = (side) => Object.keys(WEAPONS).filter((k) => WEAPONS[k].side === side);
+
       const SIDES = {
         human: { name: "JACK — Human", sprite: "human", color: [120, 165, 210], speed: 250, jumpForce: 720, doubleJump: false, maxHp: 3, mode: "ranged", bomb: true,
           shadowY: 27, cardScale: 1.15,
@@ -374,6 +394,7 @@
         let hp = CFG.maxHp, score = 0, invuln = false, facing = 1, jumpsLeft = maxJumps;
         let lastAtk = 0, airTime = 0, spawn = vec2(0, 0), camReady = false, lastBomb = 0;
         let lastGroundedAt = 0, jumpBufferedAt = -1; // coyote time + jump buffering
+        let weapon = CFG.mode === "ranged" ? "blaster" : "claws"; // one weapon at a time (#13)
         let wallDir = 0, lastWallTime = -1, wallStick = 0;
         let lastLadderTime = -1, ladderCd = 0, onLadderNow = false;
         let nearDoor = null, lastDoorTime = -1, doorCd = 0;
@@ -423,6 +444,24 @@
         const makeDoor = (c, row) => add([sprite("door"), pos(c * TS + TS / 2, row * TS), anchor("bot"), area({ scale: vec2(0.5, 0.9) }), z(1), "door", { partner: null }]);
         DOOR_PAIRS.forEach(([a, b]) => { const da = makeDoor(a[0], a[1]), db = makeDoor(b[0], b[1]); da.partner = db.pos.clone(); db.partner = da.pos.clone(); });
 
+        // --- weapon crates on pads (#13): spawn on random floor cells ---
+        const NKEY2 = sideKey === "human" ? "stalker" : "human";
+        const crateCells = [];
+        GRID.forEach((row, r) => row.forEach((ch, c) => {
+          if (ch === " " && GRID[r + 1] && GRID[r + 1][c] === "=" && Math.abs(c - 3) > 4) crateCells.push([c, r]);
+        }));
+        function spawnCrate(wkey, at) {
+          const cell = choose(crateCells);
+          const p = at || vec2(cell[0] * TS + TS / 2, cell[1] * TS + TS - 4);
+          const cr = add([sprite("wpn-" + wkey), pos(p), anchor("bot"), area({ scale: 1.5 }), z(3), "wcrate", { wkey, born: time() }]);
+          cr.add([sprite("pad"), pos(0, 0), anchor("top"), z(-1)]);
+          cr.add([sprite("lamp"), pos(0, -12), anchor("center"), scale(0.35), opacity(0.35), z(-2)]);
+          return cr;
+        }
+        for (let i = 0; i < 3; i++) spawnCrate(choose(WPOOL(sideKey)));
+        for (let i = 0; i < 2; i++) spawnCrate(choose(WPOOL(NKEY2)));
+        loop(25, () => { if (get("wcrate").length < 5) spawnCrate(choose(WPOOL(rand() < 0.6 ? sideKey : NKEY2))); });
+
         // --- player ---
         const player = add([sprite(CFG.sprite, { anim: "idle" }), pos(spawn), anchor("center"), area({ scale: vec2(0.6, 0.82) }), body({ jumpForce: CFG.jumpForce }), opacity(1), scale(1), z(6), "player"]);
         player.add([sprite("shadow"), pos(0, CFG.shadowY), anchor("center"), z(-1), opacity(0.6)]);
@@ -454,7 +493,7 @@
         const hud = add([text("", { size: 20 }), pos(16, 14), fixed(), z(200), color(232, 224, 210), outline(3, rgb(20, 18, 16))]);
         const ctrl = CFG.bomb ? "Bomb: K/Y   " : "Wall: into-wall+Up   ";
         add([text("Move ←→/AD   Jump Space   Attack J/X   " + ctrl + "Climb ↑↓   Door: E", { size: 13 }), pos(16, 520), fixed(), z(200), color(150, 140, 124)]);
-        const updateHUD = () => (hud.text = `${CFG.name}    HP ${Math.max(hp, 0)}/${CFG.maxHp}    Energy ${score}`);
+        const updateHUD = () => (hud.text = `${CFG.name}    HP ${Math.max(hp, 0)}/${CFG.maxHp}    Energy ${score}    ⚔ ${WEAPONS[weapon].name}`);
         updateHUD();
 
         function killEnemy(e) { burst(e.pos, rgb(80, 84, 86), 12, 200, 8); burst(e.pos, rgb(230, 120, 60), 8, 240, 5); popText(e.pos, "+1", rgb(240, 180, 120)); shake(5); SFX.kill(); destroy(e); score += 1; updateHUD(); }
@@ -467,24 +506,44 @@
           invuln = true; const blink = loop(0.09, () => (player.opacity = player.opacity === 1 ? 0.35 : 1)); wait(1.1, () => { blink.cancel(); player.opacity = 1; invuln = false; });
         }
         player.onCollide("energy", (c) => { burst(c.pos, rgb(120, 220, 150), 10, 170, 6); popText(c.pos, "+1", rgb(180, 240, 190)); SFX.pickup(); destroy(c); score += 1; updateHUD(); });
+        player.onCollide("wcrate", (c) => {
+          if (WEAPONS[c.wkey].side !== sideKey || time() - c.born < 1) return; // 1s grace stops swap loops
+          const old = weapon; weapon = c.wkey;
+          const dropAt = c.pos.clone(); destroy(c); spawnCrate(old, dropAt);
+          SFX.pickup(); popText(player.pos.add(0, -34), WEAPONS[weapon].name + "!", rgb(240, 220, 160));
+          burst(dropAt.add(0, -10), rgb(240, 220, 160), 8, 140, 5); updateHUD();
+        });
         player.onCollide("danger", () => hurt());
         player.onCollide("enemy", () => hurt());
         player.onCollide("exit", () => { SFX.win(); go("over", { win: true, side: sideKey, score }); });
 
-        function shoot() {
+        function mkBullet(dirY, opts = {}) {
+          const b = add([rect(opts.len || 18, opts.h || 5, { radius: 2 }), pos(player.pos.x + facing * 24, player.pos.y - 4), anchor("center"),
+            color(...(opts.col || [240, 200, 120])), outline(2, rgb(90, 60, 20)), area(), move(vec2(facing, dirY).unit(), opts.spd || 780),
+            offscreen({ destroy: true }), z(5), "bullet", ...(opts.life ? [lifespan(opts.life, { fade: 0.06 })] : []), opacity(1)]);
+          b.onCollide("enemy", (e) => { if (!opts.pierce) destroy(b); killEnemy(e); });
+          b.onCollide("nemesis", (n) => { if (!opts.pierce) destroy(b); hitNemesis(n); });
+          b.onCollide("platform", () => destroy(b));
+        }
+        function fireRanged() {
           SFX.shoot();
           add([circle(9), pos(player.pos.x + facing * 24, player.pos.y - 4), anchor("center"), color(230, 190, 120), opacity(0.85), lifespan(0.08, { fade: 0.08 }), z(8)]);
-          const b = add([rect(18, 5, { radius: 2 }), pos(player.pos.x + facing * 24, player.pos.y - 4), anchor("center"), color(240, 200, 120), outline(2, rgb(90, 60, 20)), area(), move(vec2(facing, 0), 780), offscreen({ destroy: true }), z(5), "bullet"]);
-          b.onCollide("enemy", (e) => { destroy(b); killEnemy(e); }); b.onCollide("platform", () => destroy(b));
-          b.onCollide("nemesis", (n) => { destroy(b); hitNemesis(n); });
+          if (weapon === "scatter") { mkBullet(-0.14, { life: 0.3, spd: 700 }); mkBullet(0, { life: 0.34, spd: 730 }); mkBullet(0.14, { life: 0.3, spd: 700 }); shake(2); }
+          else if (weapon === "rail") { mkBullet(0, { pierce: true, spd: 1300, len: 36, h: 4, col: [140, 210, 240] }); shake(3); }
+          else mkBullet(0, {});
         }
-        function claw() {
-          SFX.claw(); player.move(facing * 200, 0); squash(1.24, 0.86); lungeUntil = time() + 0.28;
-          const hb = add([rect(54, 42, { radius: 6 }), pos(player.pos.x + facing * 36, player.pos.y - 2), anchor("center"), color(255, 205, 120), opacity(0.35), area(), lifespan(0.14, { fade: 0.14 }), z(5), "claw"]);
-          burst(hb.pos, rgb(255, 210, 140), 6, 150, 5); hb.onCollide("enemy", (e) => killEnemy(e));
-          hb.onCollide("nemesis", (n) => hitNemesis(n));
+        function meleeStrike() {
+          SFX.claw(); lungeUntil = time() + 0.28;
+          const [w, h, reach] = weapon === "scythe" ? [84, 60, 44] : weapon === "whip" ? [110, 18, 66] : [54, 42, 36];
+          player.move(facing * (weapon === "whip" ? 80 : 200), 0); squash(1.24, 0.86);
+          const hb = add([rect(w, h, { radius: 6 }), pos(player.pos.x + facing * reach, player.pos.y - 2), anchor("center"), color(255, 205, 120), opacity(0.35), area(), lifespan(0.14, { fade: 0.14 }), z(5), "claw"]);
+          burst(hb.pos, rgb(255, 210, 140), 6, 150, 5);
+          hb.onCollide("enemy", (e) => killEnemy(e));
+          hb.onCollide("nemesis", (n) => { hitNemesis(n); if (weapon === "whip" && n.exists()) n.move(facing * 320, 0); });
         }
-        function attack() { if (time() - lastAtk < 0.32) return; lastAtk = time(); CFG.mode === "ranged" ? shoot() : claw(); }
+        function attack() { if (time() - lastAtk < WEAPONS[weapon].cd) return; lastAtk = time(); CFG.mode === "ranged" ? fireRanged() : meleeStrike(); }
+        // debug hook (used by the headless test harness)
+        window.__quarry = { give: (w) => { if (WEAPONS[w]) { weapon = w; updateHUD(); } }, weapon: () => weapon, attack };
         function explode(p) {
           SFX.boom(); shake(11); flash(rgb(240, 180, 90), 0.4);
           const ring = add([circle(8), pos(p), anchor("center"), color(255, 220, 150), opacity(0.6), lifespan(0.3, { fade: 0.3 }), z(35)]);
@@ -553,7 +612,7 @@
           nemesis = add([
             sprite(NCFG.sprite, { anim: "idle" }), pos(far), anchor("center"),
             area({ scale: vec2(0.6, 0.82) }), body({ jumpForce: NCFG.jumpForce }), opacity(1), z(6), "nemesis",
-            { hp: 3, iframes: 0, flash: 0, dir: choose([-1, 1]), state: "patrol", anim: "idle", atkCd: 0, climbing: false, senseAt: time() + 16 },
+            { hp: 3, iframes: 0, flash: 0, dir: choose([-1, 1]), state: "patrol", anim: "idle", atkCd: 0, climbing: false, senseAt: time() + 16, weapon: NCFG.mode === "ranged" ? "blaster" : "claws" },
           ]);
           nemesis.add([sprite("shadow"), pos(0, NCFG.shadowY), anchor("center"), z(-1), opacity(0.6)]);
           if (NCFG.glow) {
@@ -565,6 +624,10 @@
           // the hunter knows its hunting ground — hazards don't hurt it,
           // only the player's attacks do (otherwise it suicides on spikes)
           nemesis.onCollide("player", () => hurt());
+          nemesis.onCollide("wcrate", (c) => { // the hunter arms itself too
+            if (!nemesis || WEAPONS[c.wkey].side !== NKEY || time() - c.born < 1) return;
+            nemesis.weapon = c.wkey; destroy(c);
+          });
 
           nemesis.onUpdate(() => {
             const n = nemesis; if (!n) return;
@@ -608,7 +671,7 @@
                   const nb = add([rect(18, 5, { radius: 2 }), pos(n.pos.x + dirx * 24, n.pos.y - 4), anchor("center"), color(255, 130, 110), outline(2, rgb(90, 30, 20)), area(), move(vec2(dirx, 0), 700), offscreen({ destroy: true }), z(5), "nbullet"]);
                   nb.onCollide("player", () => { destroy(nb); hurt(); });
                   nb.onCollide("platform", () => destroy(nb));
-                } else if (NCFG.mode === "melee" && dist < 90) {
+                } else if (NCFG.mode === "melee" && dist < (n.weapon === "whip" ? 130 : n.weapon === "scythe" ? 110 : 90)) {
                   n.atkCd = time() + 0.9; SFX.claw(); n.move((toP.x > 0 ? 1 : -1) * 220, 0);
                 }
               }
