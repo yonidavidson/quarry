@@ -451,7 +451,8 @@
       // =====================================================================
       // NET (issue #11): WebRTC 2P — manual code exchange, Google STUN
       // =====================================================================
-      const NET = { pc: null, dc: null, role: null, mySide: null, connected: false, onMsg: null, ping: 0 };
+      const NET = { pc: null, dc: null, role: null, mySide: null, connected: false, onMsg: null, ping: 0, peerName: null, lastPacketAt: 0 };
+      const CHAT = { lines: [], push(name, text) { this.lines.push({ name, text, at: Date.now() }); if (this.lines.length > 4) this.lines.shift(); } };
       const b64e = (s) => btoa(unescape(encodeURIComponent(s)));
       const b64d = (s) => decodeURIComponent(escape(atob(s.trim())));
       const iceDone = (pc) => new Promise((res) => {
@@ -460,23 +461,37 @@
         setTimeout(res, 4000); // STUN can stall; ship what we have
       });
       function netSend(o) { if (NET.dc && NET.dc.readyState === "open") NET.dc.send(JSON.stringify(o)); }
+      function netStatus(txt, good) { const el = document.getElementById("netStat"); if (el) { el.textContent = txt; el.style.color = good ? "#8fe0a0" : "#e0b080"; } }
+      function watchConn(pc) {
+        pc.onconnectionstatechange = () => {
+          const s = pc.connectionState;
+          netStatus(s === "connected" ? "✔ Connected! Starting the hunt…" : s === "connecting" ? "Connecting…" : s === "failed" ? "✗ Connection failed — regenerate codes and retry (check both windows are visible)" : "State: " + s, s === "connected");
+        };
+      }
       function wireDC(dc) {
         dc.onopen = () => {
           NET.connected = true;
-          if (NET.role === "host") { netSend({ t: "hello", side: NET.mySide }); netUIHide(); go("game", NET.mySide); }
+          if (NET.role === "host") { netSend({ t: "hello", side: NET.mySide, name: PLAYER_NAME }); netUIHide(); go("game", NET.mySide); }
         };
         dc.onmessage = (e) => {
           const m = JSON.parse(e.data);
-          if (m.t === "hello") { NET.mySide = m.side === "human" ? "stalker" : "human"; netUIHide(); go("game", NET.mySide); }
+          NET.lastPacketAt = performance.now();
+          if (m.t === "hello") { NET.peerName = m.name || "Opponent"; NET.mySide = m.side === "human" ? "stalker" : "human"; netSend({ t: "hi", name: PLAYER_NAME }); netUIHide(); go("game", NET.mySide); }
+          else if (m.t === "hi") NET.peerName = m.name || "Opponent";
           else if (m.t === "ping") netSend({ t: "pong", ts: m.ts });
           else if (m.t === "pong") NET.ping = Math.round(performance.now() - m.ts);
+          else if (m.t === "chat") CHAT.push(NET.peerName || "Them", ("" + m.text).slice(0, 90));
           if (NET.onMsg) NET.onMsg(m);
         };
         dc.onclose = () => { NET.connected = false; };
       }
+      // player name (#24): persisted, defaults to fun codename
+      let PLAYER_NAME = "";
+      function setPlayerName(n) { PLAYER_NAME = (n || "").trim().slice(0, 16) || PLAYER_NAME; try { localStorage.setItem("quarry-name", PLAYER_NAME); } catch (e) {} }
       async function netHost(side) {
         NET.role = "host"; NET.mySide = side;
         const pc = (NET.pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] }));
+        watchConn(pc);
         wireDC((NET.dc = pc.createDataChannel("game")));
         await pc.setLocalDescription(await pc.createOffer());
         await iceDone(pc);
@@ -486,6 +501,7 @@
       async function netJoin(offerCode) {
         NET.role = "guest";
         const pc = (NET.pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] }));
+        watchConn(pc);
         pc.ondatachannel = (e) => wireDC((NET.dc = e.channel));
         await pc.setRemoteDescription(JSON.parse(b64d(offerCode)));
         await pc.setLocalDescription(await pc.createAnswer());
@@ -509,35 +525,47 @@
       window.addEventListener("focus", () => { const n = document.getElementById("netui"); if (!n || n.style.display === "none") refocusGame(); });
       const NETSTYLE = `style="width:100%;height:86px;background:#0e0f12;color:#cfc8b0;border:1px solid #444;border-radius:6px;margin:6px 0;font-family:monospace;font-size:11px"`;
       const NETBTN = `style="background:#c8992e;color:#141414;border:none;border-radius:6px;padding:8px 16px;font-family:monospace;font-weight:bold;cursor:pointer;margin-right:8px"`;
+      const NETWARN = `<div style="background:#3a2a14;border:1px solid #7a5a24;border-radius:6px;padding:8px 10px;margin:8px 0;font-size:12px;color:#e0c890">⚠ Testing with two windows on ONE computer? Keep <b>both windows visible side-by-side</b> — a hidden tab pauses its game and pairing looks stuck.</div>`;
+      const NAMEROW = () => `<p style="margin:6px 0 2px">Your name:</p><input id="nameIn" value="${PLAYER_NAME.replace(/"/g, "")}" maxlength="16" style="width:180px;background:#0e0f12;color:#e6dcc8;border:1px solid #444;border-radius:6px;padding:6px;font-family:monospace"/>`;
+      window.__copyBtn = (btn, sel) => { navigator.clipboard.writeText(document.querySelector(sel).value); btn.textContent = "Copied ✔"; setTimeout(() => (btn.textContent = "Copy"), 1500); };
       window.__netHostStart = async (side) => {
+        setPlayerName(document.getElementById("nameIn") ? document.getElementById("nameIn").value : PLAYER_NAME);
+        netUI(`<h3>HOSTING as ${side === "human" ? "JACK" : "the BEAST"} — ${PLAYER_NAME}</h3>${NETWARN}<p>Generating your invite code…</p><p id="netStat"></p>`);
         const code = await netHost(side);
-        netUI(`<h3>HOSTING as ${side === "human" ? "JACK" : "the BEAST"}</h3>
-          <p>1. Send this code to your friend (any chat):</p>
-          <textarea ${NETSTYLE} readonly onclick="this.select()">${code}</textarea>
-          <button ${NETBTN} onclick="navigator.clipboard.writeText(document.querySelector('#netui textarea').value)">Copy</button>
-          <p>2. Paste their ANSWER code here:</p>
-          <textarea ${NETSTYLE} id="ansIn"></textarea>
-          <button ${NETBTN} onclick="__netHostFinish()">Connect</button>
-          <button ${NETBTN} onclick="__netCancel()">Cancel</button><p id="netStat"></p>`);
+        netUI(`<h3>HOSTING as ${side === "human" ? "JACK" : "the BEAST"} — ${PLAYER_NAME}</h3>${NETWARN}
+          <p><b>STEP 1.</b> Send this INVITE code to your friend (WhatsApp, Slack, anything):</p>
+          <textarea ${NETSTYLE} id="offOut" readonly onclick="this.select()">${code}</textarea>
+          <button ${NETBTN} onclick="__copyBtn(this,'#offOut')">Copy</button>
+          <p><b>STEP 2.</b> They will send you back an ANSWER code. Paste it here:</p>
+          <textarea ${NETSTYLE} id="ansIn" placeholder="paste answer code…"></textarea>
+          <button ${NETBTN} onclick="__netHostFinish()">STEP 3 — Connect</button>
+          <button ${NETBTN} onclick="__netCancel()">Cancel</button>
+          <p id="netStat">Waiting for their answer code…</p>`);
       };
       window.__netHostFinish = async () => {
-        try { await netHostAccept(document.getElementById("ansIn").value); document.getElementById("netStat").textContent = "Connecting…"; }
-        catch (e) { document.getElementById("netStat").textContent = "Bad code: " + e.message; }
+        const v = document.getElementById("ansIn").value.trim();
+        if (!v) return netStatus("Paste their answer code first.");
+        try { netStatus("Connecting…"); await netHostAccept(v); } catch (e) { netStatus("✗ That doesn't look like an answer code (" + e.message + ")"); }
       };
       window.__netJoinStart = () => {
-        netUI(`<h3>JOIN a hunt</h3><p>1. Paste the HOST code:</p>
-          <textarea ${NETSTYLE} id="offIn"></textarea>
-          <button ${NETBTN} onclick="__netJoinGen()">Generate answer</button>
+        setPlayerName(document.getElementById("nameIn") ? document.getElementById("nameIn").value : PLAYER_NAME);
+        netUI(`<h3>JOINING a hunt — ${PLAYER_NAME}</h3>${NETWARN}
+          <p><b>STEP 1.</b> Paste the INVITE code your friend sent you:</p>
+          <textarea ${NETSTYLE} id="offIn" placeholder="paste invite code…"></textarea>
+          <button ${NETBTN} onclick="__netJoinGen()">STEP 2 — Generate my answer</button>
           <button ${NETBTN} onclick="__netCancel()">Cancel</button><div id="ansOut"></div><p id="netStat"></p>`);
       };
       window.__netJoinGen = async () => {
+        const v = document.getElementById("offIn").value.trim();
+        if (!v) return netStatus("Paste the invite code first.");
         try {
-          const ans = await netJoin(document.getElementById("offIn").value);
-          document.getElementById("ansOut").innerHTML = `<p>2. Send this ANSWER back to the host, then wait:</p>
-            <textarea ${NETSTYLE} readonly onclick="this.select()">${ans}</textarea>
-            <button ${NETBTN} onclick="navigator.clipboard.writeText(document.querySelector('#ansOut textarea').value)">Copy</button>`;
-          document.getElementById("netStat").textContent = "Waiting for host to connect…";
-        } catch (e) { document.getElementById("netStat").textContent = "Bad code: " + e.message; }
+          netStatus("Generating answer…");
+          const ans = await netJoin(v);
+          document.getElementById("ansOut").innerHTML = `<p><b>STEP 3.</b> Send this ANSWER back to the host. When they hit Connect, the hunt starts automatically:</p>
+            <textarea ${NETSTYLE} id="ansOutTa" readonly onclick="this.select()">${ans}</textarea>
+            <button ${NETBTN} onclick="__copyBtn(this,'#ansOutTa')">Copy</button>`;
+          netStatus("Waiting for the host to connect… keep this window visible!");
+        } catch (e) { netStatus("✗ That doesn't look like an invite code (" + e.message + ")"); }
       };
       window.__netCancel = () => { try { NET.pc && NET.pc.close(); } catch (e) {} NET.pc = NET.dc = null; NET.connected = false; netUIHide(); };
 
@@ -582,6 +610,7 @@
       setInterval(livePoll, 20000);
       setTimeout(livePoll, 2500);
       const CODENAME = "Hunter-" + Math.abs((Date.now() * 2654435761) % 899 + 100); // anonymous fun name
+      PLAYER_NAME = (() => { try { return localStorage.getItem("quarry-name"); } catch (e) { return null; } })() || CODENAME;
       // bottom bar that alternates between controls hint and live events
       function addTicker(controlsLine) {
         add([rect(width(), 24), pos(0, height() - 24), fixed(), z(196), color(12, 12, 14), opacity(0.85)]);
@@ -700,10 +729,11 @@
         addTicker("QUARRY — the world wants you dead either way.");
         addOverlay();
         onKeyPress("o", () => netUI(`<h3>ONLINE 2P — hunt each other</h3>
-          <p>Host picks a side; the joiner gets the other. Exchange two codes over any chat.</p>
+          <p>How it works: the host picks a side and sends an invite code; the joiner replies with an answer code. Two codes, any chat app, no accounts.</p>
+          ${NAMEROW()}${NETWARN}
           <button ${NETBTN} onclick="__netHostStart('human')">Host as JACK</button>
           <button ${NETBTN} onclick="__netHostStart('stalker')">Host as BEAST</button>
-          <button ${NETBTN} onclick="__netJoinStart()">Join</button>
+          <button ${NETBTN} onclick="__netJoinStart()">Join a friend</button>
           <button ${NETBTN} onclick="__netCancel()">Cancel</button>`));
         const refresh = () => cards.forEach((c, i) => { c.color = i === sel ? rgb(40, 38, 34) : rgb(26, 26, 28); c.outline.color = i === sel ? rgb(220, 170, 70) : rgb(58, 58, 62); c.outline.width = i === sel ? 5 : 4; tween(c.scale, i === sel ? vec2(1.06) : vec2(1), 0.12, (v) => (c.scale = v), easings.easeOutQuad); });
         refresh();
@@ -895,7 +925,7 @@
         }
         const ctrl = CFG.bomb ? "Bomb: K/Y   " : "Wall: into-wall+Up   ";
         addTicker("Move ←→/AD   Jump Space   Attack J/X   " + ctrl + "Climb ↑↓   Door: E   Pause: Esc   Mute: N");
-        liveSend(`${CODENAME} enters the hunt as ${sideKey === "human" ? "JACK" : "the BEAST"}${NET.connected ? " (online duel!)" : ""}`);
+        liveSend(`${PLAYER_NAME} enters the hunt as ${sideKey === "human" ? "JACK" : "the BEAST"}${NET.connected ? " (online duel!)" : ""}`);
         const updateHUD = () => {
           pips.forEach((p, i) => (p.opacity = i < hp ? 1 : 0.18));
           energyTxt.text = "" + score;
@@ -926,7 +956,7 @@
           if (invuln && !fromFall) return;
           hp -= 1; shake(9); flash(rgb(180, 40, 30), 0.5); SFX.hurt(); burst(player.pos, rgb(...CFG.color), 12, 200, 6); updateHUD();
           if (fromFall) { player.pos = spawn.clone(); player.vel = vec2(0, 0); }
-          if (hp <= 0) { liveSend(`${CODENAME} was hunted down (${score} energy)`); netSend({ t: "dead" }); SFX.lose(); go("over", { win: false, side: sideKey, score, online: NET.connected, how: NET.connected ? "They hunted you down." : undefined }); return; }
+          if (hp <= 0) { liveSend(`${PLAYER_NAME} was hunted down (${score} energy)`); netSend({ t: "dead" }); SFX.lose(); go("over", { win: false, side: sideKey, score, online: NET.connected, how: NET.connected ? "They hunted you down." : undefined }); return; }
           invuln = true; const blink = loop(0.09, () => (player.opacity = player.opacity === 1 ? 0.35 : 1)); wait(1.1, () => { blink.cancel(); player.opacity = 1; invuln = false; });
         }
         player.onCollide("energy", (c) => { burst(c.pos, rgb(120, 220, 150), 10, 170, 6); popText(c.pos, "+1", rgb(180, 240, 190)); SFX.pickup(); destroy(c); score += 1; updateHUD(); });
@@ -941,7 +971,7 @@
         });
         player.onCollide("danger", () => hurt());
         player.onCollide("enemy", () => hurt());
-        player.onCollide("exit", () => { liveSend(`${CODENAME} ESCAPED as ${sideKey === "human" ? "JACK" : "the BEAST"} with ${score} energy`); netSend({ t: "escaped" }); SFX.win(); go("over", { win: true, side: sideKey, score, online: NET.connected, how: NET.connected ? "You escaped the hunt." : undefined }); });
+        player.onCollide("exit", () => { liveSend(`${PLAYER_NAME} ESCAPED as ${sideKey === "human" ? "JACK" : "the BEAST"} with ${score} energy`); netSend({ t: "escaped" }); SFX.win(); go("over", { win: true, side: sideKey, score, online: NET.connected, how: NET.connected ? "You escaped the hunt." : undefined }); });
 
         function mkBullet(dirY, opts = {}) {
           const b = add([rect(opts.len || 18, opts.h || 5, { radius: 2 }), pos(player.pos.x + facing * 24, player.pos.y - 4), anchor("center"),
@@ -1034,7 +1064,7 @@
           if (n.hp <= 0) {
             addKaboom(n.pos, { scale: 0.8 }); burst(n.pos, rgb(...NCFG.color), 22, 300, 9);
             popText(n.pos, "+5 HUNTER DOWN", rgb(255, 200, 140)); score += 5; updateHUD();
-            liveSend(`${CODENAME} downed the hunter (+5)`);
+            liveSend(`${PLAYER_NAME} downed the hunter (+5)`);
             destroy(n); nemesis = null;
             wait(rand(12, 18), () => { if (get("player").length) spawnNemesis(true); });
           } else { n.flash = time() + 0.15; }
@@ -1136,10 +1166,46 @@
           remote.onUpdate(() => { if (rTarget) remote.pos = remote.pos.lerp(rTarget, Math.min(1, dt() * 14)); });
           remote.onCollide("player", () => { if (NCFG.mode === "melee") hurt(); }); // beast body contact hurts
 
-          // link HUD + ping
+          // link HUD + ping + stalled-peer watchdog (#22)
           const link = add([text("", { size: 13 }), pos(width() - 14, 14), anchor("topright"), fixed(), z(200), color(120, 220, 140)]);
           loop(2, () => netSend({ t: "ping", ts: performance.now() }));
-          link.onUpdate(() => { link.text = NET.connected ? `LINK ● ${NET.ping}ms` : "LINK LOST"; link.color = NET.connected ? rgb(120, 220, 140) : rgb(230, 90, 80); });
+          link.onUpdate(() => {
+            if (!NET.connected) { link.text = "LINK LOST"; link.color = rgb(230, 90, 80); return; }
+            if (performance.now() - NET.lastPacketAt > 6000) { link.text = "⚠ PEER STALLED — their window may be hidden"; link.color = rgb(235, 170, 90); return; }
+            link.text = `${NET.peerName || "Opponent"} ● ${NET.ping}ms`; link.color = rgb(120, 220, 140);
+          });
+
+          // name tags (#24)
+          const tagY = (cfg) => cfg.shadowY * cfg.sc + 14;
+          const myTag = add([text(PLAYER_NAME, { size: 13 }), anchor("center"), pos(0, 0), z(90), color(...CFG.color), outline(3, rgb(0, 0, 0))]);
+          myTag.onUpdate(() => (myTag.pos = player.pos.sub(0, tagY(CFG))));
+          const rTag = add([text("", { size: 13 }), anchor("center"), pos(0, 0), z(90), color(...NCFG.color), outline(3, rgb(0, 0, 0))]);
+          rTag.onUpdate(() => { rTag.text = NET.peerName || "…"; rTag.pos = remote.pos.sub(0, tagY(NCFG)); rTag.opacity = remote.pos.x > -999 ? 0.9 : 0; });
+
+          // chat (#23): T to talk, Enter sends, Esc closes
+          const chatTxt = add([text("", { size: 14, width: 520 }), pos(12, height() - 96), anchor("botleft"), fixed(), z(200), color(224, 218, 200), outline(3, rgb(0, 0, 0))]);
+          chatTxt.onUpdate(() => {
+            const now = Date.now();
+            chatTxt.text = CHAT.lines.filter((l) => now - l.at < 12000).map((l) => l.name + ": " + l.text).join("\n");
+          });
+          function openChat() {
+            if (document.getElementById("chatIn")) return;
+            const i = document.createElement("input");
+            i.id = "chatIn"; i.maxLength = 90; i.placeholder = "say something… (Enter sends, Esc closes)";
+            i.style.cssText = "position:fixed;left:50%;transform:translateX(-50%);bottom:44px;width:46%;padding:8px;background:#101216;color:#e6dcc8;border:1px solid #c8992e;border-radius:6px;font-family:monospace;z-index:60";
+            document.body.appendChild(i);
+            setTimeout(() => i.focus(), 0);
+            let lastSent = 0;
+            i.onkeydown = (ev) => {
+              ev.stopPropagation();
+              if (ev.key === "Enter") {
+                const v = i.value.trim();
+                if (v && Date.now() - lastSent > 800) { lastSent = Date.now(); CHAT.push(PLAYER_NAME, v); netSend({ t: "chat", text: v }); i.value = ""; }
+              } else if (ev.key === "Escape") { i.onblur = null; i.remove(); refocusGame(); }
+            };
+            i.onblur = () => { i.remove(); refocusGame(); };
+          }
+          onKeyPress("t", () => setTimeout(openChat, 0));
 
           // outbound state @20Hz
           loop(0.05, () => netSend({ t: "s", x: Math.round(player.pos.x), y: Math.round(player.pos.y), f: facing, a: curAnim, hp }));
