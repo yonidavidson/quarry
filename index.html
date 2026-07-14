@@ -37,7 +37,7 @@
             c.rgb *= 0.975 + 0.025 * sin(uv.y * 1696.0);
             return c;
           }`);
-        onLoad(() => { try { usePostEffect("grade", () => ({ u_time: time() })); } catch (e) {} });
+        onLoad(() => { try { usePostEffect("grade", () => ({ u_time: time() })); } catch (e) {} setTimeout(() => { try { if (debug.fps() < 30) usePostEffect(null); } catch (e) {} }, 8000); });
       } catch (e) {}
 
       // credits footer (#27) — DOM so the links are clickable
@@ -333,8 +333,8 @@
         rotFrame(beastFrame({ l1: -10, l1b: 8, l2: 16, l2b: 4, la: 14, ra: -12, dy: 2.2, ds: -2 }), 8),
         rotFrame(beastFrame({ l1: 2, l1b: -2, l2: 4, l2b: 8, la: 2, ra: 6, dy: 4.2, ds: 0 }), 7),
         beastFrame({ dy: -4, mand: 8, l1: 34, l1b: -20, l2: -26, l2b: 26, la: -50, lab: -20, ra: -62, rab: -28, ds: -6 }),        // lunge
-        rotFrame(foldF(beastFrame({ la: -66, lab: -18, ra: -74, rab: -12, l1: -28, l1b: 20, l2: -36, l2b: 26, mand: 2 }), 0.85, 16), -74),   // wall cling (part-folded)
-        rotFrame(foldF(beastFrame({ la: -48, lab: -30, ra: -88, rab: -6, l1: -40, l1b: 30, l2: -22, l2b: 16, mand: 2, dy: 2 }), 0.85, 16), -74),
+        rotFrame(foldF(beastFrame({ la: -66, lab: -18, ra: -74, rab: -12, l1: -28, l1b: 20, l2: -36, l2b: 26, mand: 2 }), 0.7, 28), -74),   // wall cling (part-folded)
+        rotFrame(foldF(beastFrame({ la: -48, lab: -30, ra: -88, rab: -6, l1: -40, l1b: 30, l2: -22, l2b: 16, mand: 2, dy: 2 }), 0.7, 28), -74),
         rotFrame(beastFrame({ l1: 42, l1b: 55, l2: 36, l2b: 50, la: -38, lab: -30, ra: -44, rab: -34, mand: 5 }), 14),            // body drop
         rotFrame(foldF(beastFrame({ la: -78, lab: -34, ra: -84, rab: -28, l1: -52, l1b: 46, l2: -58, l2b: 50, mand: 2 }), 0.64, 40), 180),   // ceiling: FOLDED tight
         rotFrame(foldF(beastFrame({ la: -60, lab: -44, ra: -96, rab: -18, l1: -60, l1b: 54, l2: -46, l2b: 40, mand: 2, dy: 2 }), 0.64, 40), 180),
@@ -734,56 +734,82 @@
       // LEVEL — big multi-floor complex. Floors: r2(top) r5 r8 r11 r14(ground).
       // Ladders connect them; doors teleport across the map.
       // =====================================================================
-      const W = 76;
-      const pad = (s) => s.length >= W ? s.slice(0, W) : s + " ".repeat(W - s.length);
-      const FLOOR = "=".repeat(W);
-      const RAW = [
-        pad(""),
-        pad("                                     $ $ $          >"),
-        pad("                                 " + "=".repeat(27)),
-        pad(""),
-        pad("       $$$        e          $ $ $         ^^^^          e         $$$"),
-        FLOOR,
-        pad(""),
-        pad("      e      $ $ $        ^^^        e         $ $ $        e       ^^^"),
-        pad("  " + "=".repeat(15) + "       " + "=".repeat(26) + "        " + "=".repeat(15)),
-        pad(""),
-        pad("     $ $      e        ^^^^        $$$$         e         $ $        e"),
-        FLOOR,
-        pad(""),
-        pad("   @    $ $ $      e        ^^^         e        $ $ $         e      $$$"),
-        FLOOR,
-      ];
-      // ladders: {col, r0(top), r1(bottom)} — top floor row is punched into a hole
-      const LADDERS = [
-        { c: 8, r0: 11, r1: 13 }, { c: 24, r0: 8, r1: 10 }, { c: 40, r0: 5, r1: 7 },
-        { c: 34, r0: 2, r1: 4 }, { c: 60, r0: 8, r1: 10 },
-      ];
-      // door pairs: [[col,row],[col,row]] on top of floor rows
-      const DOOR_PAIRS = [[[4, 14], [68, 5]], [[20, 11], [64, 8]]];
-
-      const GRID = RAW.map((r) => r.split(""));
+      // ===== LEVEL GENERATOR (#37): ~5x map, tall ceilings for ceiling ambushes =====
+      const W = 200, GROUND_R = 24, TOP_R = 4;
+      const FLOORS = [8, 12, 16, 20, GROUND_R]; // 3-row (144px) corridors: the folded beast lurks, Jack walks under
+      const sRand = (() => { let s = 20260714; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; })();
+      const RI = (a, b) => a + Math.floor(sRand() * (b - a + 1));
+      const GRID = Array.from({ length: GROUND_R + 2 }, () => Array(W).fill(" "));
+      const fillRow = (r, c0, c1, ch) => { for (let c = Math.max(0, c0); c <= c1 && c < W; c++) GRID[r][c] = ch; };
+      fillRow(GROUND_R, 0, W - 1, "=");
+      for (const r of FLOORS.slice(0, -1)) {
+        fillRow(r, 0, W - 1, "=");
+        for (let g = 0, n = RI(7, 10); g < n; g++) { const gx = RI(6, W - 10); fillRow(r, gx, gx + RI(2, 4), " "); }
+      }
+      for (let cx0 = RI(4, 10); cx0 < W - 14;) { const seg = RI(10, 22); fillRow(TOP_R, cx0, Math.min(cx0 + seg, W - 3), "="); cx0 += seg + RI(6, 12); }
+      // items / drones / spikes on every floor
+      const floorsAll = [TOP_R, ...FLOORS];
+      for (const r of floorsAll) for (let c = 2; c < W - 2; c++) {
+        if (GRID[r][c] !== "=" || GRID[r - 1][c] !== " ") continue;
+        const v = sRand();
+        if (v < 0.035) GRID[r - 1][c] = "$";
+        else if (v < 0.052 && r !== TOP_R) GRID[r - 1][c] = "e";
+        else if (v < 0.058 && GRID[r][c + 1] === "=" && GRID[r - 1][c + 1] === " ") { GRID[r - 1][c] = "^"; GRID[r - 1][c + 1] = "^"; }
+      }
+      GRID[GROUND_R - 1][3] = "@";
+      let exitC = W - 5;
+      for (let c = W - 4; c > 2; c--) if (GRID[TOP_R][c] === "=" && GRID[TOP_R - 1][c] === " ") { GRID[TOP_R - 1][c] = ">"; exitC = c; break; }
+      // ladders + nets between every consecutive floor pair
+      const LADDERS = [], NETS = [];
+      const pairs = []; for (let i = 0; i < floorsAll.length - 1; i++) pairs.push([floorsAll[i], floorsAll[i + 1]]);
+      for (const [rT, rB] of pairs) {
+        for (let c = RI(4, 14); c < W - 4; c += RI(16, 26)) if (GRID[rT][c] === "=" && GRID[rB][c] === "=") LADDERS.push({ c, r0: rT, r1: rB - 1 });
+        for (let c = RI(10, 20); c < W - 4; c += RI(20, 32)) {
+          // net must sit beside a floor edge (climb past the lip) and land on solid ground
+          if (GRID[rT][c] !== "=" || (GRID[rT][c + 1] === "=" && GRID[rT][c - 1] === "=") || GRID[rB][c] !== "=") continue;
+          let clear = true; for (let r = rT + 1; r < rB; r++) if (GRID[r][c] !== " ") clear = false;
+          if (clear) NETS.push({ c, r0: rT + 1, r1: rB - 1 });
+        }
+      }
+      // guaranteed route to the exit
+      for (let c = exitC; c > 4; c--) if (GRID[TOP_R][c] === "=" && GRID[FLOORS[0]][c] === "=") { LADDERS.push({ c, r0: TOP_R, r1: FLOORS[0] - 1 }); break; }
       for (const L of LADDERS) for (let r = L.r0; r <= L.r1; r++) if (GRID[r]) GRID[r][L.c] = "H";
-      // chain-nets: free-climb panels (N) — like ladders but visually nets
-      const NETS = [{ c: 36, r0: 3, r1: 4 }, { c: 50, r0: 3, r1: 4 }, { c: 8, r0: 6, r1: 7 }, { c: 66, r0: 9, r1: 10 }];
       for (const N of NETS) for (let r = N.r0; r <= N.r1; r++) if (GRID[r] && GRID[r][N.c] === " ") GRID[r][N.c] = "N";
-      // Climbable wall stubs (#8): 2-tile walls for the Stalker. A guard skips
-      // candidates near enemies/ladders/doors/hazards or without ground below.
-      const WALL_CANDIDATES = [
-        { c: 13, r0: 9, r1: 10 }, { c: 17, r0: 9, r1: 10 }, { c: 46, r0: 9, r1: 10 }, { c: 55, r0: 9, r1: 10 },
-        { c: 10, r0: 6, r1: 7 }, { c: 31, r0: 6, r1: 7 }, { c: 44, r0: 6, r1: 7 },
-        { c: 18, r0: 12, r1: 13 }, { c: 28, r0: 12, r1: 13 }, { c: 50, r0: 12, r1: 13 }, { c: 58, r0: 12, r1: 13 },
-      ];
-      const DOOR_CELLS = DOOR_PAIRS.flat(); // [c, floorRow] pairs; door body sits in the 2 rows above floorRow
+      // doors snapped to valid floor cells
+      const fixDoor = ([c, r]) => {
+        const good = (cc) => cc > 1 && cc < W - 2 && GRID[r][cc] === "=" && GRID[r - 1][cc] === " " && GRID[r - 2][cc] === " ";
+        for (let d = 0; d < W; d++) { if (good(c + d)) return [c + d, r]; if (good(c - d)) return [c - d, r]; }
+        return [c, r];
+      };
+      const DOOR_PAIRS = [
+        [[4, GROUND_R], [W - 8, TOP_R]],
+        [[Math.floor(W * 0.3), FLOORS[1]], [Math.floor(W * 0.75), FLOORS[3]]],
+        [[Math.floor(W * 0.6), GROUND_R], [Math.floor(W * 0.15), FLOORS[0]]],
+      ].map((p2) => [fixDoor(p2[0]), fixDoor(p2[1])]);
+      // wall stubs (some 3-tall — beast-only ledges); destructible (#42)
+      const STUB_CELLS = new Set();
+      const WALL_CANDIDATES = [];
+      for (const r of FLOORS) for (let i = 0; i < 14; i++) { const c = RI(5, W - 5), h2 = sRand() < 0.3 ? 3 : 2; WALL_CANDIDATES.push({ c, r0: r - h2, r1: r - 1 }); }
+      const DOOR_CELLS = DOOR_PAIRS.flat();
       for (const w of WALL_CANDIDATES) {
         let ok = GRID[w.r1 + 1] && GRID[w.r1 + 1][w.c] === "=";
         for (let r = w.r0 - 1; r <= w.r1 + 1 && ok; r++) for (let c = w.c - 3; c <= w.c + 3; c++) {
           const ch = GRID[r] && GRID[r][c];
-          if (ch === "e" || ch === "@" || ch === ">" || ch === "H" || ch === "^") ok = false;
+          if (ch === "e" || ch === "@" || ch === ">" || ch === "H" || ch === "^" || ch === "N") ok = false;
         }
         for (const [dc, dr] of DOOR_CELLS) if (Math.abs(dc - w.c) <= 2 && w.r1 >= dr - 2 && w.r0 <= dr) ok = false;
-        if (ok) for (let r = w.r0; r <= w.r1; r++) if (GRID[r][w.c] === " ") GRID[r][w.c] = "=";
+        if (ok) for (let r = w.r0; r <= w.r1; r++) if (GRID[r][w.c] === " ") { GRID[r][w.c] = "="; STUB_CELLS.add(w.c + "," + r); }
       }
+      // pools + turret spots + nemesis spawns, all generated
+      const POOLS_GEN = [];
+      for (let i = 0; i < 5; i++) { const c0 = RI(10, W - 22); POOLS_GEN.push({ c0, c1: c0 + RI(6, 10), r: GROUND_R - 1 }); }
+      POOLS_GEN.push({ c0: RI(20, W - 30), c1: RI(20, W - 30) + 7, r: FLOORS[2] - 1 });
+      const TURRET_SPOTS = [];
+      for (const r of [FLOORS[0], FLOORS[1], FLOORS[2], FLOORS[3], GROUND_R, GROUND_R]) {
+        let c = RI(8, W - 12); while (c < W - 3 && !(GRID[r][c] === "=" && GRID[r - 1][c] === " ")) c++;
+        if (c < W - 3) TURRET_SPOTS.push([c, r]);
+      }
+      const NEM_SPAWNS_GEN = [[W - 10, TOP_R - 1], [W - 6, GROUND_R - 2], [6, FLOORS[0] - 2], [Math.floor(W / 2), FLOORS[2] - 2]];
       const LEVEL_W = W * TS, LEVEL_H = GRID.length * TS;
 
       function spawnEnemy(x, y) {
@@ -841,17 +867,24 @@
           s.blurb.forEach((line, j) => card.add([text("• " + line, { size: 14, width: 260 }), pos(-128, 34 + j * 24), anchor("left"), color(198, 190, 176)]));
           return card;
         });
-        add([text("← →  choose      ENTER / A  start      (controller supported)", { size: 15 }), pos(width() / 2, 486), anchor("center"), color(150, 140, 124)]);
-        add([text("O — online 2P: hunt a real friend over WebRTC", { size: 15 }), pos(width() / 2, 506), anchor("center"), color(220, 170, 90)]);
+        add([text("← →  choose      ENTER / A  start      (controller supported)", { size: 15 }), pos(width() / 2, 478), anchor("center"), color(150, 140, 124)]);
+        // ONLINE button (#36): unmistakable clickable keycap — "O" the letter, not zero
+        const oBtn = add([rect(470, 34, { radius: 8 }), pos(width() / 2, 502), anchor("center"), color(46, 38, 22), outline(2, rgb(200, 155, 60)), area(), scale(1), "obtn"]);
+        oBtn.add([rect(24, 24, { radius: 5 }), pos(-213, 0), anchor("center"), color(200, 155, 60), outline(2, rgb(90, 66, 20))]);
+        oBtn.add([text("O", { size: 17 }), pos(-213, 0), anchor("center"), color(30, 24, 12)]);
+        oBtn.add([text("PLAY ONLINE — press letter O, or click here", { size: 15 }), pos(-189, 0), anchor("left"), color(240, 200, 120)]);
+        oBtn.onUpdate(() => { const hov = oBtn.isHovering(); oBtn.scale = oBtn.scale.lerp(vec2(hov ? 1.05 : 1), dt() * 10); oBtn.outline.color = hov ? rgb(255, 210, 110) : rgb(200, 155, 60); });
         addTicker("QUARRY — the world wants you dead either way.");
         addOverlay();
-        onKeyPress("o", () => netUI(`<h3>ONLINE 2P — hunt each other</h3>
+        const openOnline = () => netUI(`<h3>ONLINE 2P — hunt each other</h3>
           <p>How it works: the host picks a side and sends an invite code; the joiner replies with an answer code. Two codes, any chat app, no accounts.</p>
           ${NAMEROW()}${NETWARN}
           <button ${NETBTN} onclick="__netHostStart('human')">Host as JACK</button>
           <button ${NETBTN} onclick="__netHostStart('stalker')">Host as BEAST</button>
           <button ${NETBTN} onclick="__netJoinStart()">Join a friend</button>
-          <button ${NETBTN} onclick="__netCancel()">Cancel</button>`));
+          <button ${NETBTN} onclick="__netCancel()">Cancel</button>`);
+        onKeyPress("o", openOnline);
+        oBtn.onClick(openOnline);
         const refresh = () => cards.forEach((c, i) => { c.color = i === sel ? rgb(40, 38, 34) : rgb(26, 26, 28); c.outline.color = i === sel ? rgb(220, 170, 70) : rgb(58, 58, 62); c.outline.width = i === sel ? 5 : 4; tween(c.scale, i === sel ? vec2(1.06) : vec2(1), 0.12, (v) => (c.scale = v), easings.easeOutQuad); });
         refresh();
         const moveSel = (d) => { sel = (sel + d + keys.length) % keys.length; SFX.pickup(); refresh(); };
@@ -886,33 +919,33 @@
         add([sprite("sky"), pos(0, 0), fixed(), z(-100)]);
         for (let wy = 0; wy < LEVEL_H; wy += 128) for (let wx = 0; wx < LEVEL_W; wx += 128) {
           const v = ((wx / 128 + wy / 128) * 2654435761) % 7 < 2 ? "wall2" : "wall"; // deterministic variety
-          add([sprite(v), pos(wx, wy), anchor("topleft"), z(-45), opacity(0.9)]);
+          add([sprite(v), pos(wx, wy), anchor("topleft"), z(-45), opacity(0.9), offscreen({ hide: true, distance: 200 })]);
           if (((wx / 128) * 31 + (wy / 128) * 17) % 9 === 3) add([sprite("stain"), pos(wx + 34, wy + 60), anchor("center"), z(-44), opacity(0.8)]);
         }
         // long pipe runs crossing the complex (silhouette depth layer)
-        for (const py of [150, 420, 700]) for (let px = -40; px < LEVEL_W; px += 192) add([sprite("pipeH"), pos(px, py + (px / 192 % 2 ? 2 : 0)), anchor("topleft"), z(-38), opacity(0.85)]);
-        for (let gx = 40; gx < LEVEL_W; gx += 360) for (let gy = 0; gy < LEVEL_H; gy += 128) add([sprite("girder"), pos(gx, gy), anchor("topleft"), z(-30), opacity(0.8)]);
+        for (let py = 150; py < LEVEL_H; py += 340) for (let px = -40; px < LEVEL_W; px += 192) add([sprite("pipeH"), pos(px, py + (px / 192 % 2 ? 2 : 0)), anchor("topleft"), z(-38), opacity(0.85), offscreen({ hide: true, distance: 220 })]);
+        for (let gx = 40; gx < LEVEL_W; gx += 360) for (let gy = 0; gy < LEVEL_H; gy += 128) add([sprite("girder"), pos(gx, gy), anchor("topleft"), z(-30), opacity(0.8), offscreen({ hide: true, distance: 160 })]);
         // depth fog: dark pools at the bottom of the frame, air up top
         add([sprite("depthfog"), pos(0, 0), fixed(), z(-25), scale(width() / 8, 1)]);
         addFog(); addDust();
 
         const spawnCell = (x, y) => add([sprite("cell"), pos(x, y), anchor("center"), area({ scale: 1.1 }), scale(1), z(3), "energy", { seed: x, update() { this.scale = vec2(1 + Math.sin(time() * 4 + this.seed) * 0.12); } }]);
+        const tileMap = new Map(); // cell -> visual tile (destructible lookup, #42)
         // --- build solids/hazards/pickups from GRID ---
         GRID.forEach((row, r) => row.forEach((ch, c) => {
           const x = c * TS + TS / 2, y = r * TS + TS / 2;
           if (ch === "=") {
             const L = row[c - 1] === "=", R = row[c + 1] === "=";
             const variant = L && R ? "tileM" : !L && R ? "tileL" : L && !R ? "tileR" : "tileS";
-            add([sprite(variant), pos(x, y), anchor("center"), area(), body({ isStatic: true }), z(2), "platform"]);
-            // support brackets under floating platform caps
+            tileMap.set(c + "," + r, add([sprite(variant), pos(x, y), anchor("center"), z(2), offscreen({ hide: true, distance: 120 })])); // visual only — colliders merged below (#37 perf)
             const below = GRID[r + 1] && GRID[r + 1][c];
             if (below !== "=" && r < GRID.length - 1) {
               if (!L) add([sprite("bracket"), pos(x - TS / 2 + 2, y + TS / 2), anchor("topleft"), z(1), opacity(0.9)]);
               if (!R) add([sprite("bracket"), pos(x + TS / 2 - 2, y + TS / 2), anchor("topleft"), z(1), opacity(0.9), { add() { this.flipX = true; this.pos.x -= 26; } }]);
             }
           }
-          else if (ch === "H") add([sprite("ladder"), pos(x, y), anchor("center"), area(), z(1), "ladder"]);
-          else if (ch === "N") add([sprite("net"), pos(x, y), anchor("center"), area(), z(1), "ladder", "net"]);
+          else if (ch === "H") add([sprite("ladder"), pos(x, y), anchor("center"), z(1), offscreen({ hide: true, distance: 120 })]); // visual; climb areas merged below
+          else if (ch === "N") add([sprite("net"), pos(x, y), anchor("center"), z(1), offscreen({ hide: true, distance: 120 })]);
           else if (ch === "^") add([sprite("spikes"), pos(x, r * TS + TS), anchor("bot"), area(), z(3), "danger"]);
           else if (ch === "$") spawnCell(x, y);
           else if (ch === "e") { if (!NET.connected) spawnEnemy(x, y); } // online: the other player IS the hunter
@@ -923,6 +956,45 @@
           }
           else if (ch === "@") spawn = vec2(x, y);
         }));
+
+        // --- merged colliders (#37 perf): one body per contiguous run ---
+        const rowBodies = [];
+        function buildRowColliders(r) {
+          (rowBodies[r] || []).forEach((b2) => b2.exists() && destroy(b2));
+          rowBodies[r] = [];
+          let c0 = -1;
+          for (let c = 0; c <= W; c++) {
+            const solid = c < W && GRID[r][c] === "=";
+            if (solid && c0 < 0) c0 = c;
+            if (!solid && c0 >= 0) {
+              rowBodies[r].push(add([rect((c - c0) * TS, TS), pos(c0 * TS + ((c - c0) * TS) / 2, r * TS + TS / 2), anchor("center"), area(), body({ isStatic: true }), opacity(0), "platform"]));
+              c0 = -1;
+            }
+          }
+        }
+        for (let r = 0; r < GRID.length; r++) buildRowColliders(r);
+        for (let c = 0; c < W; c++) { // climb areas merged per column
+          let cr0 = -1;
+          for (let r = 0; r <= GRID.length; r++) {
+            const isL = r < GRID.length && (GRID[r][c] === "H" || GRID[r][c] === "N");
+            if (isL && cr0 < 0) cr0 = r;
+            if (!isL && cr0 >= 0) { add([rect(TS, (r - cr0) * TS), pos(c * TS + TS / 2, cr0 * TS + ((r - cr0) * TS) / 2), anchor("center"), area(), opacity(0), "ladder"]); cr0 = -1; }
+          }
+        }
+        // --- destructible terrain (#42): explosives break stubs + spikes ---
+        function destroyCell(c, r) {
+          if (!GRID[r] || GRID[r][c] !== "=") return;
+          GRID[r][c] = " "; STUB_CELLS.delete(c + "," + r);
+          const t = tileMap.get(c + "," + r); if (t && t.exists()) destroy(t); tileMap.delete(c + "," + r);
+          burst(vec2(c * TS + TS / 2, r * TS + TS / 2), rgb(90, 95, 100), 10, 200, 7);
+          buildRowColliders(r);
+        }
+        function blastTerrain(p, radius) {
+          const bc0 = Math.floor((p.x - radius) / TS), bc1 = Math.floor((p.x + radius) / TS);
+          const br0 = Math.floor((p.y - radius) / TS), br1 = Math.floor((p.y + radius) / TS);
+          for (let r = br0; r <= br1; r++) for (let c = bc0; c <= bc1; c++) if (STUB_CELLS.has(c + "," + r)) destroyCell(c, r);
+          get("danger").forEach((s) => { if (s.pos.dist(p) < radius + 20) { burst(s.pos, rgb(120, 60, 50), 8, 160, 5); destroy(s); } });
+        }
 
         // --- decorations: props on surfaces, cables on ceilings, lamps ---
         let lampCount = 0;
@@ -944,12 +1016,12 @@
               if (kind === "vent") steamVents.push(vec2(x, r * TS - 6));
             }
           }
-          if (above === " " && lampCount < 11 && rand() < 0.16) { add([sprite("lamp"), pos(x, r * TS - 40), anchor("center"), z(-8), { s: rand(0, 6), update() { this.opacity = rand() < 0.006 ? 0.04 : 0.55 + Math.sin(time() * 3 + this.s) * 0.2; } }]); lampCount++; }
+          if (above === " " && lampCount < 34 && rand() < 0.16) { add([sprite("lamp"), pos(x, r * TS - 40), anchor("center"), z(-8), { s: rand(0, 6), update() { this.opacity = rand() < 0.006 ? 0.04 : 0.55 + Math.sin(time() * 3 + this.s) * 0.2; } }]); lampCount++; }
           if (below === " " && rand() < 0.14) add([sprite("cable"), pos(x + rand(-10, 10), r * TS + TS - 2), anchor("top"), z(1), opacity(0.9)]);
         }));
         loop(0.25, () => steamVents.forEach((v) => { if (rand() < 0.7) add([circle(rand(4, 7)), pos(v.add(rand(-4, 4), 0)), anchor("center"), color(150, 150, 155), opacity(rand(0.12, 0.26)), z(3), lifespan(rand(0.8, 1.4), { fade: 1 }), { up: rand(20, 40), update() { this.pos.y -= this.up * dt(); this.radius += 6 * dt(); } }]); }));
         // steam vent LAUNCHERS (#20): periodic blast that hurls you upward — ride it
-        steamVents.slice(0, 2).forEach((v, i) => {
+        steamVents.slice(0, 6).forEach((v, i) => {
           add([sprite("lamp"), pos(v), anchor("center"), scale(0.4), opacity(0.22), color(170, 195, 210), z(1)]);
           loop(3.4, () => wait(i * 1.3, () => {
             for (let k2 = 0; k2 < 14; k2++) add([circle(rand(4, 9)), pos(v.add(rand(-10, 10), 0)), anchor("center"), color(190, 195, 200), opacity(rand(0.3, 0.5)), z(7), lifespan(rand(0.5, 0.9), { fade: 0.6 }), { up: rand(160, 300), update() { this.pos.y -= this.up * dt(); this.radius += 10 * dt(); } }]);
@@ -964,7 +1036,7 @@
         DOOR_PAIRS.forEach(([a, b]) => { const da = makeDoor(a[0], a[1]), db = makeDoor(b[0], b[1]); da.partner = db.pos.clone(); db.partner = da.pos.clone(); });
 
         // --- sewage pools (#10): murky water, ripple surface, ceiling drips ---
-        const POOLS = [{ c0: 22, c1: 30, r: 13 }, { c0: 44, c1: 52, r: 13 }, { c0: 30, c1: 36, r: 10 }];
+        const POOLS = POOLS_GEN;
         const poolRects = [];
         for (const P of POOLS) {
           const x0 = P.c0 * TS, w = (P.c1 - P.c0 + 1) * TS, topY = P.r * TS + 10, h = TS - 10;
@@ -998,7 +1070,7 @@
 
         // --- defensive turrets (#32): Jack powers them with energy ---
         let nearTurret = null, lastTurretTime = -1;
-        [[10, 11], [38, 8], [58, 5]].forEach(([tc, tr]) => {
+        TURRET_SPOTS.forEach(([tc, tr]) => {
           const t = add([sprite("turretB"), pos(tc * TS + TS / 2, tr * TS), anchor("bot"), area({ scale: 1.4 }), z(3), "turret",
             { active: false, until: 0, hp: 3, fireCd: 0, hitCd: 0 }]);
           const barrel = t.add([rect(20, 5, { radius: 2 }), pos(0, -16), anchor("left"), color(70, 76, 82), outline(2, rgb(30, 33, 36)), z(1), rotate(0)]);
@@ -1046,7 +1118,7 @@
         }
         function spawnCrateSynced(wkey, at) { const cr = spawnCrate(wkey, at); netSend({ t: "crate", w: wkey, x: cr.pos.x, y: cr.pos.y }); return cr; }
         if (!NET.connected || NET.role === "host") { // online: host owns crate spawns
-          spawnCrateSynced(choose(WPOOL(sideKey)), vec2(spawn.x + 150, 14 * TS - 4)); // guaranteed starter nearby (#33)
+          spawnCrateSynced(choose(WPOOL(sideKey)), vec2(spawn.x + 150, GROUND_R * TS - 4)); // guaranteed starter nearby (#33)
           for (let i = 0; i < 4; i++) spawnCrateSynced(choose(WPOOL(sideKey)));
           for (let i = 0; i < 3; i++) spawnCrateSynced(choose(WPOOL(NKEY2)));
           loop(25, () => { if (get("wcrate").length < 8) spawnCrateSynced(choose(WPOOL(rand() < 0.6 ? sideKey : NKEY2))); });
@@ -1160,6 +1232,7 @@
             get("enemy").forEach((e) => { if (e.pos.dist(p) < 80) killEnemy(e); });
             get("nemesis").forEach((n) => { if (n.pos.dist(p) < 85) hitNemesis(n); });
             if (player.pos.dist(p) < 70) hurt();
+            blastTerrain(p, 85);
             get("breakable").forEach((b) => { if (b.exists() && b.pos.dist(p) < 90) wait(0.15, () => breakObj(b)); });
           } else { // crate: splinters
             SFX.thunk(); burst(p, rgb(150, 120, 80), 14, 190, 6); burst(p, rgb(90, 70, 45), 8, 140, 5);
@@ -1237,7 +1310,8 @@
         }
         // debug hook (used by the headless test harness)
         window.__quarry = { give: (w) => { if (WEAPONS[w]) { weapon = w; updateHUD(); } }, weapon: () => weapon, attack,
-          ceil: () => ({ stick: ceilStick, sinceContact: +(time() - lastCeilTime).toFixed(3), grounded: player.isGrounded(), y: Math.round(player.pos.y), g: player.gravityScale }) };
+          ceil: () => ({ stick: ceilStick, sinceContact: +(time() - lastCeilTime).toFixed(3), grounded: player.isGrounded(), y: Math.round(player.pos.y), g: player.gravityScale }),
+          lad: () => ({ onLad: onLadderNow, sinceLad: +(time() - lastLadderTime).toFixed(3), cd: time() > ladderCd, g: player.gravityScale, vy: Math.round(player.vel.y), y: Math.round(player.pos.y) }) };
         function explode(p) {
           SFX.boom(); shake(11); flash(rgb(240, 180, 90), 0.4);
           const ring = add([circle(8), pos(p), anchor("center"), color(255, 220, 150), opacity(0.6), lifespan(0.3, { fade: 0.3 }), z(35)]);
@@ -1246,6 +1320,7 @@
           get("enemy").forEach((e) => { if (e.pos.dist(p) < 96) killEnemy(e); });
           get("nemesis").forEach((n) => { if (n.pos.dist(p) < 110) hitNemesis(n); });
           get("breakable").forEach((b) => { if (b.pos.dist(p) < 110) breakObj(b); });
+          blastTerrain(p, 110); // stubs + spikes crumble (#42)
         }
         function throwBomb() {
           if (time() - lastBomb < 1.1) return; lastBomb = time(); SFX.toss();
@@ -1316,7 +1391,7 @@
         const NCFG = SIDES[NKEY];
         const solid = (c, r) => GRID[r] && GRID[r][c] === "=";
         const cellOf = (p) => [Math.floor(p.x / TS), Math.floor(p.y / TS)];
-        const NEM_SPAWNS = [vec2(50 * TS, TS), vec2(70 * TS, 9 * TS), vec2(6 * TS, 3 * TS), vec2(36 * TS, 12 * TS)];
+        const NEM_SPAWNS = NEM_SPAWNS_GEN.map(([c, r]) => vec2(c * TS, r * TS));
         let nemesis = null, nemHeartbeat = 0;
         const warn = add([text("", { size: 18 }), pos(width() / 2, 46), anchor("center"), fixed(), z(200), color(235, 120, 100), outline(3, rgb(20, 10, 10)), opacity(0)]);
 
@@ -1576,7 +1651,7 @@
           const wasCeil = ceilStick; ceilStick = false;
           const headSolid = () => { const r2 = Math.floor((player.pos.y - 54) / TS), c2 = Math.floor(player.pos.x / TS); return GRID[r2] && GRID[r2][c2] === "="; };
           if (CFG.wallClimb && !player.isGrounded() && !onLadderNow && time() > ceilCd && !down &&
-              (wasCeil ? (up || Math.abs(dx) > 0.05) && headSolid() : up && time() - lastCeilTime < 0.09 && headSolid())) {
+              (wasCeil ? (up || Math.abs(dx) > 0.05) && headSolid() : up && Math.abs(player.vel.y) < 80 && headSolid())) {
             ceilStick = true; player.gravityScale = 0;
             player.vel = vec2(player.vel.x, Math.min(player.vel.y, -30)); // press up against the ceiling
             if (!wasCeil) SFX.claw();
