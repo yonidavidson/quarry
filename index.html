@@ -291,11 +291,13 @@
           <path d="M82 ${52 + dy} q14 -2 16 12 q1 8 -6 12 l-10 -4 q4 -10 0 -20z" fill="#4a4f55" stroke="#22262a" stroke-width="1.6"/>
           <circle cx="90" cy="${60 + dy}" r="1.6" fill="#22262a"/><circle cx="92" cy="${68 + dy}" r="1.6" fill="#22262a"/>
           <path d="M58 ${40 + dy} q0 -8 8 -9 q8 1 8 9 l0 8 h-16z" fill="url(#pSkin)"/>
-          <path d="M48 ${20 + dy} q4 -12 18 -12 q14 0 18 12 q2 7 -1 12 l-34 0 q-3 -5 -1 -12z" fill="url(#pSkin)"/>
-          <path d="M46 ${30 + dy} q20 -7 42 0 l-2.4 5 q-18 -5 -37 0z" fill="url(#pSkinD)"/>
-          <path d="M50 ${14 + dy} q6 -3.4 12 -2.4 M62 ${10 + dy} q6 -1.2 11 1.2" stroke="#75633f" stroke-width="2.4" fill="none" opacity="0.8"/>
-          <path d="M53 ${13 + dy} Q44 ${4 + dy} 47 ${-6 + dy} q8 4 10 15z" fill="url(#pMand)" stroke="#4a3a20" stroke-width="1"/>
-          <path d="M81 ${13 + dy} Q90 ${4 + dy} 87 ${-6 + dy} q-8 4 -10 15z" fill="url(#pMand)" stroke="#4a3a20" stroke-width="1"/>
+          <path d="M46 ${21 + dy} q6 -10 21 -10 q15 0 21 10 q2 6 -1 11 l-40 0 q-3 -5 -1 -11z" fill="url(#pSkin)"/>
+          <path d="M44 ${29 + dy} q23 -8 46 0 l-3 6 q-20 -6 -40 0z" fill="#241806"/>
+          <path d="M50 ${13 + dy} q8 -4 17 -4 q9 0 16 4" stroke="#3a2c14" stroke-width="3" fill="none" opacity="0.9"/>
+          <path d="M52 ${20 + dy} C 34 ${8 + dy} 16 ${8 + dy} 6 ${20 + dy} q-1 5 4 7 q9 -9 21 -7 q11 2 19 8 q4 -4 2 -8z" fill="url(#hornW)" stroke="#3a2c14" stroke-width="1.2"/>
+          <path d="M10 ${27 + dy} q-6 0 -8 -5 q4 -6 11 -7 q-4 6 -3 12z" fill="#efe4c4"/>
+          <g stroke="#5a4426" stroke-width="1.8" fill="none" opacity="0.8"><path d="M38 ${13 + dy} q-2 4 -1 8"/><path d="M26 ${13 + dy} q-3 4 -2 9"/><path d="M16 ${17 + dy} q-3 4 -2 8"/></g>
+          <path d="M82 ${20 + dy} q16 -12 26 -6 q4 3 2 7 q-10 -4 -18 0 q-6 3 -10 5z" fill="#8a7248" stroke="#3a2c14" stroke-width="1"/>
           <ellipse cx="58" cy="${33 + dy}" rx="4" ry="2.8" fill="#1c1408"/><ellipse cx="76" cy="${33 + dy}" rx="4" ry="2.8" fill="#1c1408"/>
           <circle cx="58.5" cy="${33 + dy}" r="1.9" fill="url(#pEye)"/><circle cx="75.5" cy="${33 + dy}" r="1.9" fill="url(#pEye)"/>
           <ellipse cx="67" cy="${44 + dy}" rx="9" ry="${6 + mand * 0.5}" fill="#3a1012"/>
@@ -316,7 +318,7 @@
         <linearGradient id="pSkinD" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#54401f"/><stop offset="100%" stop-color="#2e2008"/></linearGradient>
         <linearGradient id="pMand" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#c4ae74"/><stop offset="100%" stop-color="#e2d2a0"/></linearGradient>
         <linearGradient id="bladeG" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#d7dbe0"/><stop offset="100%" stop-color="#8b9299"/></linearGradient>
-        <radialGradient id="pEye" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#ffe9a0"/><stop offset="60%" stop-color="#ffcf4a"/><stop offset="100%" stop-color="#a06010"/></radialGradient>
+        <linearGradient id="hornW" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#efe4c4"/><stop offset="100%" stop-color="#8a7248"/></linearGradient><radialGradient id="pEye" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#ffe9a0"/><stop offset="60%" stop-color="#ffcf4a"/><stop offset="100%" stop-color="#a06010"/></radialGradient>
       </defs>`;
       const rotFrame = (inner, deg) => `<g transform="rotate(${deg} 65 114)">${inner}</g>`;
       const foldF = (inner, k, ty) => `<g transform="translate(0 ${ty}) scale(1 ${k})">${inner}</g>`; // compress: the beast FOLDS (#35)
