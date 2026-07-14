@@ -17,7 +17,7 @@
       // QUARRY — asymmetric hunter/hunted platformer (inspired by Hunter Hunted)
       // Gritty industrial. All art = inline SVG. One self-contained file.
       // =====================================================================
-      const k = kaplay({ width: 960, height: 540, letterbox: true, background: [12, 12, 13], global: true });
+      const k = kaplay({ width: 960, height: 540, letterbox: true, background: [12, 12, 13], global: true, pixelDensity: 1 });
       const TS = 48;
       setGravity(2100);
       const svg = (s) => "data:image/svg+xml," + encodeURIComponent(s);
@@ -532,6 +532,17 @@
         setTimeout(res, 6500); // STUN/TURN can stall; ship what we have
       });
       function netSend(o) { if (NET.dc && NET.dc.readyState === "open") NET.dc.send(JSON.stringify(o)); }
+      async function detectPath(pc) { // which route did ICE pick? (#44)
+        try {
+          const stats = await pc.getStats();
+          const m = {}; let pairId = null;
+          stats.forEach((s) => { m[s.id] = s; if (s.type === "transport" && s.selectedCandidatePairId) pairId = s.selectedCandidatePairId; });
+          if (!pairId) stats.forEach((s) => { if (!pairId && s.type === "candidate-pair" && (s.selected || s.state === "succeeded")) pairId = s.id; });
+          const pair = m[pairId]; if (!pair) return;
+          const loc = m[pair.localCandidateId], rem = m[pair.remoteCandidateId];
+          NET.path = (loc && loc.candidateType === "relay") || (rem && rem.candidateType === "relay") ? "RELAY (slower route)" : "direct";
+        } catch (e) {}
+      }
       function netStatus(txt, good) { const el = document.getElementById("netStat"); if (el) { el.textContent = txt; el.style.color = good ? "#8fe0a0" : "#e0b080"; } }
       function watchConn(pc) {
         pc.onconnectionstatechange = () => {
@@ -542,6 +553,7 @@
       function wireDC(dc) {
         dc.onopen = () => {
           NET.connected = true;
+          setTimeout(() => detectPath(NET.pc), 1200); // direct vs relay (#44)
           if (NET.role === "host") { netSend({ t: "hello", side: NET.mySide, name: PLAYER_NAME }); netUIHide(); go("game", NET.mySide); }
         };
         dc.onmessage = (e) => {
@@ -1040,7 +1052,7 @@
           if (above === " " && lampCount < 34 && rand() < 0.16) { add([sprite("lamp"), pos(x, r * TS - 40), anchor("center"), z(-8), { s: rand(0, 6), update() { this.opacity = rand() < 0.006 ? 0.04 : 0.55 + Math.sin(time() * 3 + this.s) * 0.2; } }]); lampCount++; }
           if (below === " " && rand() < 0.14) add([sprite("cable"), pos(x + rand(-10, 10), r * TS + TS - 2), anchor("top"), z(1), opacity(0.9)]);
         }));
-        loop(0.25, () => steamVents.forEach((v) => { if (rand() < 0.7) add([circle(rand(4, 7)), pos(v.add(rand(-4, 4), 0)), anchor("center"), color(150, 150, 155), opacity(rand(0.12, 0.26)), z(3), lifespan(rand(0.8, 1.4), { fade: 1 }), { up: rand(20, 40), update() { this.pos.y -= this.up * dt(); this.radius += 6 * dt(); } }]); }));
+        loop(0.25, () => steamVents.forEach((v) => { if (Math.abs(v.x - getCamPos().x) > 620) return; if (rand() < 0.7) add([circle(rand(4, 7)), pos(v.add(rand(-4, 4), 0)), anchor("center"), color(150, 150, 155), opacity(rand(0.12, 0.26)), z(3), lifespan(rand(0.8, 1.4), { fade: 1 }), { up: rand(20, 40), update() { this.pos.y -= this.up * dt(); this.radius += 6 * dt(); } }]); }));
         // steam vent LAUNCHERS (#20): periodic blast that hurls you upward — ride it
         steamVents.slice(0, 6).forEach((v, i) => {
           add([sprite("lamp"), pos(v), anchor("center"), scale(0.4), opacity(0.22), color(170, 195, 210), z(1)]);
@@ -1073,6 +1085,7 @@
         // ceiling drips fall into pools; plink when the player is near
         loop(0.5, () => {
           for (const pr of poolRects) {
+            if (Math.abs((pr.x0 + pr.x1) / 2 - getCamPos().x) > 900) continue; // only near the camera (#44)
             if (rand() > 0.55) continue;
             const dx0 = rand(pr.x0 + 10, pr.x1 - 10);
             add([rect(2, 7), pos(dx0, pr.topY - rand(120, 200)), color(150, 190, 175), opacity(0.7), z(6), {
@@ -1586,7 +1599,7 @@
           link.onUpdate(() => {
             if (!NET.connected) { link.text = "LINK LOST"; link.color = rgb(230, 90, 80); return; }
             if (performance.now() - NET.lastPacketAt > 6000) { link.text = "⚠ PEER STALLED — their window may be hidden"; link.color = rgb(235, 170, 90); return; }
-            link.text = `${NET.peerName || "Opponent"} ● ${NET.ping}ms`; link.color = rgb(120, 220, 140);
+            link.text = `${NET.peerName || "Opponent"} ● ${NET.ping}ms${NET.path ? " · " + NET.path : ""}`; link.color = NET.path && NET.path.startsWith("RELAY") ? rgb(235, 190, 90) : rgb(120, 220, 140);
           });
 
           // name tags (#24)
