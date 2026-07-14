@@ -318,6 +318,12 @@
       loadSprite("wpn-claws", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="28" height="24"><g stroke="#cfc0a8" stroke-width="3" stroke-linecap="round" fill="none"><path d="M6 4 q6 8 4 16"/><path d="M14 3 q6 9 4 17"/><path d="M22 4 q5 8 3 16"/></g></svg>`));
       loadSprite("wpn-scythe", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="28" height="24"><path d="M4 20 L20 4" stroke="#4a3424" stroke-width="3"/><path d="M20 4 q8 2 6 12 q-2 -6 -9 -7z" fill="#cfc0a8"/></svg>`));
       loadSprite("wpn-whip", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="28" height="24"><path d="M4 20 q2 -12 10 -12 q10 0 8 8 q-2 6 -8 4" stroke="#6a4a2a" stroke-width="3" fill="none" stroke-linecap="round"/><g fill="#cfc0a8"><circle cx="9" cy="12" r="1.5"/><circle cx="17" cy="9" r="1.5"/><circle cx="21" cy="15" r="1.5"/></g></svg>`));
+      loadSprite("wpn-shotgun", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="28" height="24"><rect x="1" y="10" width="20" height="4" rx="2" fill="#3a3026"/><rect x="1" y="14" width="14" height="3" rx="1" fill="#2a221a"/><rect x="18" y="9" width="9" height="6" rx="1" fill="#26262a"/><rect x="3" y="16" width="5" height="6" fill="#1e1a16"/></svg>`));
+      loadSprite("wpn-mgun", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="28" height="24"><rect x="1" y="9" width="24" height="5" rx="1" fill="#2b2e33"/><rect x="23" y="8" width="4" height="7" fill="#43474d"/><rect x="8" y="14" width="9" height="6" rx="2" fill="#1e2024"/><rect x="3" y="14" width="4" height="7" fill="#26282c"/><rect x="12" y="4" width="3" height="5" fill="#43474d"/></svg>`));
+      loadSprite("wpn-bat", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="28" height="24"><path d="M4 21 L18 7" stroke="#8a7a5c" stroke-width="4" stroke-linecap="round"/><path d="M16 9 q6 -6 9 -3 q3 3 -3 9 q-4 3 -7 -1z" fill="#cfc0a8"/><g fill="#8a7a5c"><path d="M20 5 l2 -3 1 4z"/><path d="M25 10 l4 -1 -3 3z"/></g></svg>`));
+      // melee slash arc (tinted per weapon) + muzzle flash star
+      loadSprite("slash", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="72" height="72"><path d="M12 62 Q4 34 24 14 Q44 -4 66 8 Q46 6 32 22 Q18 38 22 60 Q17 63 12 62z" fill="#fff"/><path d="M22 56 Q16 36 30 20 Q42 6 58 10" stroke="#fff" stroke-width="3" fill="none" opacity="0.6"/></svg>`));
+      loadSprite("mflash", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="36" height="26"><path d="M2 13 L14 9 L12 2 L20 8 L34 5 L22 13 L34 21 L20 18 L12 24 L14 17z" fill="#ffe9b0"/><path d="M6 13 L15 10.5 L20 12 L26 13 L20 14 L15 15.5z" fill="#fff6dd"/></svg>`));
 
       loadSprite("lamp", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="140" height="140"><defs><radialGradient id="l" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#e8b13a" stop-opacity="0.7"/><stop offset="100%" stop-color="#e8b13a" stop-opacity="0"/></radialGradient></defs><circle cx="70" cy="70" r="70" fill="url(#l)"/></svg>`));
 
@@ -401,6 +407,12 @@
         splash: () => { noise({ dur: 0.28, vol: 0.22, type: "lowpass", f0: 900, f1: 180 }); noise({ dur: 0.12, vol: 0.1, type: "highpass", f0: 2200 }); },
         slosh: () => noise({ dur: 0.12, vol: 0.1, type: "lowpass", f0: 380, f1: 160, wet: false }),
         plink: () => { tone({ f0: 1150 + Math.random() * 500, f1: 700, dur: 0.12, type: "sine", vol: 0.05 }); },
+        shotgunS: () => { noise({ dur: 0.32, vol: 0.42, type: "lowpass", f0: 1100, f1: 120 }); tone({ f0: 110, f1: 40, dur: 0.25, type: "square", vol: 0.16 }); noise({ dur: 0.08, vol: 0.12, type: "bandpass", f0: 1400, Q: 5, delay: 0.34 }); noise({ dur: 0.07, vol: 0.1, type: "bandpass", f0: 900, Q: 5, delay: 0.44 }); },
+        mgunS: () => { noise({ dur: 0.08, vol: 0.2, type: "bandpass", f0: 2100, f1: 500, Q: 1.6 }); tone({ f0: 400, f1: 120, dur: 0.05, type: "sawtooth", vol: 0.07 }); },
+        batS: () => { noise({ dur: 0.2, vol: 0.16, type: "bandpass", f0: 340, f1: 90, Q: 1 }); },
+        whipS: () => { noise({ dur: 0.05, vol: 0.28, type: "highpass", f0: 1800 }); noise({ dur: 0.14, vol: 0.12, type: "bandpass", f0: 700, f1: 200, delay: 0.04 }); },
+        thunk: () => { noise({ dur: 0.14, vol: 0.24, type: "lowpass", f0: 320, f1: 90 }); tone({ f0: 95, f1: 45, dur: 0.14, type: "triangle", vol: 0.14 }); },
+        roar: () => { tone({ f0: 90, f1: 42, dur: 0.9, type: "sawtooth", vol: 0.28 }); noise({ dur: 0.85, vol: 0.22, type: "lowpass", f0: 600, f1: 140 }); tone({ f0: 140, f1: 60, dur: 0.7, type: "square", vol: 0.1, delay: 0.08 }); },
       };
 
       // =====================================================================
@@ -627,9 +639,12 @@
         blaster: { side: "human", name: "Blaster", cd: 0.32 },
         scatter: { side: "human", name: "Scattergun", cd: 0.7 },
         rail: { side: "human", name: "Rail Lance", cd: 0.95 },
+        shotgun: { side: "human", name: "Shotgun", cd: 0.9 },
+        mgun: { side: "human", name: "Machine Gun", cd: 0.13, auto: true },
         claws: { side: "stalker", name: "Claws", cd: 0.32 },
         scythe: { side: "stalker", name: "Bone Scythe", cd: 0.55 },
         whip: { side: "stalker", name: "Barb Whip", cd: 0.5 },
+        bat: { side: "stalker", name: "Bone Bat", cd: 0.8 },
       };
       const WPOOL = (side) => Object.keys(WEAPONS).filter((k) => WEAPONS[k].side === side);
 
@@ -950,7 +965,7 @@
           else doorHint.opacity = 0;
         });
 
-        function killEnemy(e) { burst(e.pos, rgb(80, 84, 86), 12, 200, 8); burst(e.pos, rgb(230, 120, 60), 8, 240, 5); popText(e.pos, "+1", rgb(240, 180, 120)); shake(5); SFX.kill(); destroy(e); score += 1; updateHUD(); }
+        function killEnemy(e) { burst(e.pos, rgb(80, 84, 86), 12, 200, 8); burst(e.pos, rgb(230, 120, 60), 8, 240, 5); popText(e.pos, "+1", rgb(240, 180, 120)); shake(5); SFX.kill(); hitStop(); destroy(e); score += 1; updateHUD(); }
 
         function hurt(fromFall) {
           if (invuln && !fromFall) return;
@@ -981,21 +996,38 @@
           b.onCollide("nemesis", (n) => { if (!opts.pierce) destroy(b); hitNemesis(n); });
           b.onCollide("platform", () => destroy(b));
         }
-        function fireRanged() {
-          weapon === "rail" ? SFX.rail() : weapon === "scatter" ? SFX.scatterS() : SFX.shoot();
-          add([circle(9), pos(player.pos.x + facing * 24, player.pos.y - 4), anchor("center"), color(230, 190, 120), opacity(0.85), lifespan(0.08, { fade: 0.08 }), z(8)]);
-          if (weapon === "scatter") { mkBullet(-0.14, { life: 0.3, spd: 700 }); mkBullet(0, { life: 0.34, spd: 730 }); mkBullet(0.14, { life: 0.3, spd: 700 }); shake(2); }
-          else if (weapon === "rail") { mkBullet(0, { pierce: true, spd: 1300, len: 36, h: 4, col: [140, 210, 240] }); shake(3); }
-          else mkBullet(0, {});
+        const hitStop = () => { if (debug.timeScale > 0.5) { debug.timeScale = 0.12; setTimeout(() => { if (debug.timeScale !== 0) debug.timeScale = 1; }, 60); } };
+        function casings(n2) {
+          for (let i = 0; i < n2; i++) add([rect(4, 2), pos(player.pos.x - facing * 8, player.pos.y - 8), anchor("center"), color(200, 165, 70), rotate(rand(0, 360)), opacity(1), lifespan(0.6, { fade: 0.3 }), z(7),
+            { v: vec2(-facing * rand(60, 140), rand(-180, -100)), update() { this.move(this.v); this.v.y += 800 * dt(); this.angle += 600 * dt(); } }]);
         }
+        function muzzle() {
+          add([sprite("mflash"), pos(player.pos.x + facing * 30, player.pos.y - 4), anchor("center"), scale(facing < 0 ? -1 : 1, 1), opacity(1), lifespan(0.06, { fade: 0.05 }), z(8)]);
+        }
+        function fireRanged() {
+          muzzle();
+          if (weapon === "scatter") { SFX.scatterS(); mkBullet(-0.14, { life: 0.3, spd: 700 }); mkBullet(0, { life: 0.34, spd: 730 }); mkBullet(0.14, { life: 0.3, spd: 700 }); casings(1); shake(2); }
+          else if (weapon === "rail") { SFX.rail(); mkBullet(0, { pierce: true, spd: 1300, len: 36, h: 4, col: [140, 210, 240] }); shake(3); }
+          else if (weapon === "shotgun") { SFX.shotgunS(); for (const dy2 of [-0.3, -0.15, 0, 0.15, 0.3]) mkBullet(dy2, { life: 0.2, spd: 760, len: 10, h: 4 }); casings(2); player.move(-facing * 46, 0); shake(6); }
+          else if (weapon === "mgun") { SFX.mgunS(); mkBullet(rand(-0.06, 0.06), { spd: 900, len: 14 }); casings(1); shake(1.2); }
+          else { SFX.shoot(); mkBullet(0, {}); }
+        }
+        const SLASH_TINT = { claws: [255, 208, 160], scythe: [225, 228, 255], whip: [255, 224, 130], bat: [210, 196, 168] };
         function meleeStrike() {
-          SFX.claw(); lungeUntil = time() + 0.28;
-          const [w, h, reach] = weapon === "scythe" ? [84, 60, 44] : weapon === "whip" ? [110, 18, 66] : [54, 42, 36];
+          weapon === "whip" ? SFX.whipS() : weapon === "bat" ? SFX.batS() : SFX.claw();
+          lungeUntil = time() + 0.28;
+          const [w, h, reach] = weapon === "scythe" ? [84, 60, 44] : weapon === "whip" ? [110, 18, 66] : weapon === "bat" ? [96, 68, 52] : [54, 42, 36];
           player.move(facing * (weapon === "whip" ? 80 : 200), 0); squash(1.24, 0.86);
-          const hb = add([rect(w, h, { radius: 6 }), pos(player.pos.x + facing * reach, player.pos.y - 2), anchor("center"), color(255, 205, 120), opacity(0.35), area(), lifespan(0.14, { fade: 0.14 }), z(5), "claw"]);
-          burst(hb.pos, rgb(255, 210, 140), 6, 150, 5);
-          hb.onCollide("enemy", (e) => killEnemy(e));
-          hb.onCollide("nemesis", (n) => { hitNemesis(n); if (weapon === "whip" && n.exists()) n.move(facing * 320, 0); });
+          // visible slash arc (#21): tinted crescent sweeping with the strike
+          const arc = add([sprite("slash"), pos(player.pos.x + facing * reach, player.pos.y - 4), anchor("center"),
+            scale((facing < 0 ? -1 : 1) * (w / 66), h / 66), rotate(facing * -18), color(...(SLASH_TINT[weapon] || SLASH_TINT.claws)), opacity(0.85), lifespan(0.16, { fade: 0.12 }), z(8)]);
+          arc.onUpdate(() => { arc.angle += facing * 320 * dt(); arc.pos = player.pos.add(facing * reach, -4); });
+          const hb = add([rect(w, h, { radius: 6 }), pos(player.pos.x + facing * reach, player.pos.y - 2), anchor("center"), opacity(0), area(), lifespan(0.14), z(5), "claw"]);
+          hb.onCollide("enemy", (e) => { if (weapon === "bat") SFX.thunk(); killEnemy(e); });
+          hb.onCollide("nemesis", (n) => {
+            hitNemesis(n);
+            if (n.exists()) { if (weapon === "whip") n.move(facing * 320, 0); else if (weapon === "bat") { SFX.thunk(); n.move(facing * 420, 0); n.jump && n.vel && (n.vel = vec2(n.vel.x, -260)); } }
+          });
         }
         function attack() {
           if (time() - lastAtk < WEAPONS[weapon].cd) return; lastAtk = time();
@@ -1060,7 +1092,7 @@
         function hitNemesis(n) {
           if (!n.exists() || time() < n.iframes) return;
           n.iframes = time() + 0.35; n.hp -= 1;
-          burst(n.pos, rgb(...NCFG.color), 10, 200, 6); shake(4); SFX.kill();
+          burst(n.pos, rgb(120, 30, 30), 12, 210, 6); shake(4); SFX.kill(); hitStop();
           if (n.hp <= 0) {
             addKaboom(n.pos, { scale: 0.8 }); burst(n.pos, rgb(...NCFG.color), 22, 300, 9);
             popText(n.pos, "+5 HUNTER DOWN", rgb(255, 200, 140)); score += 5; updateHUD();
@@ -1096,9 +1128,11 @@
             const n = nemesis; if (!n) return;
             const toP = player.pos.sub(n.pos), dist = toP.len(), sameFloor = Math.abs(toP.y) < 110;
             // occasionally "senses" the player from anywhere — keeps pressure on
+            const wasHunting = n.state === "hunt";
             if (time() > n.senseAt) { n.state = "hunt"; n.senseAt = time() + rand(14, 22); }
             if ((dist < 400 && sameFloor) || dist < 150) n.state = "hunt";
             else if (n.state === "hunt" && dist > 650) n.state = "patrol";
+            if (n.state === "hunt" && !wasHunting && time() > (n.roarCd || 0)) { n.roarCd = time() + 8; SFX.roar(); shake(7); } // it saw you
 
             const spd = NCFG.speed * (n.state === "hunt" ? 0.92 : 0.55);
             let vx = 0;
@@ -1134,7 +1168,7 @@
                   const nb = add([rect(18, 5, { radius: 2 }), pos(n.pos.x + dirx * 24, n.pos.y - 4), anchor("center"), color(255, 130, 110), outline(2, rgb(90, 30, 20)), area(), move(vec2(dirx, 0), 700), offscreen({ destroy: true }), z(5), "nbullet"]);
                   nb.onCollide("player", () => { destroy(nb); hurt(); });
                   nb.onCollide("platform", () => destroy(nb));
-                } else if (NCFG.mode === "melee" && dist < (n.weapon === "whip" ? 130 : n.weapon === "scythe" ? 110 : 90)) {
+                } else if (NCFG.mode === "melee" && dist < (n.weapon === "whip" ? 130 : n.weapon === "bat" ? 120 : n.weapon === "scythe" ? 110 : 90)) {
                   n.atkCd = time() + 0.9; SFX.claw(); n.move((toP.x > 0 ? 1 : -1) * 220, 0);
                 }
               }
@@ -1272,6 +1306,8 @@
           dx = clamp(dx, -1, 1);
           const up = isKeyDown("up") || isKeyDown("w") || (stick && stick.y < -0.4);
           const down = isKeyDown("down") || isKeyDown("s") || (stick && stick.y > 0.4);
+          // machine gun: hold to fire
+          if (WEAPONS[weapon].auto && (isKeyDown("j") || isKeyDown("x") || isGamepadButtonDown("west") || isGamepadButtonDown("east"))) attack();
           const wading = inWater();
           if (Math.abs(dx) > 0.05) {
             player.move(dx * CFG.speed * (wading ? 0.55 : 1), 0); facing = dx > 0 ? 1 : -1; player.flipX = facing < 0;
