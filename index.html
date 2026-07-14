@@ -793,6 +793,7 @@
         add([sprite("depthfog"), pos(0, 0), fixed(), z(-25), scale(width() / 8, 1)]);
         addFog(); addDust();
 
+        const spawnCell = (x, y) => add([sprite("cell"), pos(x, y), anchor("center"), area({ scale: 1.1 }), scale(1), z(3), "energy", { seed: x, update() { this.scale = vec2(1 + Math.sin(time() * 4 + this.seed) * 0.12); } }]);
         // --- build solids/hazards/pickups from GRID ---
         GRID.forEach((row, r) => row.forEach((ch, c) => {
           const x = c * TS + TS / 2, y = r * TS + TS / 2;
@@ -810,7 +811,7 @@
           else if (ch === "H") add([sprite("ladder"), pos(x, y), anchor("center"), area(), z(1), "ladder"]);
           else if (ch === "N") add([sprite("net"), pos(x, y), anchor("center"), area(), z(1), "ladder", "net"]);
           else if (ch === "^") add([sprite("spikes"), pos(x, r * TS + TS), anchor("bot"), area(), z(3), "danger"]);
-          else if (ch === "$") add([sprite("cell"), pos(x, y), anchor("center"), area({ scale: 1.1 }), scale(1), z(3), "energy", { seed: x, update() { this.scale = vec2(1 + Math.sin(time() * 4 + this.seed) * 0.12); } }]);
+          else if (ch === "$") spawnCell(x, y);
           else if (ch === "e") { if (!NET.connected) spawnEnemy(x, y); } // online: the other player IS the hunter
           else if (ch === ">") {
             add([sprite("exit"), pos(x, r * TS + TS), anchor("bot"), area(), z(3), "exit"]);
@@ -829,13 +830,31 @@
           const x = c * TS + TS / 2;
           if (above === " " && r > 2 && rand() < 0.22) {
             const kind = choose(["barrel", "crate", "sign", "vent", "vent"]);
-            add([sprite(kind), pos(x + rand(-6, 6), r * TS + (kind === "sign" ? -6 : 0)), anchor(kind === "sign" ? "center" : "bot"), z(3), rotate(kind === "sign" ? 0 : rand(-2, 2))]);
-            if (kind === "vent") steamVents.push(vec2(x, r * TS - 6));
+            if (kind === "barrel" || kind === "crate") {
+              // interactive (#20): breakable; some barrels are pushable
+              const pushable = kind === "barrel" && rand() < 0.35;
+              const o = add([sprite(kind), pos(x + rand(-6, 6), r * TS), anchor("bot"), area({ scale: 0.9 }), z(3), "breakable",
+                ...(pushable ? [body(), "pushable"] : []), { kind }]);
+              if (pushable) o.onUpdate(() => { if (o.vel) o.vel = vec2(o.vel.x * 0.86, o.vel.y); });
+            } else {
+              add([sprite(kind), pos(x + rand(-6, 6), r * TS + (kind === "sign" ? -6 : 0)), anchor(kind === "sign" ? "center" : "bot"), z(3), rotate(kind === "sign" ? 0 : rand(-2, 2))]);
+              if (kind === "vent") steamVents.push(vec2(x, r * TS - 6));
+            }
           }
           if (above === " " && lampCount < 11 && rand() < 0.16) { add([sprite("lamp"), pos(x, r * TS - 40), anchor("center"), z(-8), { s: rand(0, 6), update() { this.opacity = rand() < 0.006 ? 0.04 : 0.55 + Math.sin(time() * 3 + this.s) * 0.2; } }]); lampCount++; }
           if (below === " " && rand() < 0.14) add([sprite("cable"), pos(x + rand(-10, 10), r * TS + TS - 2), anchor("top"), z(1), opacity(0.9)]);
         }));
         loop(0.25, () => steamVents.forEach((v) => { if (rand() < 0.7) add([circle(rand(4, 7)), pos(v.add(rand(-4, 4), 0)), anchor("center"), color(150, 150, 155), opacity(rand(0.12, 0.26)), z(3), lifespan(rand(0.8, 1.4), { fade: 1 }), { up: rand(20, 40), update() { this.pos.y -= this.up * dt(); this.radius += 6 * dt(); } }]); }));
+        // steam vent LAUNCHERS (#20): periodic blast that hurls you upward — ride it
+        steamVents.slice(0, 2).forEach((v, i) => {
+          add([sprite("lamp"), pos(v), anchor("center"), scale(0.4), opacity(0.22), color(170, 195, 210), z(1)]);
+          loop(3.4, () => wait(i * 1.3, () => {
+            for (let k2 = 0; k2 < 14; k2++) add([circle(rand(4, 9)), pos(v.add(rand(-10, 10), 0)), anchor("center"), color(190, 195, 200), opacity(rand(0.3, 0.5)), z(7), lifespan(rand(0.5, 0.9), { fade: 0.6 }), { up: rand(160, 300), update() { this.pos.y -= this.up * dt(); this.radius += 10 * dt(); } }]);
+            noise({ dur: 0.5, vol: 0.13, type: "highpass", f0: 1400, f1: 500 });
+            const tryLaunch = () => { if (Math.abs(player.pos.x - v.x) < 26 && player.pos.y > v.y - 100 && player.pos.y < v.y + 10) { player.vel = vec2(player.vel.x, -900); jumpsLeft = maxJumps; SFX.jump2(); } };
+            tryLaunch(); wait(0.2, tryLaunch); wait(0.4, tryLaunch);
+          }));
+        });
 
         // --- doors ---
         const makeDoor = (c, row) => add([sprite("door"), pos(c * TS + TS / 2, row * TS), anchor("bot"), area({ scale: vec2(0.5, 0.9) }), z(1), "door", { partner: null }]);
@@ -967,6 +986,24 @@
 
         function killEnemy(e) { burst(e.pos, rgb(80, 84, 86), 12, 200, 8); burst(e.pos, rgb(230, 120, 60), 8, 240, 5); popText(e.pos, "+1", rgb(240, 180, 120)); shake(5); SFX.kill(); hitStop(); destroy(e); score += 1; updateHUD(); }
 
+        function breakObj(o) {
+          if (!o.exists()) return;
+          const p = o.pos.clone().sub(0, 14), kind = o.kind;
+          destroy(o);
+          if (kind === "barrel") { // hazard barrel: explodes and chains
+            SFX.boom(); shake(8); flash(rgb(240, 170, 90), 0.25);
+            const ring = add([circle(6), pos(p), anchor("center"), color(255, 210, 140), opacity(0.55), lifespan(0.25, { fade: 0.25 }), z(35)]);
+            tween(6, 70, 0.24, (r2) => (ring.radius = r2), easings.easeOutQuad);
+            burst(p, rgb(240, 170, 80), 16, 280, 8); burst(p, rgb(110, 80, 50), 10, 200, 7);
+            get("enemy").forEach((e) => { if (e.pos.dist(p) < 80) killEnemy(e); });
+            get("nemesis").forEach((n) => { if (n.pos.dist(p) < 85) hitNemesis(n); });
+            if (player.pos.dist(p) < 70) hurt();
+            get("breakable").forEach((b) => { if (b.exists() && b.pos.dist(p) < 90) wait(0.15, () => breakObj(b)); });
+          } else { // crate: splinters
+            SFX.thunk(); burst(p, rgb(150, 120, 80), 14, 190, 6); burst(p, rgb(90, 70, 45), 8, 140, 5);
+          }
+          if (rand() < 0.45) spawnCell(p.x, p.y);
+        }
         function hurt(fromFall) {
           if (invuln && !fromFall) return;
           hp -= 1; shake(9); flash(rgb(180, 40, 30), 0.5); SFX.hurt(); burst(player.pos, rgb(...CFG.color), 12, 200, 6); updateHUD();
@@ -994,6 +1031,7 @@
             offscreen({ destroy: true }), z(5), "bullet", ...(opts.life ? [lifespan(opts.life, { fade: 0.06 })] : []), opacity(1)]);
           b.onCollide("enemy", (e) => { if (!opts.pierce) destroy(b); killEnemy(e); });
           b.onCollide("nemesis", (n) => { if (!opts.pierce) destroy(b); hitNemesis(n); });
+          b.onCollide("breakable", (o) => { if (!opts.pierce) destroy(b); breakObj(o); });
           b.onCollide("platform", () => destroy(b));
         }
         const hitStop = () => { if (debug.timeScale > 0.5) { debug.timeScale = 0.12; setTimeout(() => { if (debug.timeScale !== 0) debug.timeScale = 1; }, 60); } };
@@ -1024,6 +1062,7 @@
           arc.onUpdate(() => { arc.angle += facing * 320 * dt(); arc.pos = player.pos.add(facing * reach, -4); });
           const hb = add([rect(w, h, { radius: 6 }), pos(player.pos.x + facing * reach, player.pos.y - 2), anchor("center"), opacity(0), area(), lifespan(0.14), z(5), "claw"]);
           hb.onCollide("enemy", (e) => { if (weapon === "bat") SFX.thunk(); killEnemy(e); });
+          hb.onCollide("breakable", (o) => breakObj(o));
           hb.onCollide("nemesis", (n) => {
             hitNemesis(n);
             if (n.exists()) { if (weapon === "whip") n.move(facing * 320, 0); else if (weapon === "bat") { SFX.thunk(); n.move(facing * 420, 0); n.jump && n.vel && (n.vel = vec2(n.vel.x, -260)); } }
@@ -1043,6 +1082,7 @@
           burst(p, rgb(240, 170, 80), 20, 320, 9); burst(p, rgb(90, 90, 92), 14, 240, 8);
           get("enemy").forEach((e) => { if (e.pos.dist(p) < 96) killEnemy(e); });
           get("nemesis").forEach((n) => { if (n.pos.dist(p) < 110) hitNemesis(n); });
+          get("breakable").forEach((b) => { if (b.pos.dist(p) < 110) breakObj(b); });
         }
         function throwBomb() {
           if (time() - lastBomb < 1.1) return; lastBomb = time(); SFX.toss();
