@@ -188,6 +188,9 @@
 
       loadSprite("bomb", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="18" height="20"><rect x="8" y="0" width="2" height="4" fill="#7a4a28"/><circle cx="9" cy="2" r="1.6" fill="#e8b13a"/><circle cx="9" cy="12" r="7" fill="#2a2c2e" stroke="#131416"/><circle cx="6" cy="9" r="2" fill="#44484a" opacity="0.7"/></svg>`));
 
+      // HP pip (HUD)
+      loadSprite("pip", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="16" height="14"><path d="M8 13 L1.5 6.5 a4 4 0 0 1 6.5 -4.5 a4 4 0 0 1 6.5 4.5z" fill="#d84848" stroke="#5a1a1a" stroke-width="1.5"/></svg>`));
+
       // weapon pickup pad + per-weapon glyphs (issue #13)
       loadSprite("pad", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="40" height="10"><rect width="40" height="10" rx="2" fill="#22262a"/><g fill="#c8992e" opacity="0.8"><rect x="2" y="2" width="6" height="6"/><rect x="14" y="2" width="6" height="6"/><rect x="26" y="2" width="6" height="6"/></g><g fill="#131416"><rect x="8" y="2" width="6" height="6"/><rect x="20" y="2" width="6" height="6"/><rect x="32" y="2" width="6" height="6"/></g></svg>`));
       loadSprite("wpn-blaster", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="28" height="24"><rect x="2" y="10" width="18" height="5" rx="1" fill="#26262a"/><rect x="18" y="9" width="8" height="3" fill="#3a3a40"/><rect x="4" y="14" width="5" height="6" fill="#1e1e22"/></svg>`));
@@ -276,6 +279,9 @@
         step: (alt) => noise({ dur: 0.07, vol: 0.06, type: "lowpass", f0: alt ? 620 : 740, wet: false }),
         land: (h) => noise({ dur: 0.16, vol: 0.1 + h * 0.2, type: "lowpass", f0: 500, f1: 120 }),
         heart: (close) => { tone({ f0: 52, f1: 38, dur: 0.1, type: "sine", vol: close ? 0.3 : 0.2, wet: false }); tone({ f0: 44, f1: 32, dur: 0.14, type: "sine", vol: close ? 0.2 : 0.12, delay: 0.12, wet: false }); },
+        splash: () => { noise({ dur: 0.28, vol: 0.22, type: "lowpass", f0: 900, f1: 180 }); noise({ dur: 0.12, vol: 0.1, type: "highpass", f0: 2200 }); },
+        slosh: () => noise({ dur: 0.12, vol: 0.1, type: "lowpass", f0: 380, f1: 160, wet: false }),
+        plink: () => { tone({ f0: 1150 + Math.random() * 500, f1: 700, dur: 0.12, type: "sine", vol: 0.05 }); },
       };
 
       // =====================================================================
@@ -413,6 +419,7 @@
       scene("select", () => {
         add([sprite("sky"), pos(0, 0), fixed(), z(-100)]);
         menuParallax(); addFog(); addDust();
+        add([sprite("lamp"), pos(width() / 2, 66), anchor("center"), scale(2.6), opacity(0.35), z(-5)]);
         add([text("QUARRY", { size: 64 }), pos(width() / 2, 66), anchor("center"), color(228, 218, 200), outline(4, rgb(20, 18, 16))]);
         add([text("The world wants you dead either way. Choose your side.", { size: 19 }), pos(width() / 2, 116), anchor("center"), color(170, 158, 140)]);
         const keys = ["human", "stalker"]; let sel = 0;
@@ -447,6 +454,8 @@
         let lastGroundedAt = 0, jumpBufferedAt = -1; // coyote time + jump buffering
         let weapon = CFG.mode === "ranged" ? "blaster" : "claws"; // one weapon at a time (#13)
         let stepAt = 0, stepAlt = false; // footstep cadence
+        let lastWaterAt = -1, wasInWater = false; // sewage wading
+        const inWater = () => time() - lastWaterAt < 0.06;
         ambience();
         let wallDir = 0, lastWallTime = -1, wallStick = 0;
         let lastLadderTime = -1, ladderCd = 0, onLadderNow = false;
@@ -488,7 +497,7 @@
             add([sprite(kind), pos(x + rand(-6, 6), r * TS + (kind === "sign" ? -6 : 0)), anchor(kind === "sign" ? "center" : "bot"), z(3), rotate(kind === "sign" ? 0 : rand(-2, 2))]);
             if (kind === "vent") steamVents.push(vec2(x, r * TS - 6));
           }
-          if (above === " " && lampCount < 11 && rand() < 0.16) { add([sprite("lamp"), pos(x, r * TS - 40), anchor("center"), z(-8), { s: rand(0, 6), update() { this.opacity = 0.55 + Math.sin(time() * 3 + this.s) * 0.2; } }]); lampCount++; }
+          if (above === " " && lampCount < 11 && rand() < 0.16) { add([sprite("lamp"), pos(x, r * TS - 40), anchor("center"), z(-8), { s: rand(0, 6), update() { this.opacity = rand() < 0.006 ? 0.04 : 0.55 + Math.sin(time() * 3 + this.s) * 0.2; } }]); lampCount++; }
           if (below === " " && rand() < 0.14) add([sprite("cable"), pos(x + rand(-10, 10), r * TS + TS - 2), anchor("top"), z(1), opacity(0.9)]);
         }));
         loop(0.25, () => steamVents.forEach((v) => { if (rand() < 0.7) add([circle(rand(4, 7)), pos(v.add(rand(-4, 4), 0)), anchor("center"), color(150, 150, 155), opacity(rand(0.12, 0.26)), z(3), lifespan(rand(0.8, 1.4), { fade: 1 }), { up: rand(20, 40), update() { this.pos.y -= this.up * dt(); this.radius += 6 * dt(); } }]); }));
@@ -496,6 +505,39 @@
         // --- doors ---
         const makeDoor = (c, row) => add([sprite("door"), pos(c * TS + TS / 2, row * TS), anchor("bot"), area({ scale: vec2(0.5, 0.9) }), z(1), "door", { partner: null }]);
         DOOR_PAIRS.forEach(([a, b]) => { const da = makeDoor(a[0], a[1]), db = makeDoor(b[0], b[1]); da.partner = db.pos.clone(); db.partner = da.pos.clone(); });
+
+        // --- sewage pools (#10): murky water, ripple surface, ceiling drips ---
+        const POOLS = [{ c0: 22, c1: 30, r: 13 }, { c0: 44, c1: 52, r: 13 }, { c0: 30, c1: 36, r: 10 }];
+        const poolRects = [];
+        for (const P of POOLS) {
+          const x0 = P.c0 * TS, w = (P.c1 - P.c0 + 1) * TS, topY = P.r * TS + 10, h = TS - 10;
+          poolRects.push({ x0, x1: x0 + w, topY });
+          add([rect(w, h), pos(x0, topY), color(42, 66, 48), opacity(0.55), area(), z(7), "water"]);
+          add([rect(w, 3), pos(x0, topY), color(96, 140, 104), opacity(0.5), z(8), { update() { this.pos.y = topY + Math.sin(time() * 2 + x0) * 1.5; } }]);
+          // drifting scum patches
+          for (let i = 0; i < 3; i++) {
+            const sx = x0 + rand(0, w);
+            add([rect(rand(10, 22), 3, { radius: 2 }), pos(sx, topY + 2), color(70, 96, 66), opacity(0.6), z(8), { sx, w, x0, update() { this.pos.x = this.x0 + ((this.sx - this.x0 + time() * 7) % this.w); } }]);
+          }
+        }
+        // ceiling drips fall into pools; plink when the player is near
+        loop(0.5, () => {
+          for (const pr of poolRects) {
+            if (rand() > 0.55) continue;
+            const dx0 = rand(pr.x0 + 10, pr.x1 - 10);
+            add([rect(2, 7), pos(dx0, pr.topY - rand(120, 200)), color(150, 190, 175), opacity(0.7), z(6), {
+              update() {
+                this.move(0, 340);
+                if (this.pos.y >= pr.topY) {
+                  destroy(this);
+                  add([circle(3), pos(this.pos.x, pr.topY + 2), color(140, 190, 160), opacity(0.5), lifespan(0.25, { fade: 0.25 }), z(8), { update() { this.radius += 26 * dt(); } }]);
+                  const p = get("player")[0];
+                  if (p && Math.abs(p.pos.x - this.pos.x) < 520) SFX.plink();
+                }
+              },
+            }]);
+          }
+        });
 
         // --- weapon crates on pads (#13): spawn on random floor cells ---
         const NKEY2 = sideKey === "human" ? "stalker" : "human";
@@ -538,16 +580,51 @@
         // wall / ladder / door detection
         player.onCollideUpdate("platform", (p) => { const dx = p.pos.x - player.pos.x, dy = Math.abs(p.pos.y - player.pos.y); if (Math.abs(dx) > 12 && dy < TS * 0.55) { wallDir = dx > 0 ? 1 : -1; lastWallTime = time(); } });
         player.onCollideUpdate("ladder", () => { lastLadderTime = time(); });
+        player.onCollideUpdate("water", () => { lastWaterAt = time(); });
         player.onCollideUpdate("door", (d) => { nearDoor = d; lastDoorTime = time(); });
         const wallActive = () => time() - lastWallTime < 0.06;
         const ladderActive = () => time() - lastLadderTime < 0.06 && time() > ladderCd;
 
-        // --- HUD ---
-        const hud = add([text("", { size: 20 }), pos(16, 14), fixed(), z(200), color(232, 224, 210), outline(3, rgb(20, 18, 16))]);
+        // --- HUD v2 (#10): panel with HP pips, energy, weapon, bomb cooldown ---
+        add([rect(210, CFG.bomb ? 96 : 84, { radius: 8 }), pos(10, 8), fixed(), z(198), color(16, 16, 18), opacity(0.72), outline(2, rgb(60, 58, 52))]);
+        add([text(CFG.name, { size: 15 }), pos(20, 16), fixed(), z(200), color(...CFG.color)]);
+        const pips = [];
+        for (let i = 0; i < CFG.maxHp; i++) pips.push(add([sprite("pip"), pos(20 + i * 20, 38), fixed(), z(200), opacity(1)]));
+        add([sprite("cell"), pos(20 + CFG.maxHp * 20 + 14, 36), fixed(), z(200), scale(0.75)]);
+        const energyTxt = add([text("0", { size: 16 }), pos(20 + CFG.maxHp * 20 + 34, 40), fixed(), z(200), color(180, 240, 190)]);
+        const wIcon = add([sprite("wpn-" + weapon), pos(20, 60), fixed(), z(200)]);
+        const wTxt = add([text(WEAPONS[weapon].name, { size: 14 }), pos(52, 66), fixed(), z(200), color(240, 220, 160)]);
+        let bombBar = null;
+        if (CFG.bomb) {
+          add([rect(120, 5, { radius: 2 }), pos(20, 90), fixed(), z(199), color(40, 38, 34)]);
+          bombBar = add([rect(120, 5, { radius: 2 }), pos(20, 90), fixed(), z(200), color(230, 170, 70)]);
+          bombBar.onUpdate(() => { bombBar.width = 120 * clamp((time() - lastBomb) / 1.1, 0, 1); });
+        }
         const ctrl = CFG.bomb ? "Bomb: K/Y   " : "Wall: into-wall+Up   ";
-        add([text("Move ←→/AD   Jump Space   Attack J/X   " + ctrl + "Climb ↑↓   Door: E", { size: 13 }), pos(16, 520), fixed(), z(200), color(150, 140, 124)]);
-        const updateHUD = () => (hud.text = `${CFG.name}    HP ${Math.max(hp, 0)}/${CFG.maxHp}    Energy ${score}    ⚔ ${WEAPONS[weapon].name}`);
+        add([text("Move ←→/AD   Jump Space   Attack J/X   " + ctrl + "Climb ↑↓   Door: E   Pause: Esc   Mute: N", { size: 13 }), pos(16, 520), fixed(), z(200), color(150, 140, 124)]);
+        const updateHUD = () => {
+          pips.forEach((p, i) => (p.opacity = i < hp ? 1 : 0.18));
+          energyTxt.text = "" + score;
+          wIcon.use(sprite("wpn-" + weapon));
+          wTxt.text = WEAPONS[weapon].name;
+        };
         updateHUD();
+        // low-HP: red edge pulse + slow dread heartbeat
+        const lowHp = add([rect(width(), height()), pos(0, 0), fixed(), z(185), color(160, 30, 25), opacity(0)]);
+        let lowBeatAt = 0;
+        lowHp.onUpdate(() => {
+          lowHp.opacity = hp === 1 ? 0.10 + Math.sin(time() * 4) * 0.07 : 0;
+          if (hp === 1 && time() > lowBeatAt) { lowBeatAt = time() + 1.0; SFX.heart(false); }
+        });
+        // pause (freeze via timeScale so input still works)
+        const pausedTxt = add([text("PAUSED — ESC to resume", { size: 30 }), pos(width() / 2, height() / 2), anchor("center"), fixed(), z(300), color(230, 220, 200), outline(4, rgb(0, 0, 0)), opacity(0)]);
+        onKeyPress("escape", () => { debug.timeScale = debug.timeScale === 0 ? 1 : 0; pausedTxt.opacity = debug.timeScale === 0 ? 1 : 0; });
+        // door hint
+        const doorHint = add([text("E — enter", { size: 14 }), pos(0, 0), anchor("center"), z(60), color(230, 190, 110), outline(3, rgb(0, 0, 0)), opacity(0)]);
+        doorHint.onUpdate(() => {
+          if (nearDoor && time() - lastDoorTime < 0.15) { doorHint.pos = nearDoor.pos.add(0, -78); doorHint.opacity = 0.85; }
+          else doorHint.opacity = 0;
+        });
 
         function killEnemy(e) { burst(e.pos, rgb(80, 84, 86), 12, 200, 8); burst(e.pos, rgb(230, 120, 60), 8, 240, 5); popText(e.pos, "+1", rgb(240, 180, 120)); shake(5); SFX.kill(); destroy(e); score += 1; updateHUD(); }
 
@@ -773,10 +850,15 @@
           dx = clamp(dx, -1, 1);
           const up = isKeyDown("up") || isKeyDown("w") || (stick && stick.y < -0.4);
           const down = isKeyDown("down") || isKeyDown("s") || (stick && stick.y > 0.4);
+          const wading = inWater();
           if (Math.abs(dx) > 0.05) {
-            player.move(dx * CFG.speed, 0); facing = dx > 0 ? 1 : -1; player.flipX = facing < 0;
-            if (player.isGrounded() && time() > stepAt) { stepAt = time() + 0.27; stepAlt = !stepAlt; SFX.step(stepAlt); }
+            player.move(dx * CFG.speed * (wading ? 0.55 : 1), 0); facing = dx > 0 ? 1 : -1; player.flipX = facing < 0;
+            if (player.isGrounded() && time() > stepAt) { stepAt = time() + (wading ? 0.34 : 0.27); stepAlt = !stepAlt; wading ? SFX.slosh() : SFX.step(stepAlt); }
           }
+          // sewage: splash on entry, capped sink speed, always able to hop out
+          if (wading && !wasInWater) { SFX.splash(); burst(player.pos.add(0, 10), rgb(110, 160, 130), 10, 160, 5); }
+          wasInWater = wading;
+          if (wading) { if (player.vel.y > 130) player.vel = vec2(player.vel.x, 130); jumpsLeft = Math.max(jumpsLeft, 1); }
 
           // ladder
           if (ladderActive()) {
