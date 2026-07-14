@@ -909,6 +909,8 @@
         ambience();
         let wallDir = 0, lastWallTime = -1, wallStick = 0;
         let lastCeilTime = -1, ceilStick = false, ceilCd = 0; // ceiling crawl (#30)
+        let hanging = false, grabCd = 0, hangCell = null; // ledge grab (#40)
+        const FRAME_H = CFG.wallClimb ? 228 : 140, HIT_H = FRAME_H * CFG.sc * CFG.areaY, HIT_W = (CFG.wallClimb ? 130 : 100) * 0.6 * CFG.sc;
         let lastLadderTime = -1, ladderCd = 0, onLadderNow = false;
         let nearDoor = null, lastDoorTime = -1, doorCd = 0;
         const steamVents = [];
@@ -1354,6 +1356,7 @@
         }
 
         function jump() {
+          if (hanging) { hanging = false; grabCd = time() + 0.35; player.gravityScale = 1; player.jump(CFG.jumpForce * 0.92); jumpsLeft = Math.max(0, maxJumps - 1); squash(0.74, 1.28); SFX.jump(); return; } // leap off the ledge
           if (ceilStick) { ceilStick = false; ceilCd = time() + 0.35; player.gravityScale = 1; return; } // release from ceiling
           if (onLadderNow) { player.gravityScale = 1; ladderCd = time() + 0.28; }
           if (CFG.wallClimb && !player.isGrounded() && wallStick !== 0) {
@@ -1644,6 +1647,26 @@
           // apex hang: floatier at the top of the jump arc
           if (!onLadderNow) player.gravityScale = !player.isGrounded() && Math.abs(player.vel.y) < 70 ? 0.72 : 1;
 
+          // ledge grab (#40): fall past a lip with your hands close — catch it, hang, climb up
+          const solidCell = (c2, r2) => GRID[r2] && GRID[r2][c2] === "=";
+          if (hanging) {
+            player.gravityScale = 0; player.vel = vec2(0, 0);
+            if (up && hangCell) { // clamber onto the ledge
+              hanging = false; grabCd = time() + 0.3; player.gravityScale = 1;
+              player.pos = vec2(hangCell.c * TS + TS / 2, hangCell.r * TS - HIT_H / 2 - 2);
+              landUntil = time() + 0.2; dust(player.pos.add(0, HIT_H / 2)); SFX.jump();
+            } else if (down) { hanging = false; grabCd = time() + 0.4; player.gravityScale = 1; }
+          } else if (!player.isGrounded() && !onLadderNow && !ceilStick && player.vel.y > 40 && time() > grabCd) {
+            const handY = player.pos.y - HIT_H / 2 + 6;
+            const cA = Math.floor((player.pos.x + facing * (HIT_W / 2 + 8)) / TS), rA = Math.floor(handY / TS);
+            if (solidCell(cA, rA) && !solidCell(cA, rA - 1) && handY - rA * TS < Math.max(30, player.vel.y * dt() + 10)) {
+              hanging = true; hangCell = { c: cA, r: rA };
+              player.gravityScale = 0; player.vel = vec2(0, 0);
+              player.pos = vec2(cA * TS + (facing > 0 ? -1 : 1) * (TS / 2 + HIT_W / 2 - 3) + TS / 2 - (facing > 0 ? 0 : 0), rA * TS + HIT_H / 2 - 8);
+              SFX.claw();
+            }
+          }
+
           // ceiling crawl (#30): hold Up under a ceiling to latch upside-down, crawl with ←→, Down/jump releases.
           // Sustain via a direct tile check overhead — collision events stop once physics separates the bodies.
           const wasCeil = ceilStick; ceilStick = false;
@@ -1669,6 +1692,7 @@
 
           // animation state (beast gets cling/crawl on walls + ceiling + tucked drop)
           if (time() < lungeUntil) setAnim("jump");
+          else if (hanging) setAnim(CFG.wallClimb ? "cling" : "climb");
           else if (ceilStick) setAnim("ceil");
           else if (CFG.wallClimb && wallStick !== 0 && !player.isGrounded()) setAnim("cling");
           else if (CFG.wallClimb && !player.isGrounded() && !onLadderNow && player.vel.y > 280) setAnim("drop");
