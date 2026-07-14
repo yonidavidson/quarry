@@ -293,9 +293,11 @@
         rotFrame(beastFrame({ la: -68, lab: -18, ra: -74, rab: -12, l1: -28, l1b: 20, l2: -36, l2b: 26, jaw: 2 }), -74),   // wall cling A (#26)
         rotFrame(beastFrame({ la: -50, lab: -30, ra: -88, rab: -6, l1: -40, l1b: 30, l2: -22, l2b: 16, jaw: 2, dy: 2 }), -74), // wall crawl B
         rotFrame(beastFrame({ l1: 42, l1b: 55, l2: 36, l2b: 50, la: -38, lab: -30, ra: -44, rab: -34, jaw: 5 }), 14),      // body drop (tucked)
+        rotFrame(beastFrame({ la: -66, lab: -20, ra: -76, rab: -10, l1: -30, l1b: 22, l2: -38, l2b: 28, jaw: 2 }), 180),   // ceiling cling A (#30)
+        rotFrame(beastFrame({ la: -48, lab: -32, ra: -90, rab: -4, l1: -42, l1b: 32, l2: -24, l2b: 18, jaw: 2, dy: 2 }), 180), // ceiling crawl B
       ];
-      loadSprite("stalker", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="${112 * 10}" height="192">${BDEFS}${BFRAMES.map((f, i) => `<g transform="translate(${i * 112} 12)">${f}</g>`).join("")}</svg>`),
-        { sliceX: 10, anims: { idle: { from: 0, to: 1, speed: 2, loop: true }, run: { from: 2, to: 5, speed: 11, loop: true }, jump: 6, cling: { from: 7, to: 8, speed: 6, loop: true }, drop: 9 } });
+      loadSprite("stalker", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="${112 * 12}" height="192">${BDEFS}${BFRAMES.map((f, i) => `<g transform="translate(${i * 112} 12)">${f}</g>`).join("")}</svg>`),
+        { sliceX: 12, anims: { idle: { from: 0, to: 1, speed: 2, loop: true }, run: { from: 2, to: 5, speed: 11, loop: true }, jump: 6, cling: { from: 7, to: 8, speed: 6, loop: true }, drop: 9, ceil: { from: 10, to: 11, speed: 6, loop: true } } });
 
       loadSprite("redglow", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80"><defs><radialGradient id="rg" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#ff5040" stop-opacity="0.55"/><stop offset="100%" stop-color="#ff5040" stop-opacity="0"/></radialGradient></defs><circle cx="40" cy="40" r="40" fill="url(#rg)"/></svg>`));
 
@@ -313,6 +315,8 @@
 
       // HP pip (HUD)
       loadSprite("pip", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="16" height="14"><path d="M8 13 L1.5 6.5 a4 4 0 0 1 6.5 -4.5 a4 4 0 0 1 6.5 4.5z" fill="#d84848" stroke="#5a1a1a" stroke-width="1.5"/></svg>`));
+
+      loadSprite("turretB", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="30" height="30"><rect x="9" y="18" width="12" height="10" fill="#2b2f33"/><rect x="5" y="26" width="20" height="4" rx="1" fill="#22262a"/><circle cx="15" cy="14" r="9" fill="#3a3f44" stroke="#22262a" stroke-width="2"/><circle cx="15" cy="14" r="4" fill="#2b2f33"/><rect x="6" y="6" width="18" height="3" rx="1" fill="#4a5055"/></svg>`));
 
       // weapon pickup pad + per-weapon glyphs (issue #13)
       loadSprite("pad", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="40" height="10"><rect width="40" height="10" rx="2" fill="#22262a"/><g fill="#c8992e" opacity="0.8"><rect x="2" y="2" width="6" height="6"/><rect x="14" y="2" width="6" height="6"/><rect x="26" y="2" width="6" height="6"/></g><g fill="#131416"><rect x="8" y="2" width="6" height="6"/><rect x="20" y="2" width="6" height="6"/><rect x="32" y="2" width="6" height="6"/></g></svg>`));
@@ -474,7 +478,7 @@
       const iceDone = (pc) => new Promise((res) => {
         if (pc.iceGatheringState === "complete") return res();
         pc.addEventListener("icegatheringstatechange", () => pc.iceGatheringState === "complete" && res());
-        setTimeout(res, 4000); // STUN can stall; ship what we have
+        setTimeout(res, 6500); // STUN/TURN can stall; ship what we have
       });
       function netSend(o) { if (NET.dc && NET.dc.readyState === "open") NET.dc.send(JSON.stringify(o)); }
       function netStatus(txt, good) { const el = document.getElementById("netStat"); if (el) { el.textContent = txt; el.style.color = good ? "#8fe0a0" : "#e0b080"; } }
@@ -504,9 +508,25 @@
       // player name (#24): persisted, defaults to fun codename
       let PLAYER_NAME = "";
       function setPlayerName(n) { PLAYER_NAME = (n || "").trim().slice(0, 16) || PLAYER_NAME; try { localStorage.setItem("quarry-name", PLAYER_NAME); } catch (e) {} }
+      // STUN alone can't traverse symmetric NAT — include a free TURN relay (#29)
+      const ICE_SERVERS = [
+        { urls: "stun:stun.l.google.com:19302" },
+        { urls: ["turn:standard.relay.metered.ca:80", "turn:standard.relay.metered.ca:443", "turns:standard.relay.metered.ca:443?transport=tcp"], username: "openrelayproject", credential: "openrelayproject" },
+      ];
+      function iceDiag(pc) { // count candidate types for the wizard status line
+        const types = { host: 0, srflx: 0, relay: 0 };
+        pc.addEventListener("icecandidate", (e) => {
+          if (e.candidate) { const t = /typ (\w+)/.exec(e.candidate.candidate); if (t && types[t[1]] !== undefined) types[t[1]]++; }
+          else { const el = document.getElementById("netDiag"); if (el) el.textContent = `network paths: direct×${types.host} public×${types.srflx} relay×${types.relay}${types.relay === 0 ? " (no relay — tough NATs may fail)" : ""}`; }
+        });
+        pc.addEventListener("iceconnectionstatechange", () => {
+          if (pc.iceConnectionState === "failed") netStatus("✗ Couldn't punch through between your networks. Both players: regenerate fresh codes and retry.", false);
+        });
+      }
       async function netHost(side) {
         NET.role = "host"; NET.mySide = side;
-        const pc = (NET.pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] }));
+        const pc = (NET.pc = new RTCPeerConnection({ iceServers: ICE_SERVERS }));
+        iceDiag(pc);
         watchConn(pc);
         wireDC((NET.dc = pc.createDataChannel("game")));
         await pc.setLocalDescription(await pc.createOffer());
@@ -516,7 +536,8 @@
       async function netHostAccept(answerCode) { await NET.pc.setRemoteDescription(JSON.parse(b64d(answerCode))); }
       async function netJoin(offerCode) {
         NET.role = "guest";
-        const pc = (NET.pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] }));
+        const pc = (NET.pc = new RTCPeerConnection({ iceServers: ICE_SERVERS }));
+        iceDiag(pc);
         watchConn(pc);
         pc.ondatachannel = (e) => wireDC((NET.dc = e.channel));
         await pc.setRemoteDescription(JSON.parse(b64d(offerCode)));
@@ -556,12 +577,15 @@
           <textarea ${NETSTYLE} id="ansIn" placeholder="paste answer code…"></textarea>
           <button ${NETBTN} onclick="__netHostFinish()">STEP 3 — Connect</button>
           <button ${NETBTN} onclick="__netCancel()">Cancel</button>
-          <p id="netStat">Waiting for their answer code…</p>`);
+          <p id="netStat">Waiting for their answer code…</p><p id="netDiag" style="font-size:11px;color:#8a8272"></p>`);
       };
       window.__netHostFinish = async () => {
         const v = document.getElementById("ansIn").value.trim();
         if (!v) return netStatus("Paste their answer code first.");
-        try { netStatus("Connecting…"); await netHostAccept(v); } catch (e) { netStatus("✗ That doesn't look like an answer code (" + e.message + ")"); }
+        try {
+          netStatus("Connecting…"); await netHostAccept(v);
+          setTimeout(() => { if (!NET.connected) netStatus("✗ Not connected after 20s — tough network. Both players regenerate fresh codes and retry; the relay usually catches on the second try.", false); }, 20000);
+        } catch (e) { netStatus("✗ That doesn't look like an answer code (" + e.message + ")"); }
       };
       window.__netJoinStart = () => {
         setPlayerName(document.getElementById("nameIn") ? document.getElementById("nameIn").value : PLAYER_NAME);
@@ -569,7 +593,7 @@
           <p><b>STEP 1.</b> Paste the INVITE code your friend sent you:</p>
           <textarea ${NETSTYLE} id="offIn" placeholder="paste invite code…"></textarea>
           <button ${NETBTN} onclick="__netJoinGen()">STEP 2 — Generate my answer</button>
-          <button ${NETBTN} onclick="__netCancel()">Cancel</button><div id="ansOut"></div><p id="netStat"></p>`);
+          <button ${NETBTN} onclick="__netCancel()">Cancel</button><div id="ansOut"></div><p id="netStat"></p><p id="netDiag" style="font-size:11px;color:#8a8272"></p>`);
       };
       window.__netJoinGen = async () => {
         const v = document.getElementById("offIn").value.trim();
@@ -581,6 +605,7 @@
             <textarea ${NETSTYLE} id="ansOutTa" readonly onclick="this.select()">${ans}</textarea>
             <button ${NETBTN} onclick="__copyBtn(this,'#ansOutTa')">Copy</button>`;
           netStatus("Waiting for the host to connect… keep this window visible!");
+          setTimeout(() => { if (!NET.connected) netStatus("✗ Not connected after 30s — did the host paste your answer? Tough networks: both regenerate fresh codes and retry.", false); }, 30000);
         } catch (e) { netStatus("✗ That doesn't look like an invite code (" + e.message + ")"); }
       };
       window.__netCancel = () => { try { NET.pc && NET.pc.close(); } catch (e) {} NET.pc = NET.dc = null; NET.connected = false; netUIHide(); };
@@ -805,6 +830,7 @@
         const inWater = () => time() - lastWaterAt < 0.06;
         ambience();
         let wallDir = 0, lastWallTime = -1, wallStick = 0;
+        let lastCeilTime = -1, ceilStick = false, ceilCd = 0; // ceiling crawl (#30)
         let lastLadderTime = -1, ladderCd = 0, onLadderNow = false;
         let nearDoor = null, lastDoorTime = -1, doorCd = 0;
         const steamVents = [];
@@ -923,6 +949,37 @@
           }
         });
 
+        // --- defensive turrets (#32): Jack powers them with energy ---
+        let nearTurret = null, lastTurretTime = -1;
+        [[10, 11], [38, 8], [58, 5]].forEach(([tc, tr]) => {
+          const t = add([sprite("turretB"), pos(tc * TS + TS / 2, tr * TS), anchor("bot"), area({ scale: 1.4 }), z(3), "turret",
+            { active: false, until: 0, hp: 3, fireCd: 0, hitCd: 0 }]);
+          const barrel = t.add([rect(20, 5, { radius: 2 }), pos(0, -16), anchor("left"), color(70, 76, 82), outline(2, rgb(30, 33, 36)), z(1), rotate(0)]);
+          const light = t.add([circle(3), pos(0, -24), anchor("center"), color(110, 110, 110), z(2)]);
+          t.onUpdate(() => {
+            light.color = t.active ? rgb(120, 230, 140) : rgb(110, 110, 110);
+            if (!t.active) return;
+            if (time() > t.until) { t.active = false; return; }
+            let tgt = null, bd = 320;
+            for (const e of get("enemy").concat(get("nemesis"))) { const d = e.pos.dist(t.pos.sub(0, 16)); if (d < bd) { bd = d; tgt = e; } }
+            if (!tgt) { barrel.angle = Math.sin(time() * 1.5) * 20; return; } // idle sweep
+            const dir = tgt.pos.sub(t.pos.sub(0, 16)).unit();
+            barrel.angle = (Math.atan2(dir.y, dir.x) * 180) / Math.PI;
+            if (time() > t.fireCd) {
+              t.fireCd = time() + 0.5; SFX.mgunS();
+              const b = add([rect(12, 4, { radius: 2 }), pos(t.pos.sub(0, 16).add(dir.scale(24))), anchor("center"), color(140, 230, 160), area(), move(dir, 820), offscreen({ destroy: true }), z(5)]);
+              b.onCollide("enemy", (e) => { destroy(b); killEnemy(e); });
+              b.onCollide("nemesis", (nn) => { destroy(b); if (nn.exists()) { nn.move(dir.x > 0 ? 200 : -200, 0); nn.flash = time() + 0.2; nn.slowUntil = time() + 1.3; } });
+              b.onCollide("platform", () => destroy(b));
+            }
+          });
+          t.onCollideUpdate("nemesis", () => { // the beast smashes them
+            if (!t.active || time() < t.hitCd) return; t.hitCd = time() + 0.8; t.hp--;
+            burst(t.pos.sub(0, 12), rgb(90, 95, 100), 8, 160, 5); SFX.thunk();
+            if (t.hp <= 0) { addKaboom(t.pos.sub(0, 12), { scale: 0.5 }); SFX.kill(); destroy(t); }
+          });
+        });
+
         // --- weapon crates on pads (#13): spawn on random floor cells ---
         const NKEY2 = sideKey === "human" ? "stalker" : "human";
         const crateCells = [];
@@ -934,14 +991,18 @@
           const p = at || vec2(cell[0] * TS + TS / 2, cell[1] * TS + TS - 4);
           const cr = add([sprite("wpn-" + wkey), pos(p), anchor("bot"), area({ scale: 1.5 }), z(3), "wcrate", { wkey, born: time() }]);
           cr.add([sprite("pad"), pos(0, 0), anchor("top"), z(-1)]);
-          cr.add([sprite("lamp"), pos(0, -12), anchor("center"), scale(0.35), opacity(0.35), z(-2)]);
+          // beacon (#33): pulsing light column visible from across the room
+          const beam = cr.add([sprite("lamp"), pos(0, -46), anchor("center"), scale(0.5, 2.4), opacity(0.4), z(-2), color(240, 214, 130)]);
+          beam.onUpdate(() => (beam.opacity = 0.28 + Math.sin(time() * 3 + cr.born) * 0.16));
+          cr.add([sprite("lamp"), pos(0, -10), anchor("center"), scale(0.4), opacity(0.4), z(-2), color(240, 214, 130)]);
           return cr;
         }
         function spawnCrateSynced(wkey, at) { const cr = spawnCrate(wkey, at); netSend({ t: "crate", w: wkey, x: cr.pos.x, y: cr.pos.y }); return cr; }
         if (!NET.connected || NET.role === "host") { // online: host owns crate spawns
-          for (let i = 0; i < 3; i++) spawnCrateSynced(choose(WPOOL(sideKey)));
-          for (let i = 0; i < 2; i++) spawnCrateSynced(choose(WPOOL(NKEY2)));
-          loop(25, () => { if (get("wcrate").length < 5) spawnCrateSynced(choose(WPOOL(rand() < 0.6 ? sideKey : NKEY2))); });
+          spawnCrateSynced(choose(WPOOL(sideKey)), vec2(spawn.x + 150, 14 * TS - 4)); // guaranteed starter nearby (#33)
+          for (let i = 0; i < 4; i++) spawnCrateSynced(choose(WPOOL(sideKey)));
+          for (let i = 0; i < 3; i++) spawnCrateSynced(choose(WPOOL(NKEY2)));
+          loop(25, () => { if (get("wcrate").length < 8) spawnCrateSynced(choose(WPOOL(rand() < 0.6 ? sideKey : NKEY2))); });
         }
 
         // --- player ---
@@ -950,6 +1011,22 @@
         // anim state machine: lunge/jump > run > idle
         let curAnim = "idle", lungeUntil = 0;
         const setAnim = (n) => { if (curAnim !== n) { curAnim = n; player.play(n); } };
+        // held weapon in hands (#33): follows the character, flips with facing
+        const mkHeld = (getObj, getW, getF) => {
+          const h2 = add([sprite("wpn-" + getW()), pos(-9999, 0), anchor("center"), z(7), scale(1.1), opacity(0.95), { last: getW() }]);
+          h2.onUpdate(() => {
+            const o = getObj();
+            if (!o || !o.exists()) { h2.opacity = 0; return; }
+            h2.opacity = 0.95;
+            const w2 = getW();
+            if (w2 !== h2.last) { h2.last = w2; h2.use(sprite("wpn-" + w2)); }
+            const f2 = getF();
+            h2.flipX = f2 < 0; h2.pos = o.pos.add(f2 * 15, 3);
+          });
+          return h2;
+        };
+        mkHeld(() => player, () => weapon, () => facing);
+
         // beast menace: pulsing eye glow + drool drips
         let glow = null;
         if (CFG.glow) {
@@ -965,7 +1042,11 @@
         });
 
         // wall / ladder / door detection
-        player.onCollideUpdate("platform", (p) => { const dx = p.pos.x - player.pos.x, dy = Math.abs(p.pos.y - player.pos.y); if (Math.abs(dx) > 12 && dy < TS * 0.85) { wallDir = dx > 0 ? 1 : -1; lastWallTime = time(); } });
+        player.onCollideUpdate("platform", (p) => {
+          const dx = p.pos.x - player.pos.x, dy = Math.abs(p.pos.y - player.pos.y);
+          if (Math.abs(dx) > 12 && dy < TS * 0.85) { wallDir = dx > 0 ? 1 : -1; lastWallTime = time(); }
+          if (Math.abs(dx) <= 32 && p.pos.y < player.pos.y - 20) lastCeilTime = time(); // tile overhead
+        });
         player.onCollideUpdate("ladder", () => { lastLadderTime = time(); });
         player.onCollideUpdate("water", () => { lastWaterAt = time(); });
         player.onCollideUpdate("door", (d) => { nearDoor = d; lastDoorTime = time(); });
@@ -986,6 +1067,8 @@
           add([rect(120, 5, { radius: 2 }), pos(20, 90), fixed(), z(199), color(40, 38, 34)]);
           bombBar = add([rect(120, 5, { radius: 2 }), pos(20, 90), fixed(), z(200), color(230, 170, 70)]);
           bombBar.onUpdate(() => { bombBar.width = 120 * clamp((time() - lastBomb) / 1.1, 0, 1); });
+          const flTxt = add([text("", { size: 13 }), pos(148, 86), fixed(), z(200), color(240, 110, 80)]);
+          flTxt.onUpdate(() => (flTxt.text = "✹".repeat(flares) + (flares < 2 ? " (L)" : " L")));
         }
         const ctrl = CFG.bomb ? "Bomb: K/Y   " : "Wall: into-wall+Up   ";
         addTicker("Move ←→/AD   Jump Space   Attack J/X   " + ctrl + "Climb ↑↓   Door: E   Pause: Esc   Mute: N");
@@ -1010,7 +1093,8 @@
         // door hint
         const doorHint = add([text("E — enter", { size: 14 }), pos(0, 0), anchor("center"), z(60), color(230, 190, 110), outline(3, rgb(0, 0, 0)), opacity(0)]);
         doorHint.onUpdate(() => {
-          if (nearDoor && time() - lastDoorTime < 0.15) { doorHint.pos = nearDoor.pos.add(0, -78); doorHint.opacity = 0.85; }
+          if (nearDoor && time() - lastDoorTime < 0.15) { doorHint.text = "E — enter"; doorHint.pos = nearDoor.pos.add(0, -78); doorHint.opacity = 0.85; }
+          else if (CFG.bomb && nearTurret && nearTurret.exists() && !nearTurret.active && time() - lastTurretTime < 0.15) { doorHint.text = "E — activate turret (2 energy)"; doorHint.pos = nearTurret.pos.sub(0, 44); doorHint.opacity = 0.85; }
           else doorHint.opacity = 0;
         });
 
@@ -1104,7 +1188,8 @@
           netSend({ t: "atk", kind: weapon, x: Math.round(player.pos.x), y: Math.round(player.pos.y), dir: facing });
         }
         // debug hook (used by the headless test harness)
-        window.__quarry = { give: (w) => { if (WEAPONS[w]) { weapon = w; updateHUD(); } }, weapon: () => weapon, attack };
+        window.__quarry = { give: (w) => { if (WEAPONS[w]) { weapon = w; updateHUD(); } }, weapon: () => weapon, attack,
+          ceil: () => ({ stick: ceilStick, sinceContact: +(time() - lastCeilTime).toFixed(3), grounded: player.isGrounded(), y: Math.round(player.pos.y), g: player.gravityScale }) };
         function explode(p) {
           SFX.boom(); shake(11); flash(rgb(240, 180, 90), 0.4);
           const ring = add([circle(8), pos(p), anchor("center"), color(255, 220, 150), opacity(0.6), lifespan(0.3, { fade: 0.3 }), z(35)]);
@@ -1121,6 +1206,25 @@
           wait(0.9, () => { if (g.exists()) { const p = g.pos.clone(); destroy(g); explode(p); } });
           netSend({ t: "atk", kind: "bomb", x: Math.round(player.pos.x), y: Math.round(player.pos.y), dir: facing });
         }
+        // flares (#31): Jack's deterrent — the beast won't cross burning light
+        let flares = CFG.bomb ? 2 : 0, flareAt = 0;
+        function igniteFlare(p) {
+          noise({ dur: 0.5, vol: 0.12, type: "highpass", f0: 2600, f1: 1200 });
+          const f = add([rect(4, 12, { radius: 2 }), pos(p), anchor("center"), color(240, 90, 60), opacity(1), z(6), lifespan(5, { fade: 0.8 }), "flare"]);
+          const gl = f.add([sprite("lamp"), pos(0, -4), anchor("center"), scale(1.1), color(255, 90, 50), opacity(0.7), z(-1)]);
+          gl.onUpdate(() => (gl.opacity = 0.5 + rand(-0.15, 0.25)));
+          f.onUpdate(() => { if (rand() < 0.5) add([circle(rand(1.5, 3)), pos(f.pos.add(rand(-4, 4), -8)), anchor("center"), color(255, rand(120, 200), 80), opacity(0.9), lifespan(0.35, { fade: 0.3 }), z(7), { update() { this.move(rand(-20, 20), -rand(60, 130)); } }]); });
+        }
+        function throwFlare() {
+          if (!CFG.bomb || flares <= 0) return;
+          flares--; flareAt = time() + 20; SFX.toss();
+          const g = add([rect(4, 12, { radius: 2 }), pos(player.pos.x + facing * 14, player.pos.y - 6), anchor("center"), color(230, 80, 60), area(), body(), rotate(0), z(6)]);
+          g.vel = vec2(facing * 300, -380);
+          g.onUpdate(() => (g.angle += facing * 360 * dt()));
+          g.onCollide("nemesis", (n) => { if (n.exists()) { n.move((n.pos.x > g.pos.x ? 1 : -1) * 300, 0); n.flash = time() + 0.3; } igniteFlare(g.pos.clone()); destroy(g); });
+          wait(0.7, () => { if (g.exists()) { igniteFlare(g.pos.clone()); destroy(g); } });
+          netSend({ t: "atk", kind: "flare", x: Math.round(player.pos.x), y: Math.round(player.pos.y), dir: facing });
+        }
         function useDoor() {
           if (nearDoor && nearDoor.partner && time() - lastDoorTime < 0.1 && time() > doorCd) {
             doorCd = time() + 0.6; SFX.warp(); flash(rgb(230, 180, 90), 0.4); burst(player.pos, rgb(230, 180, 90), 14, 220, 6);
@@ -1129,6 +1233,7 @@
         }
 
         function jump() {
+          if (ceilStick) { ceilStick = false; ceilCd = time() + 0.35; player.gravityScale = 1; return; } // release from ceiling
           if (onLadderNow) { player.gravityScale = 1; ladderCd = time() + 0.28; }
           if (CFG.wallClimb && !player.isGrounded() && wallStick !== 0) {
             player.jump(CFG.jumpForce * 0.95); player.vel = vec2(-wallStick * 340, player.vel.y);
@@ -1144,7 +1249,15 @@
         onKeyPress("space", jump); onGamepadButtonPress("south", jump);
         ["j", "x"].forEach((key) => onKeyPress(key, attack)); onGamepadButtonPress("west", attack); onGamepadButtonPress("east", attack);
         ["k", "c"].forEach((key) => onKeyPress(key, () => { if (CFG.bomb) throwBomb(); })); onGamepadButtonPress("north", () => { if (CFG.bomb) throwBomb(); });
-        onKeyPress("e", useDoor); onGamepadButtonPress("dpad-up", useDoor);
+        onKeyPress("l", throwFlare); onGamepadButtonPress("rshoulder", throwFlare);
+        function useTurret() {
+          if (!nearTurret || !nearTurret.exists() || time() - lastTurretTime > 0.15 || nearTurret.active || !CFG.bomb) return;
+          if (score < 2) { popText(player.pos.add(0, -40), "need 2 energy", rgb(240, 200, 120)); return; }
+          score -= 2; updateHUD(); nearTurret.active = true; nearTurret.until = time() + 25;
+          SFX.warp(); popText(nearTurret.pos.sub(0, 44), "TURRET ONLINE", rgb(140, 230, 160));
+        }
+        player.onCollideUpdate("turret", (t) => { nearTurret = t; lastTurretTime = time(); });
+        onKeyPress("e", () => { useDoor(); useTurret(); }); onGamepadButtonPress("dpad-up", () => { useDoor(); useTurret(); });
         onKeyPress("r", () => go("game", sideKey));
         onKeyPress("n", () => popText(player.pos.add(0, -44), toggleMute() ? "MUTED" : "SOUND ON", rgb(210, 210, 210)));
 
@@ -1193,6 +1306,8 @@
             if (!nemesis || WEAPONS[c.wkey].side !== NKEY || time() - c.born < 1) return;
             nemesis.weapon = c.wkey; destroy(c);
           });
+          const nem = nemesis;
+          mkHeld(() => nem, () => nem.weapon, () => (nem.flipX ? -1 : 1));
 
           nemesis.onUpdate(() => {
             const n = nemesis; if (!n) return;
@@ -1204,11 +1319,14 @@
             else if (n.state === "hunt" && dist > 650) n.state = "patrol";
             if (n.state === "hunt" && !wasHunting && time() > (n.roarCd || 0)) { n.roarCd = time() + 8; SFX.roar(); shake(7); } // it saw you
 
-            const spd = NCFG.speed * (n.state === "hunt" ? 0.92 : 0.55);
-            let vx = 0;
+            const spd = NCFG.speed * (n.state === "hunt" ? 0.92 : 0.55) * (time() < (n.slowUntil || 0) ? 0.45 : 1);
+            let vx = 0, feared = false;
             const [pc, pr] = cellOf(n.pos);
+            // burning flares repel the beast (#31)
+            for (const fl of get("flare")) if (fl.pos.dist(n.pos) < 150) { feared = true; vx = n.pos.x < fl.pos.x ? -1 : 1; n.dir = vx; break; }
 
-            if (n.state === "patrol") {
+            if (feared) { /* flee the light */ }
+            else if (n.state === "patrol") {
               vx = n.dir;
               const aheadC = pc + n.dir;
               if (solid(aheadC, pr) || (!solid(aheadC, pr + 1) && !solid(aheadC, pr + 2) && n.isGrounded())) n.dir *= -1;
@@ -1230,8 +1348,8 @@
                 }
               }
               if (n.climbing && sameFloor) { n.climbing = false; n.gravityScale = 1; }
-              // attack in range
-              if (time() > n.atkCd) {
+              // attack in range (not while repelled by a flare)
+              if (time() > n.atkCd && !feared) {
                 if (NCFG.mode === "ranged" && dist < 330 && sameFloor && Math.abs(toP.y) < 46) {
                   n.atkCd = time() + 1.35; SFX.shoot();
                   const dirx = toP.x > 0 ? 1 : -1;
@@ -1312,10 +1430,16 @@
           onKeyPress("t", () => setTimeout(openChat, 0));
 
           // outbound state @20Hz
-          loop(0.05, () => netSend({ t: "s", x: Math.round(player.pos.x), y: Math.round(player.pos.y), f: facing, a: curAnim, hp }));
+          loop(0.05, () => netSend({ t: "s", x: Math.round(player.pos.x), y: Math.round(player.pos.y), f: facing, a: curAnim, hp, w: weapon }));
+          let remoteWeapon = NCFG.mode === "ranged" ? "blaster" : "claws";
+          mkHeld(() => remote, () => remoteWeapon, () => (remote.flipX ? -1 : 1));
 
           function remoteAttack(m) {
-            if (m.kind === "bomb") {
+            if (m.kind === "flare") {
+              const g = add([rect(4, 12, { radius: 2 }), pos(m.x + m.dir * 14, m.y - 6), anchor("center"), color(230, 80, 60), body(), area(), rotate(0), z(6)]);
+              g.vel = vec2(m.dir * 300, -380);
+              wait(0.7, () => { if (g.exists()) { igniteFlare(g.pos.clone()); destroy(g); } });
+            } else if (m.kind === "bomb") {
               const g = add([sprite("bomb"), pos(m.x + m.dir * 16, m.y - 6), anchor("center"), area({ scale: 0.7 }), body(), rotate(0), z(5)]);
               g.vel = vec2(m.dir * 360, -430);
               wait(0.9, () => { if (g.exists()) { const p = g.pos.clone(); destroy(g); SFX.boom(); shake(8); burst(p, rgb(240, 170, 80), 16, 280, 8); if (player.pos.dist(p) < 110) hurt(); } });
@@ -1336,7 +1460,7 @@
           }
 
           NET.onMsg = (m) => {
-            if (m.t === "s") { rTarget = vec2(m.x, m.y); remote.flipX = m.f < 0; rHp = m.hp; if (remote.anim !== m.a) { remote.anim = m.a; remote.play(m.a); } }
+            if (m.t === "s") { rTarget = vec2(m.x, m.y); remote.flipX = m.f < 0; rHp = m.hp; if (m.w) remoteWeapon = m.w; if (remote.anim !== m.a) { remote.anim = m.a; remote.play(m.a); } }
             else if (m.t === "atk") remoteAttack(m);
             else if (m.t === "crate") spawnCrate(m.w, vec2(m.x, m.y));
             else if (m.t === "crateTake") { const c = get("wcrate").sort((a, b) => a.pos.dist(vec2(m.x, m.y)) - b.pos.dist(vec2(m.x, m.y)))[0]; if (c && c.pos.dist(vec2(m.x, m.y)) < 40) destroy(c); }
@@ -1378,6 +1502,8 @@
           const down = isKeyDown("down") || isKeyDown("s") || (stick && stick.y > 0.4);
           // machine gun: hold to fire
           if (WEAPONS[weapon].auto && (isKeyDown("j") || isKeyDown("x") || isGamepadButtonDown("west") || isGamepadButtonDown("east"))) attack();
+          // flares recharge slowly (#31)
+          if (CFG.bomb && flares < 2 && time() > flareAt) { flares++; flareAt = time() + 20; }
           const wading = inWater();
           if (Math.abs(dx) > 0.05) {
             player.move(dx * CFG.speed * (wading ? 0.55 : 1), 0); facing = dx > 0 ? 1 : -1; player.flipX = facing < 0;
@@ -1397,6 +1523,18 @@
           // apex hang: floatier at the top of the jump arc
           if (!onLadderNow) player.gravityScale = !player.isGrounded() && Math.abs(player.vel.y) < 70 ? 0.72 : 1;
 
+          // ceiling crawl (#30): hold Up under a ceiling to latch upside-down, crawl with ←→, Down/jump releases.
+          // Sustain via a direct tile check overhead — collision events stop once physics separates the bodies.
+          const wasCeil = ceilStick; ceilStick = false;
+          const headSolid = () => { const r2 = Math.floor((player.pos.y - 54) / TS), c2 = Math.floor(player.pos.x / TS); return GRID[r2] && GRID[r2][c2] === "="; };
+          if (CFG.wallClimb && !player.isGrounded() && !onLadderNow && time() > ceilCd && !down &&
+              (wasCeil ? (up || Math.abs(dx) > 0.05) && headSolid() : up && time() - lastCeilTime < 0.09 && headSolid())) {
+            ceilStick = true; player.gravityScale = 0;
+            player.vel = vec2(player.vel.x, Math.min(player.vel.y, -30)); // press up against the ceiling
+            if (!wasCeil) SFX.claw();
+          }
+          if (wasCeil && !ceilStick) player.gravityScale = 1; // let go — the body drops
+
           // wall-climb (alien), only when not on a ladder
           wallStick = 0;
           if (!onLadderNow && CFG.wallClimb && !player.isGrounded() && wallActive()) {
@@ -1408,8 +1546,9 @@
             }
           }
 
-          // animation state (beast gets cling/crawl on walls + tucked drop, #26)
+          // animation state (beast gets cling/crawl on walls + ceiling + tucked drop)
           if (time() < lungeUntil) setAnim("jump");
+          else if (ceilStick) setAnim("ceil");
           else if (CFG.wallClimb && wallStick !== 0 && !player.isGrounded()) setAnim("cling");
           else if (CFG.wallClimb && !player.isGrounded() && !onLadderNow && player.vel.y > 280) setAnim("drop");
           else if (!player.isGrounded() && !onLadderNow) setAnim("jump");
