@@ -11,440 +11,305 @@
     </style>
   </head>
   <body>
-    <!-- KAPLAY: modern 2D game framework (successor to Kaboom.js) -->
     <script src="https://unpkg.com/kaplay@3001/dist/kaplay.js"></script>
     <script>
-      // ---------------------------------------------------------------------
-      // QUARRY — asymmetric hunter/hunted platformer, inspired by "Hunter Hunted".
-      // Gritty-industrial art style. All graphics are inline SVG (no asset files).
-      // ---------------------------------------------------------------------
-
-      const k = kaplay({
-        width: 960,
-        height: 540,
-        letterbox: true,
-        background: [12, 12, 13],
-        global: true,
-      });
-
-      const TS = 48; // tile size in px
+      // =====================================================================
+      // QUARRY — asymmetric hunter/hunted platformer (inspired by Hunter Hunted)
+      // Gritty industrial. All art = inline SVG. One self-contained file.
+      // =====================================================================
+      const k = kaplay({ width: 960, height: 540, letterbox: true, background: [12, 12, 13], global: true });
+      const TS = 48;
       setGravity(2100);
-
-      // =====================================================================
-      // ART — hand-authored inline SVG sprites (gritty industrial palette)
-      // =====================================================================
       const svg = (s) => "data:image/svg+xml," + encodeURIComponent(s);
 
-      loadSprite("sky", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="960" height="540">
-        <defs><linearGradient id="s" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="#2a2622"/><stop offset="48%" stop-color="#332b26"/>
-          <stop offset="100%" stop-color="#171615"/></linearGradient></defs>
-        <rect width="960" height="540" fill="url(#s)"/></svg>`));
-
-      loadSprite("bgFar", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="480" height="220">
-        <g fill="#20242a">
-          <rect x="18" y="90" width="42" height="130"/><rect x="70" y="120" width="26" height="100"/>
-          <rect x="112" y="64" width="26" height="156"/><rect x="150" y="108" width="52" height="112"/>
-          <rect x="212" y="78" width="22" height="142"/><rect x="246" y="128" width="60" height="92"/>
-          <rect x="322" y="96" width="34" height="124"/><rect x="362" y="54" width="18" height="166"/>
-          <rect x="390" y="116" width="72" height="104"/></g>
-        <g fill="#3a2c20"><rect x="112" y="64" width="26" height="6"/><rect x="362" y="54" width="18" height="6"/></g>
-        <g fill="#e8b13a" opacity="0.45">
-          <rect x="120" y="84" width="4" height="6"/><rect x="222" y="96" width="4" height="6"/>
-          <rect x="366" y="72" width="4" height="6"/><rect x="410" y="130" width="4" height="6"/></g></svg>`));
-
-      loadSprite("bgMid", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="480" height="280">
-        <g fill="#2b3036">
-          <rect x="40" y="60" width="30" height="220"/><rect x="180" y="96" width="46" height="184"/>
-          <rect x="300" y="72" width="26" height="208"/><rect x="360" y="104" width="66" height="176"/>
-          <rect x="0" y="150" width="480" height="20"/></g>
-        <g fill="#3a2c20" opacity="0.7"><rect x="0" y="150" width="480" height="5"/></g>
-        <g fill="#1f2226"><rect x="40" y="60" width="30" height="6"/><rect x="300" y="72" width="26" height="6"/></g></svg>`));
-
-      loadSprite("tile", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48">
-        <rect width="48" height="48" fill="#34383b"/>
-        <rect width="48" height="6" fill="#474c4f"/><rect y="6" width="48" height="2" fill="#22262a"/>
-        <rect y="43" width="48" height="5" fill="#20242a"/>
-        <ellipse cx="26" cy="30" rx="13" ry="7" fill="#2b2e30" opacity="0.55"/>
-        <path d="M11 8 l3 32" stroke="#5e3d24" stroke-width="3" opacity="0.45"/>
-        <path d="M34 9 l-3 28" stroke="#6b4527" stroke-width="2" opacity="0.4"/>
-        <g fill="#20242a"><circle cx="6" cy="12" r="2"/><circle cx="42" cy="12" r="2"/>
-          <circle cx="6" cy="39" r="2"/><circle cx="42" cy="39" r="2"/></g></svg>`));
-
-      loadSprite("spikes", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="48" height="24">
-        <rect y="18" width="48" height="6" fill="#2f3436"/>
-        <g fill="#5a5f61" stroke="#20242a" stroke-width="1">
-          <path d="M2 22 L8 3 L14 22 z"/><path d="M14 22 L20 3 L26 22 z"/>
-          <path d="M26 22 L32 3 L38 22 z"/><path d="M38 22 L44 3 L48 22 z"/></g>
-        <g stroke="#7a4a28" stroke-width="1" opacity="0.5"><path d="M8 6 l0 12"/><path d="M32 6 l0 12"/></g></svg>`));
-
-      loadSprite("cell", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="22" height="28">
-        <circle cx="11" cy="15" r="10" fill="#5ee08a" opacity="0.16"/>
-        <rect x="8" y="0" width="6" height="4" fill="#3a3d3f"/>
-        <rect x="4" y="3" width="14" height="23" rx="3" fill="#2c2f31" stroke="#1c1f21"/>
-        <rect x="7" y="7" width="8" height="15" rx="2" fill="#3aa06a"/>
-        <rect x="7" y="7" width="8" height="6" rx="2" fill="#7ee0a0" opacity="0.5"/></svg>`));
-
-      loadSprite("exit", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="48" height="72">
-        <rect x="4" y="2" width="40" height="70" rx="3" fill="#2c3033"/>
-        <rect x="8" y="6" width="32" height="62" fill="#3c4144" stroke="#20242a" stroke-width="2"/>
-        <g opacity="0.85"><path d="M11 62 l20 -22" stroke="#c8992e" stroke-width="5"/>
-          <path d="M20 64 l14 -16" stroke="#1c1c1c" stroke-width="5"/></g>
-        <circle cx="24" cy="18" r="10" fill="#e8b13a" opacity="0.3"/>
-        <circle cx="24" cy="18" r="5" fill="#f0c04a"/></svg>`));
-
-      loadSprite("drone", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="36" height="34">
-        <rect x="1" y="6" width="9" height="3" fill="#3a3d3f"/><rect x="26" y="6" width="9" height="3" fill="#3a3d3f"/>
-        <path d="M7 10 h22 q5 7 -2 15 h-18 q-7 -8 -2 -15z" fill="#45494b"/>
-        <rect x="7" y="10" width="22" height="4" fill="#565b5d"/>
-        <path d="M11 13 l-1 12" stroke="#6b4527" stroke-width="2" opacity="0.5"/>
-        <circle cx="18" cy="19" r="5.5" fill="#7a1e1e"/><circle cx="18" cy="19" r="2.6" fill="#ef4444"/>
-        <g fill="#232527"><circle cx="9" cy="20" r="1.5"/><circle cx="27" cy="20" r="1.5"/></g></svg>`));
-
-      // Human survivor (Gair), faces right, holding a rifle.
-      loadSprite("human", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="44" height="56">
-        <ellipse cx="22" cy="53" rx="13" ry="3" fill="#000" opacity="0.3"/>
-        <rect x="14" y="38" width="6" height="15" fill="#2f2d28"/><rect x="24" y="38" width="6" height="15" fill="#3a372f"/>
-        <rect x="12" y="51" width="10" height="4" rx="1" fill="#1a1916"/><rect x="24" y="51" width="10" height="4" rx="1" fill="#1a1916"/>
-        <rect x="12" y="20" width="20" height="20" rx="4" fill="#5a5344"/>
-        <rect x="12" y="20" width="20" height="6" rx="3" fill="#6a6250"/>
-        <rect x="12" y="34" width="20" height="3" fill="#33302a"/>
-        <path d="M14 12 a8 8 0 0 1 16 0 z" fill="#4a4438"/>
-        <circle cx="22" cy="13" r="7.5" fill="#b08d6a"/>
-        <rect x="21" y="10" width="10" height="4" rx="2" fill="#e0a23c"/>
-        <rect x="28" y="24" width="6" height="4" fill="#4a4438"/>
-        <rect x="30" y="24" width="14" height="4" rx="1" fill="#26262a"/>
-        <rect x="28" y="27" width="7" height="3" fill="#1e1e22"/></svg>`));
-
-      // Alien Stalker — hunched, clawed, dark carapace with muted-red ridge.
-      loadSprite("stalker", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="48" height="56">
-        <ellipse cx="24" cy="53" rx="15" ry="3" fill="#000" opacity="0.3"/>
-        <path d="M12 34 q-10 4 -12 15 q7 -7 15 -9 z" fill="#3a2c2e"/>
-        <path d="M14 40 l-4 13 6 0 4 -11 z" fill="#2a2022"/><path d="M30 40 l6 13 6 0 -6 -13 z" fill="#31262a"/>
-        <path d="M12 20 q12 -10 24 0 q4 12 -2 22 q-10 6 -20 0 q-6 -10 -2 -22 z" fill="#3a2a2c"/>
-        <path d="M22 12 q4 -6 8 0 q2 11 -2 21 q-2 -13 -6 -21 z" fill="#7a3a3a" opacity="0.85"/>
-        <path d="M26 7 q12 2 12 12 q-2 8 -12 8 q-9 -2 -9 -10 q0 -8 9 -10z" fill="#33262a"/>
-        <circle cx="34" cy="15" r="2.6" fill="#e8b13a"/><circle cx="29" cy="18" r="2" fill="#e8b13a"/>
-        <path d="M37 30 l8 -3 -6 6 z" fill="#8a8375"/><path d="M9 30 l-7 -3 6 6 z" fill="#8a8375"/></svg>`));
-
-      // Radial glows / overlays
-      loadSprite("lamp", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="140" height="140">
-        <defs><radialGradient id="l" cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stop-color="#e8b13a" stop-opacity="0.7"/>
-          <stop offset="100%" stop-color="#e8b13a" stop-opacity="0"/></radialGradient></defs>
-        <circle cx="70" cy="70" r="70" fill="url(#l)"/></svg>`));
-
-      loadSprite("fog", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="600" height="180">
-        <defs><radialGradient id="f" cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stop-color="#6a5a48" stop-opacity="0.5"/>
-          <stop offset="100%" stop-color="#6a5a48" stop-opacity="0"/></radialGradient></defs>
-        <ellipse cx="300" cy="90" rx="300" ry="80" fill="url(#f)"/></svg>`));
-
-      loadSprite("shadow", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="64" height="22">
-        <defs><radialGradient id="sh" cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stop-color="#000" stop-opacity="0.55"/>
-          <stop offset="100%" stop-color="#000" stop-opacity="0"/></radialGradient></defs>
-        <ellipse cx="32" cy="11" rx="32" ry="11" fill="url(#sh)"/></svg>`));
-
-      loadSprite("vignette", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="960" height="540">
-        <defs><radialGradient id="v" cx="50%" cy="46%" r="72%">
-          <stop offset="52%" stop-color="#000" stop-opacity="0"/>
-          <stop offset="100%" stop-color="#000" stop-opacity="0.72"/></radialGradient></defs>
-        <rect width="960" height="540" fill="url(#v)"/></svg>`));
+      // favicon (Stalker eyes)
+      (() => {
+        const l = document.createElement("link");
+        l.rel = "icon";
+        l.href = svg(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="6" fill="#17130f"/><path d="M6 12 q10 -8 20 0 q2 9 -4 15 q-6 4 -12 0 q-6 -6 -4 -15z" fill="#3a2a2c"/><circle cx="21" cy="15" r="3" fill="#e8b13a"/><circle cx="12" cy="17" r="2.4" fill="#e8b13a"/></svg>`);
+        document.head.appendChild(l);
+      })();
 
       // =====================================================================
-      // JUICE: sound (tiny Web Audio synth — no asset files)
+      // ART
+      // =====================================================================
+      loadSprite("sky", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="960" height="540"><defs><linearGradient id="s" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#2a2622"/><stop offset="48%" stop-color="#332b26"/><stop offset="100%" stop-color="#171615"/></linearGradient></defs><rect width="960" height="540" fill="url(#s)"/></svg>`));
+
+      loadSprite("bgFar", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="480" height="220"><g fill="#20242a"><rect x="18" y="90" width="42" height="130"/><rect x="70" y="120" width="26" height="100"/><rect x="112" y="64" width="26" height="156"/><rect x="150" y="108" width="52" height="112"/><rect x="212" y="78" width="22" height="142"/><rect x="246" y="128" width="60" height="92"/><rect x="322" y="96" width="34" height="124"/><rect x="362" y="54" width="18" height="166"/><rect x="390" y="116" width="72" height="104"/></g><g fill="#e8b13a" opacity="0.45"><rect x="120" y="84" width="4" height="6"/><rect x="222" y="96" width="4" height="6"/><rect x="366" y="72" width="4" height="6"/></g></svg>`));
+
+      // interior back-wall panel (tiled across the whole level)
+      loadSprite("wall", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128"><rect width="128" height="128" fill="#191b1f"/><g stroke="#111316" stroke-width="2"><line x1="0" y1="64" x2="128" y2="64"/><line x1="64" y1="0" x2="64" y2="128"/></g><g stroke="#262a2f" stroke-width="1" opacity="0.7"><line x1="0" y1="66" x2="128" y2="66"/><line x1="66" y1="0" x2="66" y2="128"/></g><g fill="#111316"><circle cx="10" cy="10" r="2"/><circle cx="118" cy="10" r="2"/><circle cx="10" cy="118" r="2"/><circle cx="118" cy="118" r="2"/><circle cx="64" cy="64" r="2"/></g><ellipse cx="30" cy="92" rx="26" ry="15" fill="#131418" opacity="0.6"/><ellipse cx="100" cy="38" rx="22" ry="13" fill="#131418" opacity="0.5"/><path d="M42 2 l5 124" stroke="#3a2c20" stroke-width="2" opacity="0.14"/></svg>`));
+
+      loadSprite("girder", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="26" height="128"><rect x="4" width="18" height="128" fill="#2b2f33"/><rect x="4" width="4" height="128" fill="#3a3f44"/><rect x="18" width="4" height="128" fill="#1e2124"/><g fill="#15171a"><circle cx="13" cy="12" r="2"/><circle cx="13" cy="44" r="2"/><circle cx="13" cy="76" r="2"/><circle cx="13" cy="108" r="2"/></g></svg>`));
+
+      loadSprite("pipeV", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="20" height="48"><rect x="4" width="12" height="48" fill="#3a3f44"/><rect x="4" width="4" height="48" fill="#4a5055"/><rect x="13" width="3" height="48" fill="#22262a"/><rect x="1" y="20" width="18" height="8" rx="2" fill="#2b3034"/></svg>`));
+
+      loadSprite("tile", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48"><rect width="48" height="48" fill="#34383b"/><rect width="48" height="6" fill="#474c4f"/><rect y="6" width="48" height="2" fill="#22262a"/><rect y="43" width="48" height="5" fill="#20242a"/><ellipse cx="26" cy="30" rx="13" ry="7" fill="#2b2e30" opacity="0.55"/><path d="M11 8 l3 32" stroke="#5e3d24" stroke-width="3" opacity="0.45"/><g fill="#20242a"><circle cx="6" cy="12" r="2"/><circle cx="42" cy="12" r="2"/><circle cx="6" cy="39" r="2"/><circle cx="42" cy="39" r="2"/></g></svg>`));
+
+      loadSprite("ladder", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48"><rect x="10" width="5" height="48" fill="#4a4030"/><rect x="33" width="5" height="48" fill="#4a4030"/><g fill="#5a4f3a"><rect x="10" y="5" width="28" height="4"/><rect x="10" y="21" width="28" height="4"/><rect x="10" y="37" width="28" height="4"/></g><g fill="#2e281c"><rect x="10" y="5" width="28" height="1"/><rect x="10" y="21" width="28" height="1"/><rect x="10" y="37" width="28" height="1"/></g></svg>`));
+
+      loadSprite("door", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="40" height="66"><rect x="2" y="2" width="36" height="64" rx="4" fill="#2b2f33"/><rect x="6" y="6" width="28" height="56" rx="3" fill="#141314"/><rect x="6" y="6" width="28" height="56" rx="3" fill="none" stroke="#c8992e" stroke-width="2" opacity="0.85"/><ellipse cx="20" cy="34" rx="11" ry="24" fill="#e8b13a" opacity="0.18"/><circle cx="20" cy="8" r="3" fill="#f0c04a"/><g stroke="#c8992e" stroke-width="2" opacity="0.5"><line x1="10" y1="22" x2="30" y2="22"/><line x1="10" y1="46" x2="30" y2="46"/></g></svg>`));
+
+      loadSprite("spikes", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="48" height="24"><rect y="18" width="48" height="6" fill="#2f3436"/><g fill="#5a5f61" stroke="#20242a" stroke-width="1"><path d="M2 22 L8 3 L14 22 z"/><path d="M14 22 L20 3 L26 22 z"/><path d="M26 22 L32 3 L38 22 z"/><path d="M38 22 L44 3 L48 22 z"/></g><g stroke="#7a4a28" stroke-width="1" opacity="0.5"><path d="M8 6 l0 12"/><path d="M32 6 l0 12"/></g></svg>`));
+
+      loadSprite("cell", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="22" height="28"><circle cx="11" cy="15" r="10" fill="#5ee08a" opacity="0.16"/><rect x="8" y="0" width="6" height="4" fill="#3a3d3f"/><rect x="4" y="3" width="14" height="23" rx="3" fill="#2c2f31" stroke="#1c1f21"/><rect x="7" y="7" width="8" height="15" rx="2" fill="#3aa06a"/><rect x="7" y="7" width="8" height="6" rx="2" fill="#7ee0a0" opacity="0.5"/></svg>`));
+
+      loadSprite("exit", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="48" height="72"><rect x="4" y="2" width="40" height="70" rx="3" fill="#2c3033"/><rect x="8" y="6" width="32" height="62" fill="#3c4144" stroke="#20242a" stroke-width="2"/><g opacity="0.85"><path d="M11 62 l20 -22" stroke="#c8992e" stroke-width="5"/><path d="M20 64 l14 -16" stroke="#1c1c1c" stroke-width="5"/></g><circle cx="24" cy="18" r="10" fill="#e8b13a" opacity="0.3"/><circle cx="24" cy="18" r="5" fill="#f0c04a"/></svg>`));
+
+      loadSprite("drone", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="36" height="34"><rect x="1" y="6" width="9" height="3" fill="#3a3d3f"/><rect x="26" y="6" width="9" height="3" fill="#3a3d3f"/><path d="M7 10 h22 q5 7 -2 15 h-18 q-7 -8 -2 -15z" fill="#45494b"/><rect x="7" y="10" width="22" height="4" fill="#565b5d"/><path d="M11 13 l-1 12" stroke="#6b4527" stroke-width="2" opacity="0.5"/><circle cx="18" cy="19" r="5.5" fill="#7a1e1e"/><circle cx="18" cy="19" r="2.6" fill="#ef4444"/><g fill="#232527"><circle cx="9" cy="20" r="1.5"/><circle cx="27" cy="20" r="1.5"/></g></svg>`));
+
+      loadSprite("human", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="44" height="56"><ellipse cx="22" cy="53" rx="13" ry="3" fill="#000" opacity="0.3"/><rect x="14" y="38" width="6" height="15" fill="#2f2d28"/><rect x="24" y="38" width="6" height="15" fill="#3a372f"/><rect x="12" y="51" width="10" height="4" rx="1" fill="#1a1916"/><rect x="24" y="51" width="10" height="4" rx="1" fill="#1a1916"/><rect x="12" y="20" width="20" height="20" rx="4" fill="#5a5344"/><rect x="12" y="20" width="20" height="6" rx="3" fill="#6a6250"/><rect x="12" y="34" width="20" height="3" fill="#33302a"/><path d="M14 12 a8 8 0 0 1 16 0 z" fill="#4a4438"/><circle cx="22" cy="13" r="7.5" fill="#b08d6a"/><rect x="21" y="10" width="10" height="4" rx="2" fill="#e0a23c"/><rect x="28" y="24" width="6" height="4" fill="#4a4438"/><rect x="30" y="24" width="14" height="4" rx="1" fill="#26262a"/><rect x="28" y="27" width="7" height="3" fill="#1e1e22"/></svg>`));
+
+      loadSprite("stalker", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="48" height="56"><ellipse cx="24" cy="53" rx="15" ry="3" fill="#000" opacity="0.3"/><path d="M12 34 q-10 4 -12 15 q7 -7 15 -9 z" fill="#3a2c2e"/><path d="M14 40 l-4 13 6 0 4 -11 z" fill="#2a2022"/><path d="M30 40 l6 13 6 0 -6 -13 z" fill="#31262a"/><path d="M12 20 q12 -10 24 0 q4 12 -2 22 q-10 6 -20 0 q-6 -10 -2 -22 z" fill="#3a2a2c"/><path d="M22 12 q4 -6 8 0 q2 11 -2 21 q-2 -13 -6 -21 z" fill="#7a3a3a" opacity="0.85"/><path d="M26 7 q12 2 12 12 q-2 8 -12 8 q-9 -2 -9 -10 q0 -8 9 -10z" fill="#33262a"/><circle cx="34" cy="15" r="2.6" fill="#e8b13a"/><circle cx="29" cy="18" r="2" fill="#e8b13a"/><path d="M37 30 l8 -3 -6 6 z" fill="#8a8375"/><path d="M9 30 l-7 -3 6 6 z" fill="#8a8375"/></svg>`));
+
+      loadSprite("barrel", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="30" height="38"><ellipse cx="15" cy="36" rx="12" ry="2.5" fill="#000" opacity="0.3"/><rect x="3" y="4" width="24" height="30" rx="3" fill="#5a4632"/><rect x="3" y="4" width="7" height="30" rx="3" fill="#6b543c"/><rect x="3" y="10" width="24" height="4" fill="#33281c"/><rect x="3" y="24" width="24" height="4" fill="#33281c"/><ellipse cx="15" cy="5" rx="12" ry="3" fill="#4a3a28"/><path d="M15 15 l5 9 -10 0 z" fill="#c8992e"/></svg>`));
+
+      loadSprite("crate", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="34" height="32"><ellipse cx="17" cy="30" rx="15" ry="2.5" fill="#000" opacity="0.3"/><rect x="2" y="2" width="30" height="28" fill="#4a4436"/><path d="M2 2 L32 30 M32 2 L2 30" stroke="#2e2a20" stroke-width="3"/><rect x="2" y="2" width="30" height="28" fill="none" stroke="#2e2a20" stroke-width="3"/><rect x="2" y="2" width="30" height="6" fill="#5a5344"/></svg>`));
+
+      loadSprite("vent", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="44" height="18"><rect width="44" height="18" rx="2" fill="#2b2f33"/><g stroke="#16181b" stroke-width="2"><line x1="7" y1="3" x2="7" y2="15"/><line x1="15" y1="3" x2="15" y2="15"/><line x1="23" y1="3" x2="23" y2="15"/><line x1="31" y1="3" x2="31" y2="15"/><line x1="39" y1="3" x2="39" y2="15"/></g><rect width="44" height="3" fill="#3a3f44"/></svg>`));
+
+      loadSprite("sign", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26"><rect x="1" y="1" width="24" height="24" rx="2" fill="#c8992e"/><rect x="3" y="3" width="20" height="20" rx="1" fill="#161514"/><path d="M13 6 L21 20 L5 20 Z" fill="#e8b13a"/><rect x="12" y="11" width="2" height="5" fill="#161514"/><rect x="12" y="17" width="2" height="2" fill="#161514"/></svg>`));
+
+      loadSprite("cable", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="12" height="72"><path d="M6 0 q5 28 0 46 q-5 16 0 24" stroke="#141518" stroke-width="3" fill="none"/><circle cx="6" cy="70" r="3" fill="#2b2f33"/></svg>`));
+
+      loadSprite("bomb", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="18" height="20"><rect x="8" y="0" width="2" height="4" fill="#7a4a28"/><circle cx="9" cy="2" r="1.6" fill="#e8b13a"/><circle cx="9" cy="12" r="7" fill="#2a2c2e" stroke="#131416"/><circle cx="6" cy="9" r="2" fill="#44484a" opacity="0.7"/></svg>`));
+
+      loadSprite("lamp", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="140" height="140"><defs><radialGradient id="l" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#e8b13a" stop-opacity="0.7"/><stop offset="100%" stop-color="#e8b13a" stop-opacity="0"/></radialGradient></defs><circle cx="70" cy="70" r="70" fill="url(#l)"/></svg>`));
+
+      loadSprite("fog", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="600" height="180"><defs><radialGradient id="f" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#6a5a48" stop-opacity="0.5"/><stop offset="100%" stop-color="#6a5a48" stop-opacity="0"/></radialGradient></defs><ellipse cx="300" cy="90" rx="300" ry="80" fill="url(#f)"/></svg>`));
+
+      loadSprite("vignette", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="960" height="540"><defs><radialGradient id="v" cx="50%" cy="46%" r="72%"><stop offset="50%" stop-color="#000" stop-opacity="0"/><stop offset="100%" stop-color="#000" stop-opacity="0.74"/></radialGradient></defs><rect width="960" height="540" fill="url(#v)"/></svg>`));
+
+      // =====================================================================
+      // SOUND (Web Audio synth)
       // =====================================================================
       let _ac = null;
-      function ac() {
-        if (!_ac) { try { _ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} }
-        if (_ac && _ac.state === "suspended") _ac.resume();
-        return _ac;
-      }
+      function ac() { if (!_ac) { try { _ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} } if (_ac && _ac.state === "suspended") _ac.resume(); return _ac; }
       function seq(notes) {
-        const a = ac();
-        if (!a) return;
-        let t = a.currentTime;
+        const a = ac(); if (!a) return; let t = a.currentTime;
         for (const [f, d, ty, v, slide] of notes) {
           const o = a.createOscillator(), g = a.createGain();
-          o.type = ty || "square";
-          o.frequency.setValueAtTime(f, t);
+          o.type = ty || "square"; o.frequency.setValueAtTime(f, t);
           if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(1, slide), t + d);
-          g.gain.setValueAtTime(v || 0.12, t);
-          g.gain.exponentialRampToValueAtTime(0.0008, t + d);
-          o.connect(g).connect(a.destination);
-          o.start(t); o.stop(t + d + 0.02);
-          t += d;
+          g.gain.setValueAtTime(v || 0.12, t); g.gain.exponentialRampToValueAtTime(0.0008, t + d);
+          o.connect(g).connect(a.destination); o.start(t); o.stop(t + d + 0.02); t += d;
         }
       }
       const SFX = {
-        jump: () => seq([[300, 0.12, "square", 0.11, 520]]),
-        jump2: () => seq([[440, 0.12, "square", 0.1, 760]]),
-        shoot: () => seq([[620, 0.09, "sawtooth", 0.09, 200]]),
-        claw: () => seq([[170, 0.14, "square", 0.13, 80]]),
-        kill: () => seq([[130, 0.22, "triangle", 0.16, 48]]),
-        pickup: () => seq([[587, 0.07, "square", 0.11], [880, 0.12, "square", 0.11]]),
-        hurt: () => seq([[160, 0.28, "sawtooth", 0.18, 60]]),
-        win: () => seq([[440, 0.1], [587, 0.1], [698, 0.1], [880, 0.26]]),
-        lose: () => seq([[330, 0.15], [262, 0.15], [196, 0.34, "sawtooth"]]),
+        jump: () => seq([[300, 0.12, "square", 0.11, 520]]), jump2: () => seq([[440, 0.12, "square", 0.1, 760]]),
+        shoot: () => seq([[620, 0.09, "sawtooth", 0.09, 200]]), claw: () => seq([[170, 0.14, "square", 0.13, 80]]),
+        kill: () => seq([[130, 0.22, "triangle", 0.16, 48]]), pickup: () => seq([[587, 0.07, "square", 0.11], [880, 0.12, "square", 0.11]]),
+        hurt: () => seq([[160, 0.28, "sawtooth", 0.18, 60]]), win: () => seq([[440, 0.1], [587, 0.1], [698, 0.1], [880, 0.26]]),
+        lose: () => seq([[330, 0.15], [262, 0.15], [196, 0.34, "sawtooth"]]), toss: () => seq([[300, 0.08, "square", 0.09, 180]]),
+        boom: () => seq([[120, 0.12, "square", 0.2, 40], [80, 0.24, "sawtooth", 0.18, 30]]), warp: () => seq([[500, 0.08], [700, 0.08], [980, 0.14]]),
       };
 
       // =====================================================================
-      // JUICE: particles, floating text, dust, screen flash
+      // PARTICLES / FX
       // =====================================================================
       function burst(p, col, n = 12, spd = 220, sz = 7) {
         for (let i = 0; i < n; i++) {
           const v = vec2(rand(-1, 1), rand(-1, 1)).unit().scale(rand(spd * 0.35, spd));
-          add([
-            rect(rand(sz * 0.5, sz), rand(sz * 0.5, sz)), pos(p), anchor("center"),
-            color(col), rotate(rand(0, 360)), opacity(1), lifespan(0.5, { fade: 0.4 }), z(40),
-            { v, update() { this.move(this.v); this.v = this.v.scale(0.9); this.v.y += 700 * dt(); } },
-          ]);
+          add([rect(rand(sz * 0.5, sz), rand(sz * 0.5, sz)), pos(p), anchor("center"), color(col), rotate(rand(0, 360)), opacity(1), lifespan(0.5, { fade: 0.4 }), z(40), { v, update() { this.move(this.v); this.v = this.v.scale(0.9); this.v.y += 700 * dt(); } }]);
         }
       }
       function dust(p) {
         for (let i = 0; i < 7; i++) {
           const v = vec2(rand(-1, 1), rand(-1.1, -0.15)).unit().scale(rand(50, 140));
-          add([
-            circle(rand(2, 4)), pos(p.add(rand(-10, 10), 0)), anchor("center"),
-            color(150, 140, 120), opacity(0.7), lifespan(0.4, { fade: 0.35 }), z(38),
-            { v, update() { this.move(this.v); this.v = this.v.scale(0.9); } },
-          ]);
+          add([circle(rand(2, 4)), pos(p.add(rand(-10, 10), 0)), anchor("center"), color(150, 140, 120), opacity(0.7), lifespan(0.4, { fade: 0.35 }), z(38), { v, update() { this.move(this.v); this.v = this.v.scale(0.9); } }]);
         }
       }
       function popText(p, str, col) {
-        add([
-          text(str, { size: 20 }), pos(p), anchor("center"), color(col),
-          outline(3, rgb(0, 0, 0)), opacity(1), lifespan(0.6, { fade: 0.5 }), z(170),
-          { update() { this.move(0, -46); } },
-        ]);
+        add([text(str, { size: 20 }), pos(p), anchor("center"), color(col), outline(3, rgb(0, 0, 0)), opacity(1), lifespan(0.6, { fade: 0.5 }), z(170), { update() { this.move(0, -46); } }]);
       }
-      function flash(col, a = 0.45) {
-        add([rect(width(), height()), pos(0, 0), fixed(), color(col), opacity(a), lifespan(0.35, { fade: 0.35 }), z(190)]);
-      }
+      function flash(col, a = 0.45) { add([rect(width(), height()), pos(0, 0), fixed(), color(col), opacity(a), lifespan(0.35, { fade: 0.35 }), z(190)]); }
 
       // =====================================================================
-      // ATMOSPHERE — sky, parallax skyline, fog, dust motes, vignette
+      // ATMOSPHERE
       // =====================================================================
       const wrapv = (v, m) => ((v % m) + m) % m;
-
-      function parallaxLayer(sprName, w, yPos, factor, zi, op) {
-        const count = Math.ceil(width() / w) + 2;
-        const tiles = [];
-        for (let i = 0; i < count; i++) tiles.push(add([sprite(sprName), pos(i * w, yPos), fixed(), z(zi), opacity(op)]));
-        onUpdate(() => {
-          const off = wrapv(getCamPos().x * factor, w);
-          tiles.forEach((o, i) => (o.pos.x = i * w - off));
-        });
-      }
-
       function addFog() {
         for (let i = 0; i < 3; i++) {
-          const f = add([sprite("fog"), pos(rand(0, width()), rand(120, 380)), fixed(), z(-60), opacity(rand(0.35, 0.75)), { spd: rand(6, 16) }]);
+          const f = add([sprite("fog"), pos(rand(0, width()), rand(120, 380)), fixed(), z(-60), opacity(rand(0.35, 0.7)), { spd: rand(6, 16) }]);
           f.onUpdate(() => { f.pos.x += f.spd * dt(); if (f.pos.x > width() + 320) f.pos.x = -620; });
         }
       }
       function addDust() {
-        loop(0.22, () => {
-          add([
-            rect(rand(1, 3), rand(1, 3)), pos(rand(0, width()), height() + 6), fixed(),
-            color(205, 175, 125), opacity(rand(0.1, 0.35)), z(-50), lifespan(rand(6, 10), { fade: 2 }),
-            { drift: rand(-8, 8), up: rand(10, 24), update() { this.pos.x += this.drift * dt(); this.pos.y -= this.up * dt(); } },
-          ]);
-        });
+        loop(0.22, () => add([rect(rand(1, 3), rand(1, 3)), pos(rand(0, width()), height() + 6), fixed(), color(205, 175, 125), opacity(rand(0.1, 0.32)), z(-50), lifespan(rand(6, 10), { fade: 2 }), { drift: rand(-8, 8), up: rand(10, 24), update() { this.pos.x += this.drift * dt(); this.pos.y -= this.up * dt(); } }]));
       }
-      function addBackdrop(withParallax) {
-        add([sprite("sky"), pos(0, 0), fixed(), z(-100)]);
-        if (withParallax) {
-          parallaxLayer("bgFar", 480, 140, 0.25, -90, 0.9);
-          parallaxLayer("bgMid", 480, 240, 0.5, -80, 0.95);
-        } else {
-          add([sprite("bgFar"), pos(0, 150), fixed(), z(-90), opacity(0.85)]);
-          add([sprite("bgMid"), pos(0, 250), fixed(), z(-80), opacity(0.9)]);
-        }
-        addFog();
-        addDust();
+      function menuParallax() {
+        const w = 480;
+        const count = Math.ceil(width() / w) + 2;
+        const tiles = [];
+        for (let i = 0; i < count; i++) tiles.push(add([sprite("bgFar"), pos(i * w, 150), fixed(), z(-90), opacity(0.85)]));
+        onUpdate(() => { const off = wrapv(time() * 6, w); tiles.forEach((o, i) => (o.pos.x = i * w - off)); });
       }
       function addOverlay() { add([sprite("vignette"), pos(0, 0), fixed(), z(150)]); }
 
-      // Two playable "sides" with distinct skills (the core Hunter/Hunted idea).
+      // =====================================================================
+      // SIDES
+      // =====================================================================
       const SIDES = {
-        human: {
-          name: "GAIR — Human", sprite: "human", color: [120, 165, 210],
-          speed: 260, jumpForce: 720, doubleJump: false, maxHp: 3, mode: "ranged",
-          blurb: ["Ranged blaster (J / X)", "Standard jump", "Fragile — 3 HP", "Keep your distance."],
-        },
-        stalker: {
-          name: "The STALKER — Alien", sprite: "stalker", color: [200, 100, 100],
-          speed: 320, jumpForce: 780, doubleJump: true, maxHp: 4, mode: "melee",
-          blurb: ["Claw lunge (J / X)", "Double jump • faster", "Tough — 4 HP", "Hunt them down, up close."],
-        },
+        human: { name: "GAIR — Human", sprite: "human", color: [120, 165, 210], speed: 260, jumpForce: 720, doubleJump: false, maxHp: 3, mode: "ranged", bomb: true,
+          blurb: ["Blaster (J/X) + Bomb (K/Y)", "Standard jump", "Fragile — 3 HP", "Zone enemies out."] },
+        stalker: { name: "The STALKER — Alien", sprite: "stalker", color: [200, 100, 100], speed: 320, jumpForce: 780, doubleJump: true, maxHp: 4, mode: "melee", wallClimb: true,
+          blurb: ["Claw lunge (J/X)", "Wall-climb • double jump", "Tough — 4 HP", "Hunt up close."] },
       };
 
-      // Hand-crafted level. Legend:
-      //   = ground/platform   ^ spikes   $ energy   e enemy   > exit   @ spawn
-      const MAP = [
-        "                                                                  ",
-        "                                                                  ",
-        "                              $ $ $                               ",
-        "                            =========                             ",
-        "                                                          $  $    ",
-        "              $                     e                   ========   ",
-        "           =======      ^^^^^                    e                ",
-        "                      ==========      $ $ $                  >     ",
-        "     $   e                          =========          =========  ",
-        "  =======  ====   ^^^     e   $ $                                  ",
-        "  @                    =================      ^^^^     e          ",
-        "=======        ============          =====  ========  =========   ",
-        "=======================        ===============================    ",
+      // =====================================================================
+      // LEVEL — big multi-floor complex. Floors: r2(top) r5 r8 r11 r14(ground).
+      // Ladders connect them; doors teleport across the map.
+      // =====================================================================
+      const W = 76;
+      const pad = (s) => s.length >= W ? s.slice(0, W) : s + " ".repeat(W - s.length);
+      const FLOOR = "=".repeat(W);
+      const RAW = [
+        pad(""),
+        pad("                                     $ $ $          >"),
+        pad("                                 " + "=".repeat(27)),
+        pad(""),
+        pad("       $$$        e          $ $ $         ^^^^          e         $$$"),
+        FLOOR,
+        pad(""),
+        pad("      e      $ $ $        ^^^        e         $ $ $        e       ^^^"),
+        pad("  " + "=".repeat(15) + "       " + "=".repeat(26) + "        " + "=".repeat(15)),
+        pad(""),
+        pad("     $ $      e        ^^^^        $$$$         e         $ $        e"),
+        FLOOR,
+        pad(""),
+        pad("   @    $ $ $      e        ^^^         e        $ $ $         e      $$$"),
+        FLOOR,
       ];
-      const LEVEL_W = MAP[0].length * TS;
-      const LEVEL_H = MAP.length * TS;
+      // ladders: {col, r0(top), r1(bottom)} — top floor row is punched into a hole
+      const LADDERS = [
+        { c: 8, r0: 11, r1: 13 }, { c: 24, r0: 8, r1: 10 }, { c: 40, r0: 5, r1: 7 },
+        { c: 34, r0: 2, r1: 4 }, { c: 60, r0: 8, r1: 10 },
+      ];
+      // door pairs: [[col,row],[col,row]] on top of floor rows
+      const DOOR_PAIRS = [[[4, 14], [68, 5]], [[20, 11], [64, 8]]];
+
+      const GRID = RAW.map((r) => r.split(""));
+      for (const L of LADDERS) for (let r = L.r0; r <= L.r1; r++) if (GRID[r]) GRID[r][L.c] = "H";
+      const LEVEL_W = W * TS, LEVEL_H = GRID.length * TS;
 
       function spawnEnemy(x, y) {
-        const e = add([
-          sprite("drone"), pos(x, y), anchor("center"), area({ scale: 0.85 }), z(4), "enemy",
-          {
-            dir: choose([-1, 1]), homeX: x, range: 95,
-            update() {
-              this.move(this.dir * 78, 0); this.flipX = this.dir < 0;
-              if (this.pos.x > this.homeX + this.range) this.dir = -1;
-              if (this.pos.x < this.homeX - this.range) this.dir = 1;
-            },
-          },
-        ]);
+        const e = add([sprite("drone"), pos(x, y), anchor("center"), area({ scale: 0.85 }), z(4), "enemy",
+          { dir: choose([-1, 1]), homeX: x, range: 95, update() { this.move(this.dir * 78, 0); this.flipX = this.dir < 0; if (this.pos.x > this.homeX + this.range) this.dir = -1; if (this.pos.x < this.homeX - this.range) this.dir = 1; } }]);
         e.add([sprite("shadow"), pos(0, 16), anchor("center"), z(-1), opacity(0.4), scale(0.6)]);
         return e;
       }
+      loadSprite("shadow", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="64" height="22"><defs><radialGradient id="sh" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#000" stop-opacity="0.55"/><stop offset="100%" stop-color="#000" stop-opacity="0"/></radialGradient></defs><ellipse cx="32" cy="11" rx="32" ry="11" fill="url(#sh)"/></svg>`));
 
-      // =======================================================================
-      // MENU / CHARACTER SELECT
-      // =======================================================================
+      // =====================================================================
+      // MENU
+      // =====================================================================
       scene("select", () => {
-        addBackdrop(false);
+        add([sprite("sky"), pos(0, 0), fixed(), z(-100)]);
+        menuParallax(); addFog(); addDust();
         add([text("QUARRY", { size: 64 }), pos(width() / 2, 66), anchor("center"), color(228, 218, 200), outline(4, rgb(20, 18, 16))]);
         add([text("The world wants you dead either way. Choose your side.", { size: 19 }), pos(width() / 2, 116), anchor("center"), color(170, 158, 140)]);
-
-        const keys = ["human", "stalker"];
-        let sel = 0;
-
+        const keys = ["human", "stalker"]; let sel = 0;
         const cards = keys.map((key, i) => {
-          const s = SIDES[key];
-          const cx = width() / 2 + (i === 0 ? -172 : 172);
+          const s = SIDES[key], cx = width() / 2 + (i === 0 ? -172 : 172);
           const card = add([rect(300, 262, { radius: 12 }), pos(cx, 300), anchor("center"), color(26, 26, 28), outline(4, rgb(58, 58, 62)), scale(1), "card"]);
           card.add([sprite(s.sprite), pos(0, -66), anchor("center"), scale(1.5)]);
           card.add([text(s.name.toUpperCase(), { size: 17, width: 270, align: "center" }), pos(0, 6), anchor("center"), color(...s.color)]);
           s.blurb.forEach((line, j) => card.add([text("• " + line, { size: 14, width: 260 }), pos(-128, 34 + j * 24), anchor("left"), color(198, 190, 176)]));
           return card;
         });
-
         add([text("← →  choose      ENTER / A  start      (controller supported)", { size: 15 }), pos(width() / 2, 500), anchor("center"), color(150, 140, 124)]);
         addOverlay();
-
-        function refresh() {
-          cards.forEach((c, i) => {
-            c.color = i === sel ? rgb(40, 38, 34) : rgb(26, 26, 28);
-            c.outline.color = i === sel ? rgb(220, 170, 70) : rgb(58, 58, 62);
-            c.outline.width = i === sel ? 5 : 4;
-            tween(c.scale, i === sel ? vec2(1.06) : vec2(1), 0.12, (v) => (c.scale = v), easings.easeOutQuad);
-          });
-        }
+        const refresh = () => cards.forEach((c, i) => { c.color = i === sel ? rgb(40, 38, 34) : rgb(26, 26, 28); c.outline.color = i === sel ? rgb(220, 170, 70) : rgb(58, 58, 62); c.outline.width = i === sel ? 5 : 4; tween(c.scale, i === sel ? vec2(1.06) : vec2(1), 0.12, (v) => (c.scale = v), easings.easeOutQuad); });
         refresh();
-
         const moveSel = (d) => { sel = (sel + d + keys.length) % keys.length; SFX.pickup(); refresh(); };
-        onKeyPress("left", () => moveSel(-1)); onKeyPress("a", () => moveSel(-1));
-        onKeyPress("right", () => moveSel(1)); onKeyPress("d", () => moveSel(1));
+        onKeyPress("left", () => moveSel(-1)); onKeyPress("a", () => moveSel(-1)); onKeyPress("right", () => moveSel(1)); onKeyPress("d", () => moveSel(1));
         onGamepadButtonPress("dpad-left", () => moveSel(-1)); onGamepadButtonPress("dpad-right", () => moveSel(1));
-
         const start = () => { SFX.jump(); go("game", keys[sel]); };
-        onKeyPress("enter", start); onKeyPress("space", start);
-        onGamepadButtonPress("south", start); onGamepadButtonPress("start", start);
+        onKeyPress("enter", start); onKeyPress("space", start); onGamepadButtonPress("south", start); onGamepadButtonPress("start", start);
       });
 
-      // =======================================================================
+      // =====================================================================
       // GAME
-      // =======================================================================
+      // =====================================================================
       scene("game", (sideKey) => {
         const CFG = SIDES[sideKey];
         const maxJumps = CFG.doubleJump ? 2 : 1;
+        const CLIMB = 155;
+        let hp = CFG.maxHp, score = 0, invuln = false, facing = 1, jumpsLeft = maxJumps;
+        let lastAtk = 0, airTime = 0, spawn = vec2(0, 0), camReady = false, lastBomb = 0;
+        let wallDir = 0, lastWallTime = -1, wallStick = 0;
+        let lastLadderTime = -1, ladderCd = 0, onLadderNow = false;
+        let nearDoor = null, lastDoorTime = -1, doorCd = 0;
+        const steamVents = [];
 
-        let hp = CFG.maxHp, score = 0, invuln = false, facing = 1;
-        let jumpsLeft = maxJumps, lastAtk = 0, airTime = 0, spawn = vec2(0, 0), camReady = false;
+        // --- sky + interior wall + structure ---
+        add([sprite("sky"), pos(0, 0), fixed(), z(-100)]);
+        for (let wy = 0; wy < LEVEL_H; wy += 128) for (let wx = 0; wx < LEVEL_W; wx += 128) add([sprite("wall"), pos(wx, wy), anchor("topleft"), z(-45), opacity(0.9)]);
+        for (let gx = 40; gx < LEVEL_W; gx += 360) for (let gy = 0; gy < LEVEL_H; gy += 128) add([sprite("girder"), pos(gx, gy), anchor("topleft"), z(-30), opacity(0.8)]);
+        addFog(); addDust();
 
-        addBackdrop(true);
+        // --- build solids/hazards/pickups from GRID ---
+        GRID.forEach((row, r) => row.forEach((ch, c) => {
+          const x = c * TS + TS / 2, y = r * TS + TS / 2;
+          if (ch === "=") add([sprite("tile"), pos(x, y), anchor("center"), area(), body({ isStatic: true }), z(2), "platform"]);
+          else if (ch === "H") add([sprite("ladder"), pos(x, y), anchor("center"), area(), z(1), "ladder"]);
+          else if (ch === "^") add([sprite("spikes"), pos(x, r * TS + TS), anchor("bot"), area(), z(3), "danger"]);
+          else if (ch === "$") add([sprite("cell"), pos(x, y), anchor("center"), area({ scale: 1.1 }), scale(1), z(3), "energy", { seed: x, update() { this.scale = vec2(1 + Math.sin(time() * 4 + this.seed) * 0.12); } }]);
+          else if (ch === "e") spawnEnemy(x, y);
+          else if (ch === ">") add([sprite("exit"), pos(x, r * TS + TS), anchor("bot"), area(), z(3), "exit"]);
+          else if (ch === "@") spawn = vec2(x, y);
+        }));
 
-        // --- Build the world from the map ---
-        MAP.forEach((row, r) => {
-          for (let c = 0; c < row.length; c++) {
-            const ch = row[c];
-            const x = c * TS + TS / 2, y = r * TS + TS / 2;
-            if (ch === "=") {
-              add([sprite("tile"), pos(x, y), anchor("center"), area(), body({ isStatic: true }), z(2), "platform"]);
-            } else if (ch === "^") {
-              add([sprite("spikes"), pos(x, r * TS + TS), anchor("bot"), area(), z(3), "danger"]);
-            } else if (ch === "$") {
-              add([sprite("cell"), pos(x, y), anchor("center"), area({ scale: 1.1 }), scale(1), z(3), "energy",
-                { seed: x, update() { this.scale = vec2(1 + Math.sin(time() * 4 + this.seed) * 0.12); } }]);
-            } else if (ch === "e") {
-              spawnEnemy(x, y);
-            } else if (ch === ">") {
-              add([sprite("exit"), pos(x, r * TS + TS), anchor("bot"), area(), z(3), "exit"]);
-            } else if (ch === "@") {
-              spawn = vec2(x, y);
-            }
+        // --- decorations: props on surfaces, cables on ceilings, lamps ---
+        let lampCount = 0;
+        GRID.forEach((row, r) => row.forEach((ch, c) => {
+          if (ch !== "=") return;
+          const above = r > 0 ? GRID[r - 1][c] : " ";
+          const below = r < GRID.length - 1 ? GRID[r + 1][c] : "=";
+          const x = c * TS + TS / 2;
+          if (above === " " && r > 2 && rand() < 0.22) {
+            const kind = choose(["barrel", "crate", "sign", "vent", "vent"]);
+            add([sprite(kind), pos(x + rand(-6, 6), r * TS + (kind === "sign" ? -6 : 0)), anchor(kind === "sign" ? "center" : "bot"), z(3), rotate(kind === "sign" ? 0 : rand(-2, 2))]);
+            if (kind === "vent") steamVents.push(vec2(x, r * TS - 6));
           }
-        });
+          if (above === " " && lampCount < 11 && rand() < 0.16) { add([sprite("lamp"), pos(x, r * TS - 40), anchor("center"), z(-8), { s: rand(0, 6), update() { this.opacity = 0.55 + Math.sin(time() * 3 + this.s) * 0.2; } }]); lampCount++; }
+          if (below === " " && rand() < 0.14) add([sprite("cable"), pos(x + rand(-10, 10), r * TS + TS - 2), anchor("top"), z(1), opacity(0.9)]);
+        }));
+        loop(0.25, () => steamVents.forEach((v) => { if (rand() < 0.7) add([circle(rand(4, 7)), pos(v.add(rand(-4, 4), 0)), anchor("center"), color(150, 150, 155), opacity(rand(0.12, 0.26)), z(3), lifespan(rand(0.8, 1.4), { fade: 1 }), { up: rand(20, 40), update() { this.pos.y -= this.up * dt(); this.radius += 6 * dt(); } }]); }));
 
-        // decorative amber lamps in the world
-        [[3, 10], [21, 7], [40, 4], [55, 8], [12, 12]].forEach(([cx, cy]) =>
-          add([sprite("lamp"), pos(cx * TS, cy * TS), anchor("center"), z(1), opacity(0.85),
-            { s: rand(0, 6), update() { this.opacity = 0.6 + Math.sin(time() * 3 + this.s) * 0.2; } }]));
+        // --- doors ---
+        const makeDoor = (c, row) => add([sprite("door"), pos(c * TS + TS / 2, row * TS), anchor("bot"), area({ scale: vec2(0.5, 0.9) }), z(1), "door", { partner: null }]);
+        DOOR_PAIRS.forEach(([a, b]) => { const da = makeDoor(a[0], a[1]), db = makeDoor(b[0], b[1]); da.partner = db.pos.clone(); db.partner = da.pos.clone(); });
 
-        // --- Player ---
-        const player = add([
-          sprite(CFG.sprite), pos(spawn), anchor("center"),
-          area({ scale: vec2(0.6, 0.82) }), body({ jumpForce: CFG.jumpForce }), opacity(1), scale(1), z(6), "player",
-        ]);
+        // --- player ---
+        const player = add([sprite(CFG.sprite), pos(spawn), anchor("center"), area({ scale: vec2(0.6, 0.82) }), body({ jumpForce: CFG.jumpForce }), opacity(1), scale(1), z(6), "player"]);
         player.add([sprite("shadow"), pos(0, 26), anchor("center"), z(-1), opacity(0.6)]);
+        const squash = (sx, sy) => { player.scale = vec2(sx, sy); tween(player.scale, vec2(1, 1), 0.18, (v) => (player.scale = v), easings.easeOutQuad); };
+        player.onGround(() => { jumpsLeft = maxJumps; if (airTime > 0.16) { squash(1.28, 0.74); dust(player.pos.add(0, 24)); shake(2); } airTime = 0; });
 
-        function squash(sx, sy) {
-          player.scale = vec2(sx, sy);
-          tween(player.scale, vec2(1, 1), 0.18, (v) => (player.scale = v), easings.easeOutQuad);
-        }
-
-        player.onGround(() => {
-          jumpsLeft = maxJumps;
-          if (airTime > 0.16) { squash(1.28, 0.74); dust(player.pos.add(0, 24)); shake(2); }
-          airTime = 0;
-        });
+        // wall / ladder / door detection
+        player.onCollideUpdate("platform", (p) => { const dx = p.pos.x - player.pos.x, dy = Math.abs(p.pos.y - player.pos.y); if (Math.abs(dx) > 12 && dy < TS * 0.55) { wallDir = dx > 0 ? 1 : -1; lastWallTime = time(); } });
+        player.onCollideUpdate("ladder", () => { lastLadderTime = time(); });
+        player.onCollideUpdate("door", (d) => { nearDoor = d; lastDoorTime = time(); });
+        const wallActive = () => time() - lastWallTime < 0.06;
+        const ladderActive = () => time() - lastLadderTime < 0.06 && time() > ladderCd;
 
         // --- HUD ---
         const hud = add([text("", { size: 20 }), pos(16, 14), fixed(), z(200), color(232, 224, 210), outline(3, rgb(20, 18, 16))]);
-        add([text("Move: ←→ / A D / stick   Jump: Space / W / A-btn   Attack: J / X / B-btn", { size: 14 }), pos(16, 518), fixed(), z(200), color(150, 140, 124)]);
+        const ctrl = CFG.bomb ? "Bomb: K/Y   " : "Wall: into-wall+Up   ";
+        add([text("Move ←→/AD   Jump Space   Attack J/X   " + ctrl + "Climb ↑↓   Door: E", { size: 13 }), pos(16, 520), fixed(), z(200), color(150, 140, 124)]);
         const updateHUD = () => (hud.text = `${CFG.name}    HP ${Math.max(hp, 0)}/${CFG.maxHp}    Energy ${score}`);
         updateHUD();
 
-        function killEnemy(e) {
-          burst(e.pos, rgb(80, 84, 86), 12, 200, 8);   // metal debris
-          burst(e.pos, rgb(230, 120, 60), 8, 240, 5);  // sparks
-          popText(e.pos, "+1", rgb(240, 180, 120));
-          shake(5); SFX.kill();
-          destroy(e); score += 1; updateHUD();
-        }
+        function killEnemy(e) { burst(e.pos, rgb(80, 84, 86), 12, 200, 8); burst(e.pos, rgb(230, 120, 60), 8, 240, 5); popText(e.pos, "+1", rgb(240, 180, 120)); shake(5); SFX.kill(); destroy(e); score += 1; updateHUD(); }
 
         function hurt(fromFall) {
           if (invuln && !fromFall) return;
-          hp -= 1;
-          shake(9); flash(rgb(180, 40, 30), 0.5); SFX.hurt();
-          burst(player.pos, rgb(...CFG.color), 12, 200, 6);
-          updateHUD();
+          hp -= 1; shake(9); flash(rgb(180, 40, 30), 0.5); SFX.hurt(); burst(player.pos, rgb(...CFG.color), 12, 200, 6); updateHUD();
           if (fromFall) { player.pos = spawn.clone(); player.vel = vec2(0, 0); }
           if (hp <= 0) { SFX.lose(); go("over", { win: false, side: sideKey, score }); return; }
-          invuln = true;
-          const blink = loop(0.09, () => (player.opacity = player.opacity === 1 ? 0.35 : 1));
-          wait(1.1, () => { blink.cancel(); player.opacity = 1; invuln = false; });
+          invuln = true; const blink = loop(0.09, () => (player.opacity = player.opacity === 1 ? 0.35 : 1)); wait(1.1, () => { blink.cancel(); player.opacity = 1; invuln = false; });
         }
-
         player.onCollide("energy", (c) => { burst(c.pos, rgb(120, 220, 150), 10, 170, 6); popText(c.pos, "+1", rgb(180, 240, 190)); SFX.pickup(); destroy(c); score += 1; updateHUD(); });
         player.onCollide("danger", () => hurt());
         player.onCollide("enemy", () => hurt());
@@ -454,38 +319,51 @@
           SFX.shoot();
           add([circle(9), pos(player.pos.x + facing * 24, player.pos.y - 4), anchor("center"), color(230, 190, 120), opacity(0.85), lifespan(0.08, { fade: 0.08 }), z(8)]);
           const b = add([rect(18, 5, { radius: 2 }), pos(player.pos.x + facing * 24, player.pos.y - 4), anchor("center"), color(240, 200, 120), outline(2, rgb(90, 60, 20)), area(), move(vec2(facing, 0), 780), offscreen({ destroy: true }), z(5), "bullet"]);
-          b.onCollide("enemy", (e) => { destroy(b); killEnemy(e); });
-          b.onCollide("platform", () => destroy(b));
+          b.onCollide("enemy", (e) => { destroy(b); killEnemy(e); }); b.onCollide("platform", () => destroy(b));
         }
         function claw() {
           SFX.claw(); player.move(facing * 200, 0); squash(1.24, 0.86);
           const hb = add([rect(54, 42, { radius: 6 }), pos(player.pos.x + facing * 36, player.pos.y - 2), anchor("center"), color(255, 205, 120), opacity(0.35), area(), lifespan(0.14, { fade: 0.14 }), z(5), "claw"]);
-          burst(hb.pos, rgb(255, 210, 140), 6, 150, 5);
-          hb.onCollide("enemy", (e) => killEnemy(e));
+          burst(hb.pos, rgb(255, 210, 140), 6, 150, 5); hb.onCollide("enemy", (e) => killEnemy(e));
         }
         function attack() { if (time() - lastAtk < 0.32) return; lastAtk = time(); CFG.mode === "ranged" ? shoot() : claw(); }
-
-        function jump() {
-          if (jumpsLeft > 0) {
-            const mid = jumpsLeft < maxJumps;
-            player.jump(CFG.jumpForce); jumpsLeft -= 1;
-            squash(0.74, 1.28); dust(player.pos.add(0, 24));
-            mid ? SFX.jump2() : SFX.jump();
+        function explode(p) {
+          SFX.boom(); shake(11); flash(rgb(240, 180, 90), 0.4);
+          const ring = add([circle(8), pos(p), anchor("center"), color(255, 220, 150), opacity(0.6), lifespan(0.3, { fade: 0.3 }), z(35)]);
+          tween(8, 96, 0.28, (r) => (ring.radius = r), easings.easeOutQuad);
+          burst(p, rgb(240, 170, 80), 20, 320, 9); burst(p, rgb(90, 90, 92), 14, 240, 8);
+          get("enemy").forEach((e) => { if (e.pos.dist(p) < 96) killEnemy(e); });
+        }
+        function throwBomb() {
+          if (time() - lastBomb < 1.1) return; lastBomb = time(); SFX.toss();
+          const g = add([sprite("bomb"), pos(player.pos.x + facing * 16, player.pos.y - 6), anchor("center"), area({ scale: 0.7 }), body(), rotate(0), z(5), "bomb"]);
+          g.vel = vec2(facing * 360, -430); g.onUpdate(() => { g.angle += facing * 420 * dt(); });
+          wait(0.9, () => { if (g.exists()) { const p = g.pos.clone(); destroy(g); explode(p); } });
+        }
+        function useDoor() {
+          if (nearDoor && nearDoor.partner && time() - lastDoorTime < 0.1 && time() > doorCd) {
+            doorCd = time() + 0.6; SFX.warp(); flash(rgb(230, 180, 90), 0.4); burst(player.pos, rgb(230, 180, 90), 14, 220, 6);
+            player.pos = nearDoor.partner.add(0, -8); player.vel = vec2(0, 0); burst(player.pos, rgb(230, 180, 90), 14, 220, 6);
           }
         }
-        ["space", "up", "w"].forEach((key) => onKeyPress(key, jump));
-        onGamepadButtonPress("south", jump);
-        ["j", "x"].forEach((key) => onKeyPress(key, attack));
-        onGamepadButtonPress("west", attack); onGamepadButtonPress("east", attack);
+
+        function jump() {
+          if (onLadderNow) { player.gravityScale = 1; ladderCd = time() + 0.28; }
+          if (CFG.wallClimb && !player.isGrounded() && wallStick !== 0) {
+            player.jump(CFG.jumpForce * 0.95); player.vel = vec2(-wallStick * 340, player.vel.y);
+            facing = -wallStick; player.flipX = facing < 0; jumpsLeft = maxJumps - 1;
+            squash(0.72, 1.3); dust(player.pos.add(wallStick * 8, 12)); SFX.jump2(); return;
+          }
+          if (jumpsLeft > 0) { const mid = jumpsLeft < maxJumps; player.jump(CFG.jumpForce); jumpsLeft -= 1; squash(0.74, 1.28); dust(player.pos.add(0, 24)); mid ? SFX.jump2() : SFX.jump(); }
+        }
+        ["space", "up", "w"].forEach((key) => key === "space" ? onKeyPress(key, jump) : null);
+        onKeyPress("space", jump); onGamepadButtonPress("south", jump);
+        ["j", "x"].forEach((key) => onKeyPress(key, attack)); onGamepadButtonPress("west", attack); onGamepadButtonPress("east", attack);
+        ["k", "c"].forEach((key) => onKeyPress(key, () => { if (CFG.bomb) throwBomb(); })); onGamepadButtonPress("north", () => { if (CFG.bomb) throwBomb(); });
+        onKeyPress("e", useDoor); onGamepadButtonPress("dpad-up", useDoor);
         onKeyPress("r", () => go("game", sideKey));
 
-        function camTarget() {
-          const halfW = width() / 2, halfH = height() / 2;
-          return vec2(
-            clamp(player.pos.x, halfW, Math.max(LEVEL_W - halfW, halfW)),
-            clamp(player.pos.y, halfH, Math.max(LEVEL_H - halfH, halfH)) - 30,
-          );
-        }
+        const camTarget = () => vec2(clamp(player.pos.x, width() / 2, Math.max(LEVEL_W - width() / 2, width() / 2)), clamp(player.pos.y, height() / 2, Math.max(LEVEL_H - height() / 2, height() / 2)) - 20);
 
         player.onUpdate(() => {
           if (!player.isGrounded()) airTime += dt();
@@ -497,31 +375,47 @@
           const stick = getGamepadStick("left");
           if (stick && Math.abs(stick.x) > 0.3) dx += stick.x;
           dx = clamp(dx, -1, 1);
+          const up = isKeyDown("up") || isKeyDown("w") || (stick && stick.y < -0.4);
+          const down = isKeyDown("down") || isKeyDown("s") || (stick && stick.y > 0.4);
           if (Math.abs(dx) > 0.05) { player.move(dx * CFG.speed, 0); facing = dx > 0 ? 1 : -1; player.flipX = facing < 0; }
 
-          const target = camTarget();
-          if (!camReady) { setCamPos(target); camReady = true; }
-          else setCamPos(getCamPos().lerp(target, Math.min(1, dt() * 8)));
+          // ladder
+          if (ladderActive()) {
+            onLadderNow = true; player.gravityScale = 0; jumpsLeft = maxJumps;
+            player.vel = vec2(player.vel.x, up ? -CLIMB : down ? CLIMB : 0);
+          } else { onLadderNow = false; player.gravityScale = 1; }
 
-          if (player.pos.y > LEVEL_H + 260) hurt(true);
+          // wall-climb (alien), only when not on a ladder
+          wallStick = 0;
+          if (!onLadderNow && CFG.wallClimb && !player.isGrounded() && wallActive()) {
+            const into = (wallDir > 0 && dx > 0.1) || (wallDir < 0 && dx < -0.1);
+            if (into) {
+              wallStick = wallDir; player.flipX = wallDir < 0;
+              if (up) player.vel = vec2(player.vel.x, -150); else if (player.vel.y > 60) player.vel = vec2(player.vel.x, 60);
+              if (rand() < 0.35) add([circle(rand(2, 3)), pos(player.pos.x + wallDir * 12, player.pos.y + rand(-6, 10)), anchor("center"), color(150, 140, 120), opacity(0.6), lifespan(0.3, { fade: 0.3 }), z(7), { update() { this.move(0, 60); } }]);
+            }
+          }
+
+          const target = camTarget();
+          if (!camReady) { setCamPos(target); camReady = true; } else setCamPos(getCamPos().lerp(target, Math.min(1, dt() * 8)));
+          if (player.pos.y > LEVEL_H + 200) hurt(true);
         });
 
         addOverlay();
       });
 
-      // =======================================================================
-      // GAME OVER / WIN
-      // =======================================================================
+      // =====================================================================
+      // GAME OVER
+      // =====================================================================
       scene("over", ({ win, side, score }) => {
         const s = SIDES[side];
-        addBackdrop(false);
-        add([rect(width(), height()), pos(0, 0), fixed(), color(...(win ? [16, 26, 20] : [26, 14, 14])), opacity(0.5), z(-10)]);
+        add([sprite("sky"), pos(0, 0), fixed(), z(-100)]); menuParallax(); addFog(); addDust();
+        add([rect(width(), height()), pos(0, 0), fixed(), color(...(win ? [16, 26, 20] : [26, 14, 14])), opacity(0.45), z(-10)]);
         add([sprite(s.sprite), pos(width() / 2, 130), anchor("center"), scale(2.2)]);
         add([text(win ? "YOU ESCAPED" : "HUNTED DOWN", { size: 54 }), pos(width() / 2, 250), anchor("center"), color(win ? rgb(150, 220, 160) : rgb(220, 110, 100)), outline(4, rgb(20, 18, 16))]);
         add([text(`${s.name}   •   Energy collected: ${score}`, { size: 22 }), pos(width() / 2, 312), anchor("center"), color(210, 200, 186)]);
         add([text("ENTER / A — play again      M — menu", { size: 17 }), pos(width() / 2, 372), anchor("center"), color(160, 150, 134)]);
         addOverlay();
-
         const again = () => go("game", side);
         onKeyPress("enter", again); onKeyPress("space", again); onGamepadButtonPress("south", again);
         onKeyPress("m", () => go("select")); onGamepadButtonPress("start", () => go("select"));
