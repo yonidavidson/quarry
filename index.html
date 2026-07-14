@@ -56,11 +56,88 @@
 
       loadSprite("exit", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="48" height="72"><rect x="4" y="2" width="40" height="70" rx="3" fill="#2c3033"/><rect x="8" y="6" width="32" height="62" fill="#3c4144" stroke="#20242a" stroke-width="2"/><g opacity="0.85"><path d="M11 62 l20 -22" stroke="#c8992e" stroke-width="5"/><path d="M20 64 l14 -16" stroke="#1c1c1c" stroke-width="5"/></g><circle cx="24" cy="18" r="10" fill="#e8b13a" opacity="0.3"/><circle cx="24" cy="18" r="5" fill="#f0c04a"/></svg>`));
 
-      loadSprite("drone", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="36" height="34"><rect x="1" y="6" width="9" height="3" fill="#3a3d3f"/><rect x="26" y="6" width="9" height="3" fill="#3a3d3f"/><path d="M7 10 h22 q5 7 -2 15 h-18 q-7 -8 -2 -15z" fill="#45494b"/><rect x="7" y="10" width="22" height="4" fill="#565b5d"/><path d="M11 13 l-1 12" stroke="#6b4527" stroke-width="2" opacity="0.5"/><circle cx="18" cy="19" r="5.5" fill="#7a1e1e"/><circle cx="18" cy="19" r="2.6" fill="#ef4444"/><g fill="#232527"><circle cx="9" cy="20" r="1.5"/><circle cx="27" cy="20" r="1.5"/></g></svg>`));
+      // drone: 2-frame strip (rotor flicker + eye pulse)
+      const droneFrame = (alt) => `
+        <rect x="${alt ? 3 : 1}" y="6" width="${alt ? 5 : 9}" height="3" fill="#3a3d3f" opacity="${alt ? 0.6 : 1}"/>
+        <rect x="${alt ? 28 : 26}" y="6" width="${alt ? 5 : 9}" height="3" fill="#3a3d3f" opacity="${alt ? 0.6 : 1}"/>
+        ${alt ? '<rect x="0" y="6" width="36" height="3" fill="#3a3d3f" opacity="0.25"/>' : ""}
+        <path d="M7 10 h22 q5 7 -2 15 h-18 q-7 -8 -2 -15z" fill="#45494b"/>
+        <rect x="7" y="10" width="22" height="4" fill="#565b5d"/>
+        <path d="M11 13 l-1 12" stroke="#6b4527" stroke-width="2" opacity="0.5"/>
+        <circle cx="18" cy="19" r="5.5" fill="#7a1e1e"/><circle cx="18" cy="19" r="${alt ? 3.2 : 2.6}" fill="#ef4444"/>
+        <g fill="#232527"><circle cx="9" cy="20" r="1.5"/><circle cx="27" cy="20" r="1.5"/></g>`;
+      loadSprite("drone", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="72" height="34">
+        <g>${droneFrame(false)}</g><g transform="translate(36 0)">${droneFrame(true)}</g></svg>`),
+        { sliceX: 2, anims: { spin: { from: 0, to: 1, speed: 9, loop: true } } });
 
-      loadSprite("human", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="44" height="56"><ellipse cx="22" cy="53" rx="13" ry="3" fill="#000" opacity="0.3"/><rect x="14" y="38" width="6" height="15" fill="#2f2d28"/><rect x="24" y="38" width="6" height="15" fill="#3a372f"/><rect x="12" y="51" width="10" height="4" rx="1" fill="#1a1916"/><rect x="24" y="51" width="10" height="4" rx="1" fill="#1a1916"/><rect x="12" y="20" width="20" height="20" rx="4" fill="#5a5344"/><rect x="12" y="20" width="20" height="6" rx="3" fill="#6a6250"/><rect x="12" y="34" width="20" height="3" fill="#33302a"/><path d="M14 12 a8 8 0 0 1 16 0 z" fill="#4a4438"/><circle cx="22" cy="13" r="7.5" fill="#b08d6a"/><rect x="21" y="10" width="10" height="4" rx="2" fill="#e0a23c"/><rect x="28" y="24" width="6" height="4" fill="#4a4438"/><rect x="30" y="24" width="14" height="4" rx="1" fill="#26262a"/><rect x="28" y="27" width="7" height="3" fill="#1e1e22"/></svg>`));
+      // human: 7-frame strip — idle A/B, run A-D, jump
+      const humanFrame = (p) => {
+        const dy = p.dy || 0, rdy = (p.rdy || 0) + dy;
+        const leg = (x, ang, dark) => `<g transform="rotate(${ang || 0} ${x + 3} 38)">
+          <rect x="${x}" y="38" width="6" height="${p.tuck ? 10 : 15}" fill="${dark ? "#2f2d28" : "#3a372f"}"/>
+          <rect x="${x - 2}" y="${p.tuck ? 46 : 51}" width="10" height="4" rx="1" fill="#1a1916"/></g>`;
+        return `
+          ${p.tuck ? "" : `<ellipse cx="22" cy="53" rx="12" ry="3" fill="#000" opacity="0.3"/>`}
+          ${leg(14, p.lf, true)}${leg(24, p.rf, false)}
+          <g transform="translate(0 ${dy})">
+            <rect x="12" y="20" width="20" height="20" rx="4" fill="#5a5344"/>
+            <rect x="12" y="20" width="20" height="6" rx="3" fill="#6a6250"/>
+            <rect x="12" y="34" width="20" height="3" fill="#33302a"/>
+            <path d="M14 12 a8 8 0 0 1 16 0 z" fill="#4a4438"/>
+            <circle cx="22" cy="13" r="7.5" fill="#b08d6a"/>
+            <rect x="21" y="10" width="10" height="4" rx="2" fill="#e0a23c"/>
+          </g>
+          <g transform="translate(0 ${rdy})">
+            <rect x="28" y="24" width="6" height="4" fill="#4a4438"/>
+            <rect x="30" y="24" width="14" height="4" rx="1" fill="#26262a"/>
+            <rect x="28" y="27" width="7" height="3" fill="#1e1e22"/>
+          </g>`;
+      };
+      const HFRAMES = [
+        humanFrame({}), humanFrame({ dy: 1 }),                              // idle breath
+        humanFrame({ lf: 24, rf: -20, rdy: -1 }), humanFrame({ lf: 6, rf: -4, dy: 1 }),   // run
+        humanFrame({ lf: -20, rf: 24, rdy: -1 }), humanFrame({ lf: -4, rf: 6, dy: 1 }),
+        humanFrame({ lf: -26, rf: 18, tuck: true, rdy: -2 }),               // jump
+      ];
+      loadSprite("human", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="${44 * 7}" height="56">${HFRAMES.map((f, i) => `<g transform="translate(${i * 44} 0)">${f}</g>`).join("")}</svg>`),
+        { sliceX: 7, anims: { idle: { from: 0, to: 1, speed: 2.5, loop: true }, run: { from: 2, to: 5, speed: 11, loop: true }, jump: 6 } });
 
-      loadSprite("stalker", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="48" height="56"><ellipse cx="24" cy="53" rx="15" ry="3" fill="#000" opacity="0.3"/><path d="M12 34 q-10 4 -12 15 q7 -7 15 -9 z" fill="#3a2c2e"/><path d="M14 40 l-4 13 6 0 4 -11 z" fill="#2a2022"/><path d="M30 40 l6 13 6 0 -6 -13 z" fill="#31262a"/><path d="M12 20 q12 -10 24 0 q4 12 -2 22 q-10 6 -20 0 q-6 -10 -2 -22 z" fill="#3a2a2c"/><path d="M22 12 q4 -6 8 0 q2 11 -2 21 q-2 -13 -6 -21 z" fill="#7a3a3a" opacity="0.85"/><path d="M26 7 q12 2 12 12 q-2 8 -12 8 q-9 -2 -9 -10 q0 -8 9 -10z" fill="#33262a"/><circle cx="34" cy="15" r="2.6" fill="#e8b13a"/><circle cx="29" cy="18" r="2" fill="#e8b13a"/><path d="M37 30 l8 -3 -6 6 z" fill="#8a8375"/><path d="M9 30 l-7 -3 6 6 z" fill="#8a8375"/></svg>`));
+      // stalker: scary redesign — 7-frame strip (idle A/B, skitter A-D, lunge)
+      const stalkerFrame = (p) => {
+        const dy = p.dy || 0, m = p.mouth == null ? 2 : p.mouth, ts = p.ts || 0;
+        const arm = (ang, dark) => `<g transform="rotate(${ang || 0} 28 ${28 + dy})">
+          <path d="M28 ${28 + dy} q9 7 8 17 q5 7 13 7" stroke="${dark ? "#180d11" : "#2a161c"}" stroke-width="5" fill="none" stroke-linecap="round"/>
+          <path d="M49 ${52 + dy} q7 1 10 -7" stroke="${dark ? "#5f5a4e" : "#8a8375"}" stroke-width="3" fill="none" stroke-linecap="round"/></g>`;
+        const hind = (ang) => `<g transform="rotate(${ang || 0} 15 ${36 + dy})">
+          <path d="M15 ${36 + dy} l-9 9 3 13" stroke="#241318" stroke-width="6" fill="none" stroke-linecap="round"/>
+          <path d="M9 ${58 + dy} l8 1" stroke="#180d11" stroke-width="4" stroke-linecap="round"/></g>`;
+        return `
+          <ellipse cx="27" cy="59" rx="18" ry="3" fill="#000" opacity="0.35"/>
+          <path d="M11 ${34 + dy} q-13 ${-4 + ts} -10 ${-17 + ts * 2}" stroke="#241318" stroke-width="5" fill="none" stroke-linecap="round"/>
+          <path d="M1 ${17 + dy + ts * 2} l-1 -6 5 3z" fill="#54222c"/>
+          ${hind(p.hl)}${arm(p.la, true)}
+          <path d="M13 ${25 + dy} q11 -15 27 -8 q9 4 8 14 q-1 13 -13 17 q-14 5 -22 -4 q-6 -9 0 -19z" fill="#1f1418"/>
+          <path d="M15 ${25 + dy} q10 -12 24 -7 q7 3 7 11 q-8 -6 -16 -5 q-10 1 -15 6z" fill="#3d1f24"/>
+          <g fill="#54222c"><path d="M15 ${24 + dy} l2 -10 5 8z"/><path d="M23 ${19 + dy} l3 -10 5 8z"/><path d="M32 ${16 + dy} l3 -9 5 8z"/></g>
+          <circle cx="43" cy="${19 + dy}" r="8" fill="#ff5040" opacity="0.16"/>
+          <path d="M32 ${16 + dy} q16 -6 20 3 q1 6 -7 8 l-14 3 q-5 -8 1 -14z" fill="#1a0e13"/>
+          <path d="M33 ${17 + dy} q13 -5 17 2" stroke="#42222c" stroke-width="2" fill="none"/>
+          <circle cx="45" cy="${18 + dy}" r="2.4" fill="#ffb340"/>
+          <circle cx="40" cy="${16 + dy}" r="1.5" fill="#ffb340"/>
+          <circle cx="47" cy="${21.5 + dy}" r="1.3" fill="#ff5040"/>
+          <path d="M34 ${27 + dy} l15 ${m}" stroke="#0d070a" stroke-width="${2 + m}" stroke-linecap="round"/>
+          <g fill="#d8d2c0"><path d="M36 ${26.5 + dy} l1.5 ${3 + m * 0.5} 1.5 -${3 + m * 0.5}z"/><path d="M41 ${27 + dy} l1.5 ${3 + m * 0.6} 1.5 -${3 + m * 0.6}z"/><path d="M46 ${27.5 + dy} l1.3 ${2.5 + m * 0.7} 1.3 -${2.5 + m * 0.7}z"/></g>
+          ${arm(p.ra, false)}`;
+      };
+      const SFRAMES = [
+        stalkerFrame({}), stalkerFrame({ dy: 1.5, ts: 2, mouth: 1 }),                       // idle breath
+        stalkerFrame({ ra: 18, la: -14, hl: 14, ts: 3 }), stalkerFrame({ dy: 2, ra: 4, la: 4, hl: -2 }),   // skitter
+        stalkerFrame({ ra: -16, la: 16, hl: -14, ts: -3 }), stalkerFrame({ dy: 2, ra: 4, la: 4, hl: 2 }),
+        stalkerFrame({ dy: -2, ra: -42, la: -30, hl: 20, mouth: 6, ts: -4 }),               // lunge
+      ];
+      loadSprite("stalker", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="${52 * 7}" height="62">${SFRAMES.map((f, i) => `<g transform="translate(${i * 52} 0)">${f}</g>`).join("")}</svg>`),
+        { sliceX: 7, anims: { idle: { from: 0, to: 1, speed: 2.2, loop: true }, run: { from: 2, to: 5, speed: 12, loop: true }, jump: 6 } });
+      loadSprite("redglow", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80"><defs><radialGradient id="rg" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#ff5040" stop-opacity="0.55"/><stop offset="100%" stop-color="#ff5040" stop-opacity="0"/></radialGradient></defs><circle cx="40" cy="40" r="40" fill="url(#rg)"/></svg>`));
 
       loadSprite("barrel", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="30" height="38"><ellipse cx="15" cy="36" rx="12" ry="2.5" fill="#000" opacity="0.3"/><rect x="3" y="4" width="24" height="30" rx="3" fill="#5a4632"/><rect x="3" y="4" width="7" height="30" rx="3" fill="#6b543c"/><rect x="3" y="10" width="24" height="4" fill="#33281c"/><rect x="3" y="24" width="24" height="4" fill="#33281c"/><ellipse cx="15" cy="5" rx="12" ry="3" fill="#4a3a28"/><path d="M15 15 l5 9 -10 0 z" fill="#c8992e"/></svg>`));
 
@@ -190,10 +267,27 @@
 
       const GRID = RAW.map((r) => r.split(""));
       for (const L of LADDERS) for (let r = L.r0; r <= L.r1; r++) if (GRID[r]) GRID[r][L.c] = "H";
+      // Climbable wall stubs (#8): 2-tile walls for the Stalker. A guard skips
+      // candidates near enemies/ladders/doors/hazards or without ground below.
+      const WALL_CANDIDATES = [
+        { c: 13, r0: 9, r1: 10 }, { c: 17, r0: 9, r1: 10 }, { c: 46, r0: 9, r1: 10 }, { c: 55, r0: 9, r1: 10 },
+        { c: 10, r0: 6, r1: 7 }, { c: 31, r0: 6, r1: 7 }, { c: 44, r0: 6, r1: 7 },
+        { c: 18, r0: 12, r1: 13 }, { c: 28, r0: 12, r1: 13 }, { c: 50, r0: 12, r1: 13 }, { c: 58, r0: 12, r1: 13 },
+      ];
+      const DOOR_CELLS = DOOR_PAIRS.flat(); // [c, floorRow] pairs; door body sits in the 2 rows above floorRow
+      for (const w of WALL_CANDIDATES) {
+        let ok = GRID[w.r1 + 1] && GRID[w.r1 + 1][w.c] === "=";
+        for (let r = w.r0 - 1; r <= w.r1 + 1 && ok; r++) for (let c = w.c - 3; c <= w.c + 3; c++) {
+          const ch = GRID[r] && GRID[r][c];
+          if (ch === "e" || ch === "@" || ch === ">" || ch === "H" || ch === "^") ok = false;
+        }
+        for (const [dc, dr] of DOOR_CELLS) if (Math.abs(dc - w.c) <= 2 && w.r1 >= dr - 2 && w.r0 <= dr) ok = false;
+        if (ok) for (let r = w.r0; r <= w.r1; r++) if (GRID[r][w.c] === " ") GRID[r][w.c] = "=";
+      }
       const LEVEL_W = W * TS, LEVEL_H = GRID.length * TS;
 
       function spawnEnemy(x, y) {
-        const e = add([sprite("drone"), pos(x, y), anchor("center"), area({ scale: 0.85 }), z(4), "enemy",
+        const e = add([sprite("drone", { anim: "spin" }), pos(x, y), anchor("center"), area({ scale: 0.85 }), z(4), "enemy",
           { dir: choose([-1, 1]), homeX: x, range: 95, update() { this.move(this.dir * 78, 0); this.flipX = this.dir < 0; if (this.pos.x > this.homeX + this.range) this.dir = -1; if (this.pos.x < this.homeX - this.range) this.dir = 1; } }]);
         e.add([sprite("shadow"), pos(0, 16), anchor("center"), z(-1), opacity(0.4), scale(0.6)]);
         return e;
@@ -212,7 +306,7 @@
         const cards = keys.map((key, i) => {
           const s = SIDES[key], cx = width() / 2 + (i === 0 ? -172 : 172);
           const card = add([rect(300, 262, { radius: 12 }), pos(cx, 300), anchor("center"), color(26, 26, 28), outline(4, rgb(58, 58, 62)), scale(1), "card"]);
-          card.add([sprite(s.sprite), pos(0, -66), anchor("center"), scale(1.5)]);
+          card.add([sprite(s.sprite, { anim: "idle" }), pos(0, -66), anchor("center"), scale(1.5)]);
           card.add([text(s.name.toUpperCase(), { size: 17, width: 270, align: "center" }), pos(0, 6), anchor("center"), color(...s.color)]);
           s.blurb.forEach((line, j) => card.add([text("• " + line, { size: 14, width: 260 }), pos(-128, 34 + j * 24), anchor("left"), color(198, 190, 176)]));
           return card;
@@ -282,8 +376,17 @@
         DOOR_PAIRS.forEach(([a, b]) => { const da = makeDoor(a[0], a[1]), db = makeDoor(b[0], b[1]); da.partner = db.pos.clone(); db.partner = da.pos.clone(); });
 
         // --- player ---
-        const player = add([sprite(CFG.sprite), pos(spawn), anchor("center"), area({ scale: vec2(0.6, 0.82) }), body({ jumpForce: CFG.jumpForce }), opacity(1), scale(1), z(6), "player"]);
+        const player = add([sprite(CFG.sprite, { anim: "idle" }), pos(spawn), anchor("center"), area({ scale: vec2(0.6, 0.82) }), body({ jumpForce: CFG.jumpForce }), opacity(1), scale(1), z(6), "player"]);
         player.add([sprite("shadow"), pos(0, 26), anchor("center"), z(-1), opacity(0.6)]);
+        // anim state machine: lunge/jump > run > idle
+        let curAnim = "idle", lungeUntil = 0;
+        const setAnim = (n) => { if (curAnim !== n) { curAnim = n; player.play(n); } };
+        // stalker menace: pulsing eye glow + ichor drips
+        let glow = null;
+        if (CFG.wallClimb) {
+          glow = player.add([sprite("redglow"), pos(17, -12), anchor("center"), scale(0.5), opacity(0.4), z(1)]);
+          glow.onUpdate(() => { glow.pos.x = 17 * facing; glow.opacity = 0.3 + Math.sin(time() * 5) * 0.15; });
+        }
         const squash = (sx, sy) => { player.scale = vec2(sx, sy); tween(player.scale, vec2(1, 1), 0.18, (v) => (player.scale = v), easings.easeOutQuad); };
         player.onGround(() => { jumpsLeft = maxJumps; if (airTime > 0.16) { squash(1.28, 0.74); dust(player.pos.add(0, 24)); shake(2); } airTime = 0; });
 
@@ -322,7 +425,7 @@
           b.onCollide("enemy", (e) => { destroy(b); killEnemy(e); }); b.onCollide("platform", () => destroy(b));
         }
         function claw() {
-          SFX.claw(); player.move(facing * 200, 0); squash(1.24, 0.86);
+          SFX.claw(); player.move(facing * 200, 0); squash(1.24, 0.86); lungeUntil = time() + 0.28;
           const hb = add([rect(54, 42, { radius: 6 }), pos(player.pos.x + facing * 36, player.pos.y - 2), anchor("center"), color(255, 205, 120), opacity(0.35), area(), lifespan(0.14, { fade: 0.14 }), z(5), "claw"]);
           burst(hb.pos, rgb(255, 210, 140), 6, 150, 5); hb.onCollide("enemy", (e) => killEnemy(e));
         }
@@ -396,6 +499,15 @@
             }
           }
 
+          // animation state
+          if (time() < lungeUntil) setAnim("jump");
+          else if (!player.isGrounded() && !onLadderNow) setAnim("jump");
+          else if (Math.abs(dx) > 0.05 || (onLadderNow && (up || down))) setAnim("run");
+          else setAnim("idle");
+          // stalker ichor drips while moving
+          if (CFG.wallClimb && Math.abs(dx) > 0.05 && rand() < 0.12)
+            add([circle(rand(1.5, 2.5)), pos(player.pos.add(rand(-8, 8), rand(0, 14))), anchor("center"), color(90, 20, 30), opacity(0.7), lifespan(0.5, { fade: 0.4 }), z(5), { update() { this.move(0, 90); } }]);
+
           const target = camTarget();
           if (!camReady) { setCamPos(target); camReady = true; } else setCamPos(getCamPos().lerp(target, Math.min(1, dt() * 8)));
           if (player.pos.y > LEVEL_H + 200) hurt(true);
@@ -411,7 +523,7 @@
         const s = SIDES[side];
         add([sprite("sky"), pos(0, 0), fixed(), z(-100)]); menuParallax(); addFog(); addDust();
         add([rect(width(), height()), pos(0, 0), fixed(), color(...(win ? [16, 26, 20] : [26, 14, 14])), opacity(0.45), z(-10)]);
-        add([sprite(s.sprite), pos(width() / 2, 130), anchor("center"), scale(2.2)]);
+        add([sprite(s.sprite, { anim: "idle" }), pos(width() / 2, 130), anchor("center"), scale(2.2)]);
         add([text(win ? "YOU ESCAPED" : "HUNTED DOWN", { size: 54 }), pos(width() / 2, 250), anchor("center"), color(win ? rgb(150, 220, 160) : rgb(220, 110, 100)), outline(4, rgb(20, 18, 16))]);
         add([text(`${s.name}   •   Energy collected: ${score}`, { size: 22 }), pos(width() / 2, 312), anchor("center"), color(210, 200, 186)]);
         add([text("ENTER / A — play again      M — menu", { size: 17 }), pos(width() / 2, 372), anchor("center"), color(160, 150, 134)]);
