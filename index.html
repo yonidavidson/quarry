@@ -196,6 +196,34 @@
         <g>${droneFrame(false)}</g><g transform="translate(36 0)">${droneFrame(true)}</g></svg>`),
         { sliceX: 2, anims: { spin: { from: 0, to: 1, speed: 9, loop: true } } });
 
+      // character relight baker (#45): per-pixel top-light, warm rim, shadow edges, grain
+      function relightStrip(srcURL) {
+        return new Promise((res) => {
+          const img = new Image();
+          img.onload = () => {
+            const W2 = img.width, H2 = img.height;
+            const cv = document.createElement("canvas"); cv.width = W2; cv.height = H2;
+            const ctx = cv.getContext("2d"); ctx.drawImage(img, 0, 0);
+            const im = ctx.getImageData(0, 0, W2, H2), d = im.data;
+            const alpha = new Uint8Array(W2 * H2);
+            for (let i = 0; i < W2 * H2; i++) alpha[i] = d[i * 4 + 3];
+            const A = (x, y) => (x < 0 || y < 0 || x >= W2 || y >= H2 ? 0 : alpha[y * W2 + x]);
+            for (let y = 0; y < H2; y++) for (let x = 0; x < W2; x++) {
+              const idx = y * W2 + x; if (alpha[idx] < 40) continue;
+              const i4 = idx * 4;
+              const l = 1.07 - (y / H2) * 0.24, n = (tRand() - 0.5) * 12;
+              let r2 = d[i4] * l + n, g2 = d[i4 + 1] * l + n, b2 = d[i4 + 2] * l * 0.97 + n * 0.8;
+              if (A(x - 1, y - 1) < 40 || A(x - 2, y - 2) < 40) { r2 += 62; g2 += 50; b2 += 32; }
+              else if (A(x + 1, y + 1) < 40) { r2 *= 0.6; g2 *= 0.6; b2 *= 0.64; }
+              d[i4] = r2 > 255 ? 255 : r2; d[i4 + 1] = g2 > 255 ? 255 : g2; d[i4 + 2] = b2 > 255 ? 255 : b2;
+            }
+            ctx.putImageData(im, 0, 0);
+            res(cv.toDataURL("image/png"));
+          };
+          img.onerror = () => res(srcURL); // fall back to the raw strip
+          img.src = srcURL;
+        });
+      }
       // ===== JACK v4 (#28): Commando archetype — 100x140/frame, 12 frames =====
       const humanFrame = (p) => {
         const dy = p.dy || 0, lean = p.lean || 0, br = p.br || 0, jig = p.jig || 0;
@@ -279,18 +307,25 @@
       </defs>`;
       const HFRAMES = [
         humanFrame({ br: 0, jig: 0 }), humanFrame({ dy: 1.8, br: 1.6, jig: 1 }),                    // idle breath
-        humanFrame({ hl: 34, kl: 12, hr: -28, kr: 52, lean: 8, aim: -2, jig: 2 }),                  // run cycle (6)
-        humanFrame({ hl: 22, kl: 26, hr: -14, kr: 30, lean: 8, dy: 1.4, jig: 1 }),
-        humanFrame({ hl: 6, kl: 38, hr: 2, kr: 8, lean: 8, dy: 2.6, jig: 0 }),
-        humanFrame({ hl: -28, kl: 48, hr: 34, kr: 10, lean: 8, aim: -2, jig: -2 }),
-        humanFrame({ hl: -14, kl: 28, hr: 22, kr: 28, lean: 8, dy: 1.4, jig: -1 }),
-        humanFrame({ hl: 2, kl: 8, hr: 6, kr: 40, lean: 8, dy: 2.6, jig: 0 }),
+        ...Array.from({ length: 12 }, (_, k) => { // gait model (#46): sine hips, phase-lagged knees, 2x-freq bob
+          const ph = (k / 12) * Math.PI * 2;
+          return humanFrame({
+            hl: Math.sin(ph) * 32,
+            kl: Math.max(0, -Math.cos(ph)) * 44 + 6,
+            hr: Math.sin(ph + Math.PI) * 32,
+            kr: Math.max(0, -Math.cos(ph + Math.PI)) * 44 + 6,
+            dy: (1 - Math.abs(Math.sin(ph))) * 3,
+            lean: 8 + Math.sin(ph * 2) * 1.2,
+            aim: Math.sin(ph * 2) * 1.6 - 1,
+            jig: Math.sin(ph) * 2,
+          });
+        }),
         humanFrame({ hl: -36, kl: 32, hr: 42, kr: 60, lean: -10, dy: -3, aim: -9, tuck: true }),    // jump split
         humanFrame({ climb: 1 }), humanFrame({ climb: 2 }),                                          // ladder, back view
         humanFrame({ hl: 20, kl: 44, hr: 16, kr: 48, lean: 5, dy: 5 }),                              // land recovery
       ];
-      loadSprite("human", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="${100 * 12}" height="140">${HDEFS}${HFRAMES.map((f, i) => `<g transform="translate(${i * 100} 0)">${f}</g>`).join("")}</svg>`),
-        { sliceX: 12, anims: { idle: { from: 0, to: 1, speed: 2.5, loop: true }, run: { from: 2, to: 7, speed: 14, loop: true }, jump: 8, climb: { from: 9, to: 10, speed: 6, loop: true }, land: 11 } });
+      load(relightStrip(svg(`<svg xmlns="http://www.w3.org/2000/svg" width="${100 * 18}" height="140">${HDEFS}${HFRAMES.map((f, i) => `<g transform="translate(${i * 100} 0)">${f}</g>`).join("")}</svg>`)).then((u) => loadSprite("human", u,
+        { sliceX: 18, anims: { idle: { from: 0, to: 1, speed: 2.5, loop: true }, run: { from: 2, to: 13, speed: 26, loop: true }, jump: 14, climb: { from: 15, to: 16, speed: 6, loop: true }, land: 17 } })));
 
       // ===== BEAST v4 (#28): Predator archetype — 130x210/frame, 14 frames =====
       const beastFrame = (p) => {
@@ -328,7 +363,7 @@
           let s = "";
           for (let i = 0; i < 4; i++) {
             const x0 = side < 0 ? 52 - i * 5 : 80 + i * 5, bend = side * (10 + i * 4) + ds * 2, ty = 52 + i * 4 + dy;
-            s += `<path d="M${x0} ${16 + dy} Q${x0 + bend * 0.6} ${34 + dy} ${x0 + bend} ${ty}" stroke="#2c2418" stroke-width="5" stroke-linecap="round" fill="none"/>
+            s += `<path d="M${x0} ${16 + dy} Q${x0 + bend * 0.6} ${34 + dy} ${x0 + bend} ${ty}" stroke="#2c2418" stroke-width="7" stroke-linecap="round" fill="none"/>
               <rect x="${x0 + bend * 0.55 - 2}" y="${33 + dy}" width="4.6" height="3.4" fill="#8a8272"/>
               <rect x="${x0 + bend - 2.4}" y="${ty - 6}" width="4.6" height="3.4" fill="#8a8272"/>`;
           }
@@ -362,12 +397,12 @@
           <g stroke="#5a4426" stroke-width="1.8" fill="none" opacity="0.8"><path d="M38 ${13 + dy} q-2 4 -1 8"/><path d="M26 ${13 + dy} q-3 4 -2 9"/><path d="M16 ${17 + dy} q-3 4 -2 8"/></g>
           <path d="M82 ${20 + dy} q16 -12 26 -6 q4 3 2 7 q-10 -4 -18 0 q-6 3 -10 5z" fill="#8a7248" stroke="#3a2c14" stroke-width="1"/>
           <ellipse cx="58" cy="${33 + dy}" rx="4" ry="2.8" fill="#1c1408"/><ellipse cx="76" cy="${33 + dy}" rx="4" ry="2.8" fill="#1c1408"/>
-          <circle cx="58.5" cy="${33 + dy}" r="1.9" fill="url(#pEye)"/><circle cx="75.5" cy="${33 + dy}" r="1.9" fill="url(#pEye)"/>
+          <circle cx="58.5" cy="${33 + dy}" r="5.5" fill="#ff8c2e" opacity="0.28"/><circle cx="58.5" cy="${33 + dy}" r="1.9" fill="url(#pEye)"/><circle cx="75.5" cy="${33 + dy}" r="5.5" fill="#ff8c2e" opacity="0.28"/><circle cx="75.5" cy="${33 + dy}" r="1.9" fill="url(#pEye)"/>
           <ellipse cx="67" cy="${44 + dy}" rx="9" ry="${6 + mand * 0.5}" fill="#3a1012"/>
           <g fill="#e8e2d0"><path d="M62 ${40 + dy} l1.6 4 1.9 -4z"/><path d="M67 ${41 + dy} l1.6 4.6 1.9 -4.6z"/><path d="M72 ${40 + dy} l1.4 3.4 1.6 -3.4z"/></g>
-          <g fill="url(#pMand)" stroke="#4a3a20" stroke-width="1">
-            <path d="M56 ${38 + dy} Q${48 - mand} ${42 + dy} ${46 - mand * 1.6} ${50 + dy} q${4} ${1.2} ${6} ${-1.2} q${4} -5 ${8} -8z"/>
-            <path d="M78 ${38 + dy} Q${86 + mand} ${42 + dy} ${88 + mand * 1.6} ${50 + dy} q-4 1.2 -6 -1.2 q-4 -5 -8 -8z"/>
+          <g fill="url(#pMand)" stroke="#3a2c14" stroke-width="1.4">
+            <path d="M56 ${38 + dy} Q${44 - mand * 1.4} ${42 + dy} ${40 - mand * 2} ${52 + dy} q${4} ${1.2} ${6} ${-1.2} q${4} -5 ${8} -8z"/>
+            <path d="M78 ${38 + dy} Q${90 + mand * 1.4} ${42 + dy} ${94 + mand * 2} ${52 + dy} q-4 1.2 -6 -1.2 q-4 -5 -8 -8z"/>
             <path d="M60 ${47 + dy} Q${54 - mand} ${52 + dy} ${53 - mand * 1.4} ${58 + dy} q3.4 1.2 5 -0.6 q2.4 -4.6 4.6 -8z"/>
             <path d="M74 ${47 + dy} Q${80 + mand} ${52 + dy} ${81 + mand * 1.4} ${58 + dy} q-3.4 1.2 -5 -0.6 q-2.4 -4.6 -4.6 -8z"/>
           </g>
@@ -387,22 +422,28 @@
       const foldF = (inner, k, ty) => `<g transform="translate(0 ${ty}) scale(1 ${k})">${inner}</g>`; // compress: the beast FOLDS (#35)
       const BFRAMES = [
         rotFrame(beastFrame({}), 4), rotFrame(beastFrame({ dy: 2.6, mand: 4, ds: 2 }), 5),                                       // hunched idle
-        rotFrame(beastFrame({ l1: 28, l1b: -14, l2: -22, l2b: 18, la: -26, lab: 14, ra: 28, rab: -16, ds: 4 }), 9),               // loping run (6)
-        rotFrame(beastFrame({ l1: 16, l1b: 4, l2: -10, l2b: 8, la: -12, ra: 14, dy: 2.2, ds: 2 }), 8),
-        rotFrame(beastFrame({ l1: 4, l1b: 8, l2: 2, l2b: -2, la: 6, ra: 2, dy: 4.2, ds: 0 }), 7),
-        rotFrame(beastFrame({ l1: -22, l1b: 20, l2: 28, l2b: -14, la: 28, lab: -16, ra: -26, rab: 14, ds: -4 }), 9),
-        rotFrame(beastFrame({ l1: -10, l1b: 8, l2: 16, l2b: 4, la: 14, ra: -12, dy: 2.2, ds: -2 }), 8),
-        rotFrame(beastFrame({ l1: 2, l1b: -2, l2: 4, l2b: 8, la: 2, ra: 6, dy: 4.2, ds: 0 }), 7),
+        ...Array.from({ length: 12 }, (_, k) => { // loping gait (#46)
+          const ph = (k / 12) * Math.PI * 2;
+          return rotFrame(beastFrame({
+            l1: Math.sin(ph) * 26, l1b: Math.max(0, -Math.cos(ph)) * 22 - 6,
+            l2: Math.sin(ph + Math.PI) * 26, l2b: Math.max(0, -Math.cos(ph + Math.PI)) * 22 - 6,
+            la: Math.sin(ph + Math.PI) * 24, lab: Math.sin(ph + Math.PI * 0.6) * 10,
+            ra: Math.sin(ph) * 24, rab: Math.sin(ph + Math.PI * 1.6) * 10,
+            dy: (1 - Math.abs(Math.sin(ph))) * 4,
+            ds: Math.sin(ph) * 5,
+            mand: 2 + Math.abs(Math.sin(ph)) * 1.5,
+          }), 8 + Math.sin(ph * 2) * 1.5);
+        }),
         beastFrame({ dy: -4, mand: 8, l1: 34, l1b: -20, l2: -26, l2b: 26, la: -50, lab: -20, ra: -62, rab: -28, ds: -6 }),        // lunge
-        rotFrame(foldF(beastFrame({ la: -66, lab: -18, ra: -74, rab: -12, l1: -28, l1b: 20, l2: -36, l2b: 26, mand: 2 }), 0.7, 28), -74),   // wall cling (part-folded)
+        rotFrame(foldF(beastFrame({ la: -66, lab: -18, ra: -74, rab: -12, l1: -28, l1b: 20, l2: -36, l2b: 26, mand: 2 }), 0.7, 28), -74),   // wall cling
         rotFrame(foldF(beastFrame({ la: -48, lab: -30, ra: -88, rab: -6, l1: -40, l1b: 30, l2: -22, l2b: 16, mand: 2, dy: 2 }), 0.7, 28), -74),
         rotFrame(beastFrame({ l1: 42, l1b: 55, l2: 36, l2b: 50, la: -38, lab: -30, ra: -44, rab: -34, mand: 5 }), 14),            // body drop
-        rotFrame(foldF(beastFrame({ la: -78, lab: -34, ra: -84, rab: -28, l1: -52, l1b: 46, l2: -58, l2b: 50, mand: 2 }), 0.64, 40), 180),   // ceiling: FOLDED tight
+        rotFrame(foldF(beastFrame({ la: -78, lab: -34, ra: -84, rab: -28, l1: -52, l1b: 46, l2: -58, l2b: 50, mand: 2 }), 0.64, 40), 180),   // ceiling folded
         rotFrame(foldF(beastFrame({ la: -60, lab: -44, ra: -96, rab: -18, l1: -60, l1b: 54, l2: -46, l2b: 40, mand: 2, dy: 2 }), 0.64, 40), 180),
         beastFrame({ l1: 18, l1b: 28, l2: 14, l2b: 32, la: 6, ra: 6, dy: 5, mand: 3 }),                                           // land recovery
       ];
-      loadSprite("stalker", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="${130 * 15}" height="228">${BDEFS}${BFRAMES.map((f, i) => `<g transform="translate(${i * 130} 14)">${f}</g>`).join("")}</svg>`),
-        { sliceX: 15, anims: { idle: { from: 0, to: 1, speed: 2, loop: true }, run: { from: 2, to: 7, speed: 13, loop: true }, jump: 8, cling: { from: 9, to: 10, speed: 6, loop: true }, drop: 11, ceil: { from: 12, to: 13, speed: 6, loop: true }, land: 14, climb: { from: 0, to: 1, speed: 3, loop: true } } });
+      load(relightStrip(svg(`<svg xmlns="http://www.w3.org/2000/svg" width="${130 * 21}" height="228">${BDEFS}${BFRAMES.map((f, i) => `<g transform="translate(${i * 130} 14)">${f}</g>`).join("")}</svg>`)).then((u) => loadSprite("stalker", u,
+        { sliceX: 21, anims: { idle: { from: 0, to: 1, speed: 2, loop: true }, run: { from: 2, to: 13, speed: 24, loop: true }, jump: 14, cling: { from: 15, to: 16, speed: 6, loop: true }, drop: 17, ceil: { from: 18, to: 19, speed: 6, loop: true }, land: 20, climb: { from: 0, to: 1, speed: 3, loop: true } } })));
 
       loadSprite("redglow", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80"><defs><radialGradient id="rg" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#ff5040" stop-opacity="0.55"/><stop offset="100%" stop-color="#ff5040" stop-opacity="0"/></radialGradient></defs><circle cx="40" cy="40" r="40" fill="url(#rg)"/></svg>`));
 
@@ -1830,7 +1871,7 @@
           const wasCeil = ceilStick; ceilStick = false;
           const headSolid = () => { const r2 = Math.floor((player.pos.y - 54) / TS), c2 = Math.floor(player.pos.x / TS); return GRID[r2] && GRID[r2][c2] === "="; };
           if (CFG.wallClimb && !player.isGrounded() && !onLadderNow && time() > ceilCd && !down &&
-              (wasCeil ? (up || Math.abs(dx) > 0.05) && headSolid() : up && Math.abs(player.vel.y) < 80 && headSolid())) {
+              (wasCeil ? (up || Math.abs(dx) > 0.05) && headSolid() : up && player.vel.y < 120 && headSolid())) {
             ceilStick = true; player.gravityScale = 0;
             player.vel = vec2(player.vel.x, Math.min(player.vel.y, -30)); // press up against the ceiling
             if (!wasCeil) SFX.claw();
