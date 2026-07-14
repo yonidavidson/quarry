@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>QUARRY — a hunter &amp; hunted platformer</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #0b0d14; overflow: hidden; }
+      body { display: flex; align-items: center; justify-content: center; }
+      canvas { image-rendering: pixelated; max-width: 100%; max-height: 100%; }
+    </style>
+  </head>
+  <body>
+    <!-- KAPLAY: modern 2D game framework (successor to Kaboom.js) -->
+    <script src="https://unpkg.com/kaplay@3001/dist/kaplay.js"></script>
+    <script>
+      // ---------------------------------------------------------------------
+      // QUARRY — asymmetric hunter/hunted platformer, inspired by "Hunter Hunted".
+      // Pick a side (fragile ranged Human, or tough melee Stalker) and survive a
+      // hostile world of spikes, pits and roaming drones to reach the exit.
+      // ---------------------------------------------------------------------
+
+      const k = kaplay({
+        width: 960,
+        height: 540,
+        letterbox: true,
+        background: [14, 16, 24],
+        global: true,
+        crisp: true,
+      });
+
+      const TS = 48; // tile size in px
+      setGravity(2100);
+
+      // Two playable "sides" with distinct skills (the core Hunter/Hunted idea).
+      const SIDES = {
+        human: {
+          name: "GAIR — Human",
+          color: [90, 165, 255],
+          accent: [200, 225, 255],
+          speed: 260,
+          jumpForce: 720,
+          doubleJump: false,
+          maxHp: 3,
+          mode: "ranged", // blaster projectile
+          blurb: ["Ranged blaster (J / X)", "Standard jump", "Fragile — 3 HP", "Keep your distance."],
+        },
+        stalker: {
+          name: "The STALKER — Alien",
+          color: [225, 85, 95],
+          accent: [255, 190, 130],
+          speed: 320,
+          jumpForce: 780,
+          doubleJump: true,
+          maxHp: 4,
+          mode: "melee", // claw lunge
+          blurb: ["Claw lunge (J / X)", "Double jump • faster", "Tough — 4 HP", "Hunt them down, up close."],
+        },
+      };
+
+      // Hand-crafted level. Legend:
+      //   = ground/platform   ^ spikes   $ energy   e enemy   > exit   @ spawn
+      const MAP = [
+        "                                                                  ",
+        "                                                                  ",
+        "                              $ $ $                               ",
+        "                            =========                             ",
+        "                                                          $  $    ",
+        "              $                     e                   ========   ",
+        "           =======      ^^^^^                    e                ",
+        "                      ==========      $ $ $                  >     ",
+        "     $   e                          =========          =========  ",
+        "  =======  ====   ^^^     e   $ $                                  ",
+        "  @                    =================      ^^^^     e          ",
+        "=======        ============          =====  ========  =========   ",
+        "=======================        ===============================    ",
+      ];
+
+      const LEVEL_W = MAP[0].length * TS;
+      const LEVEL_H = MAP.length * TS;
+
+      // ---- Reusable enemy factory: a drone that patrols left/right ----------
+      function spawnEnemy(x, y) {
+        return add([
+          rect(30, 30, { radius: 4 }),
+          pos(x, y),
+          anchor("center"),
+          color(200, 75, 85),
+          outline(3, rgb(70, 22, 28)),
+          area(),
+          z(4),
+          "enemy",
+          {
+            dir: choose([-1, 1]),
+            homeX: x,
+            range: 95,
+            update() {
+              this.move(this.dir * 78, 0);
+              if (this.pos.x > this.homeX + this.range) this.dir = -1;
+              if (this.pos.x < this.homeX - this.range) this.dir = 1;
+            },
+          },
+        ]);
+      }
+
+      // =======================================================================
+      // MENU / CHARACTER SELECT
+      // =======================================================================
+      scene("select", () => {
+        add([text("QUARRY", { size: 64, font: "sans-serif" }), pos(width() / 2, 70), anchor("center"), color(240, 244, 252)]);
+        add([
+          text("The world wants you dead either way. Choose your side.", { size: 20 }),
+          pos(width() / 2, 118),
+          anchor("center"),
+          color(150, 160, 180),
+        ]);
+
+        const keys = ["human", "stalker"];
+        let sel = 0;
+
+        const cards = keys.map((key, i) => {
+          const s = SIDES[key];
+          const cx = width() / 2 + (i === 0 ? -170 : 170);
+          const card = add([
+            rect(300, 250, { radius: 14 }),
+            pos(cx, 300),
+            anchor("center"),
+            color(24, 28, 40),
+            outline(4, rgb(55, 62, 82)),
+            "card",
+          ]);
+          card.add([text(s.name.toUpperCase(), { size: 18, width: 260, align: "center" }), pos(0, -95), anchor("center"), color(...s.color)]);
+          card.add([rect(70, 70, { radius: 8 }), pos(0, -30), anchor("center"), color(...s.color), outline(3, rgb(0, 0, 0))]);
+          s.blurb.forEach((line, j) => {
+            card.add([text("• " + line, { size: 15, width: 260 }), pos(-125, 30 + j * 26), anchor("left"), color(198, 206, 222)]);
+          });
+          return card;
+        });
+
+        add([text("← →  choose      ENTER / A  start      (controller supported)", { size: 15 }), pos(width() / 2, 500), anchor("center"), color(130, 140, 160)]);
+
+        function refresh() {
+          cards.forEach((c, i) => {
+            c.color = i === sel ? rgb(34, 44, 66) : rgb(24, 28, 40);
+            c.outline.color = i === sel ? rgb(120, 200, 255) : rgb(55, 62, 82);
+            c.outline.width = i === sel ? 5 : 4;
+          });
+        }
+        refresh();
+
+        const moveSel = (d) => { sel = (sel + d + keys.length) % keys.length; refresh(); };
+        onKeyPress("left", () => moveSel(-1));
+        onKeyPress("right", () => moveSel(1));
+        onKeyPress("a", () => moveSel(-1));
+        onKeyPress("d", () => moveSel(1));
+        onGamepadButtonPress("dpad-left", () => moveSel(-1));
+        onGamepadButtonPress("dpad-right", () => moveSel(1));
+
+        const start = () => go("game", keys[sel]);
+        onKeyPress("enter", start);
+        onKeyPress("space", start);
+        onGamepadButtonPress("south", start);
+        onGamepadButtonPress("start", start);
+      });
+
+      // =======================================================================
+      // GAME
+      // =======================================================================
+      scene("game", (sideKey) => {
+        const CFG = SIDES[sideKey];
+        const maxJumps = CFG.doubleJump ? 2 : 1;
+
+        let hp = CFG.maxHp;
+        let score = 0;
+        let invuln = false;
+        let facing = 1;
+        let jumpsLeft = maxJumps;
+        let lastAtk = 0;
+        let spawn = vec2(0, 0);
+
+        // --- Build the world from the map ---
+        MAP.forEach((row, r) => {
+          for (let c = 0; c < row.length; c++) {
+            const ch = row[c];
+            const x = c * TS + TS / 2;
+            const y = r * TS + TS / 2;
+            if (ch === "=") {
+              add([rect(TS, TS), pos(x, y), anchor("center"), color(52, 60, 82), outline(2, rgb(28, 33, 48)), area(), body({ isStatic: true }), "platform"]);
+            } else if (ch === "^") {
+              add([rect(TS, TS / 2), pos(x, y + TS / 4), anchor("center"), color(205, 70, 80), outline(2, rgb(70, 20, 26)), area(), "danger"]);
+            } else if (ch === "$") {
+              add([circle(10), pos(x, y), anchor("center"), color(250, 210, 80), outline(2, rgb(120, 90, 20)), area(), z(3), "energy"]);
+            } else if (ch === "e") {
+              spawnEnemy(x, y);
+            } else if (ch === ">") {
+              add([rect(TS * 0.7, TS), pos(x, y), anchor("center"), color(90, 235, 150), outline(3, rgb(20, 90, 55)), area(), z(3), "exit"]);
+            } else if (ch === "@") {
+              spawn = vec2(x, y);
+            }
+          }
+        });
+
+        // --- Player ---
+        const player = add([
+          rect(30, 42, { radius: 5 }),
+          pos(spawn),
+          anchor("center"),
+          color(...CFG.color),
+          outline(3, rgb(0, 0, 0)),
+          area(),
+          body({ jumpForce: CFG.jumpForce }),
+          opacity(1),
+          z(6),
+          "player",
+        ]);
+        // little eye so facing reads
+        const eye = add([rect(6, 6), pos(0, 0), anchor("center"), color(...CFG.accent), z(7)]);
+
+        player.onGround(() => { jumpsLeft = maxJumps; });
+
+        // --- HUD ---
+        const hud = add([text("", { size: 20 }), pos(16, 14), fixed(), z(100), color(235, 240, 250)]);
+        add([text("Move: ←→ / A D / stick   Jump: Space / W / A-btn   Attack: J / X / B-btn", { size: 14 }), pos(16, 516), fixed(), z(100), color(120, 130, 150)]);
+        function updateHUD() {
+          hud.text = `${CFG.name}    HP ${Math.max(hp, 0)}/${CFG.maxHp}    Energy ${score}`;
+        }
+        updateHUD();
+
+        // --- Damage handling ---
+        function hurt(fromFall) {
+          if (invuln && !fromFall) return;
+          hp -= 1;
+          shake(7);
+          updateHUD();
+          if (fromFall) {
+            player.pos = spawn.clone();
+            player.vel = vec2(0, 0);
+          }
+          if (hp <= 0) {
+            go("over", { win: false, side: sideKey, score });
+            return;
+          }
+          invuln = true;
+          const blink = loop(0.09, () => { player.opacity = player.opacity === 1 ? 0.35 : 1; });
+          wait(1.1, () => { blink.cancel(); player.opacity = 1; invuln = false; });
+        }
+
+        player.onCollide("energy", (c) => { destroy(c); score += 1; updateHUD(); });
+        player.onCollide("danger", () => hurt());
+        player.onCollide("enemy", () => hurt());
+        player.onCollide("exit", () => go("over", { win: true, side: sideKey, score }));
+
+        // --- Attacks ---
+        function shoot() {
+          const b = add([
+            rect(18, 6, { radius: 3 }),
+            pos(player.pos.x + facing * 24, player.pos.y - 4),
+            anchor("center"),
+            color(150, 225, 255),
+            outline(2, rgb(20, 70, 100)),
+            area(),
+            move(vec2(facing, 0), 760),
+            offscreen({ destroy: true }),
+            z(5),
+            "bullet",
+          ]);
+          b.onCollide("enemy", (e) => { destroy(e); destroy(b); score += 1; updateHUD(); });
+          b.onCollide("platform", () => destroy(b));
+        }
+
+        function claw() {
+          player.move(facing * 200, 0); // lunge
+          const hb = add([
+            rect(54, 42, { radius: 6 }),
+            pos(player.pos.x + facing * 36, player.pos.y - 2),
+            anchor("center"),
+            color(255, 205, 120),
+            opacity(0.35),
+            area(),
+            lifespan(0.14),
+            z(5),
+            "claw",
+          ]);
+          hb.onCollide("enemy", (e) => { destroy(e); score += 1; updateHUD(); });
+        }
+
+        function attack() {
+          if (time() - lastAtk < 0.32) return;
+          lastAtk = time();
+          if (CFG.mode === "ranged") shoot(); else claw();
+        }
+
+        // --- Jump ---
+        function jump() {
+          if (jumpsLeft > 0) { player.jump(CFG.jumpForce); jumpsLeft -= 1; }
+        }
+        ["space", "up", "w"].forEach((key) => onKeyPress(key, jump));
+        onGamepadButtonPress("south", jump);
+        ["j", "x"].forEach((key) => onKeyPress(key, attack));
+        onGamepadButtonPress("west", attack);
+        onGamepadButtonPress("east", attack);
+        onKeyPress("r", () => go("game", sideKey));
+
+        // --- Per-frame: movement, camera, fall death ---
+        function camTarget() {
+          const halfW = width() / 2, halfH = height() / 2;
+          const cx = clamp(player.pos.x, halfW, Math.max(LEVEL_W - halfW, halfW));
+          const cy = clamp(player.pos.y, halfH, Math.max(LEVEL_H - halfH, halfH)) - 30;
+          return vec2(cx, cy);
+        }
+
+        player.onUpdate(() => {
+          let dx = 0;
+          if (isKeyDown("left") || isKeyDown("a")) dx -= 1;
+          if (isKeyDown("right") || isKeyDown("d")) dx += 1;
+          if (isGamepadButtonDown("dpad-left")) dx -= 1;
+          if (isGamepadButtonDown("dpad-right")) dx += 1;
+          const stick = getGamepadStick("left");
+          if (stick && Math.abs(stick.x) > 0.3) dx += stick.x;
+          dx = clamp(dx, -1, 1);
+          if (Math.abs(dx) > 0.05) {
+            player.move(dx * CFG.speed, 0);
+            facing = dx > 0 ? 1 : -1;
+          }
+          eye.pos = player.pos.add(facing * 7, -6);
+          setCamPos(camTarget());
+          if (player.pos.y > LEVEL_H + 260) hurt(true);
+        });
+      });
+
+      // =======================================================================
+      // GAME OVER / WIN
+      // =======================================================================
+      scene("over", ({ win, side, score }) => {
+        const s = SIDES[side];
+        add([rect(width(), height()), pos(0, 0), color(...(win ? [16, 30, 22] : [30, 16, 18]))]);
+        add([text(win ? "YOU ESCAPED" : "HUNTED DOWN", { size: 56 }), pos(width() / 2, 200), anchor("center"), color(win ? rgb(120, 240, 160) : rgb(240, 120, 120))]);
+        add([text(`${s.name}   •   Energy collected: ${score}`, { size: 22 }), pos(width() / 2, 270), anchor("center"), color(210, 216, 230)]);
+        add([text("ENTER / A — play again      ESC-menu: press M", { size: 17 }), pos(width() / 2, 340), anchor("center"), color(150, 160, 180)]);
+
+        const again = () => go("game", side);
+        onKeyPress("enter", again);
+        onKeyPress("space", again);
+        onGamepadButtonPress("south", again);
+        onKeyPress("m", () => go("select"));
+        onGamepadButtonPress("start", () => go("select"));
+      });
+
+      go("select");
+    </script>
+  </body>
+</html>
