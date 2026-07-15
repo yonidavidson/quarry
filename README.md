@@ -44,7 +44,7 @@ The bottom bar shows live events from **every player everywhere** — who entere
 ## Built with
 
 - [KAPLAY](https://kaplayjs.com) (successor to Kaboom.js) from CDN
-- All art: inline SVG (hand-authored sprite strips with real run/idle/jump animation)
+- World art: inline SVG (hand-authored, baked to bitmap at load). Character art: pixel-art sprite strips generated with [PixelLab](https://pixellab.ai) — an 80s action-hero commando and a Predator-style beast — embedded as base64 PNG
 - All audio: Web Audio synthesis — layered noise + tones through a generated impulse-response reverb; ambient machinery hum
 - One self-contained `index.html`. That's the whole game.
 
