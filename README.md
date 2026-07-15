@@ -16,7 +16,7 @@ Whichever side you pick, **the other side hunts you** across the complex — an 
 
 ## The world wants you dead too
 
-Multi-floor industrial complex: spikes, patrol drones, sewage pools that slow your wading, ladders, climbable chain-nets, teleport doors, flickering lamps, steam vents, ceiling drips. Grab energy cells, find the glowing **EXIT**.
+Multi-floor industrial complex: spikes, patrol drones, sewage pools that slow your wading, ladders, climbable chain-nets, teleport doors, flickering lamps, steam vents, ceiling drips. The roofline opens onto a **dusk vista of mountains and a sunset lake** where crows wheel overhead (land hard and they scatter); steel-framed windows glimpse the outside from the upper floors, and each depth has its own light — cool daylight up top, green industry mid, rust-warm depths. Grab energy cells, find the glowing **EXIT** on the roof.
 
 **Random weapons** spawn on pads — you can hold only one; swapping drops your current where you stand. Human pool: Blaster / Scattergun / Rail Lance / Shotgun / Machine Gun. Beast pool: Claws / Bone Scythe / Barb Whip / Bone Bat. Every weapon has its own attack visuals and sound. The hunter arms itself too.
 
