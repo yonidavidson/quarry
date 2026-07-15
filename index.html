@@ -680,9 +680,9 @@
       for (const r of floorsAll) for (let c = 2; c < W - 2; c++) {
         if (GRID[r][c] !== "=" || GRID[r - 1][c] !== " ") continue;
         const v = sRand();
-        if (v < 0.035) GRID[r - 1][c] = "$";
-        else if (v < 0.045 && r !== TOP_R) GRID[r - 1][c] = "e";
-        else if (v < 0.049 && GRID[r][c + 1] === "=" && GRID[r - 1][c + 1] === " ") { GRID[r - 1][c] = "^"; GRID[r - 1][c + 1] = "^"; }
+        if (v < 0.045) GRID[r - 1][c] = "$";
+        else if (v < 0.056 && r !== TOP_R) GRID[r - 1][c] = "e";
+        else if (v < 0.061 && GRID[r][c + 1] === "=" && GRID[r - 1][c + 1] === " ") { GRID[r - 1][c] = "^"; GRID[r - 1][c + 1] = "^"; }
       }
       GRID[GROUND_R - 1][3] = "@";
       let exitC = W - 5;
@@ -709,10 +709,12 @@
         for (let d = 0; d < W; d++) { if (good(c + d)) return [c + d, r]; if (good(c - d)) return [c - d, r]; }
         return [c, r];
       };
+      // 4 pairs, and none opens onto the top row (#51): the last stretch to the EXIT is always a climb
       const DOOR_PAIRS = [
-        [[4, GROUND_R], [W - 8, TOP_R]],
-        [[Math.floor(W * 0.3), FLOORS[1]], [Math.floor(W * 0.75), FLOORS[3]]],
+        [[4, GROUND_R], [Math.floor(W * 0.55), FLOORS[0]]],
+        [[Math.floor(W * 0.3), FLOORS[1]], [Math.floor(W * 0.78), GROUND_R]],
         [[Math.floor(W * 0.6), GROUND_R], [Math.floor(W * 0.15), FLOORS[0]]],
+        [[Math.floor(W * 0.88), FLOORS[2]], [Math.floor(W * 0.08), FLOORS[1]]],
       ].map((p2) => [fixDoor(p2[0]), fixDoor(p2[1])]);
       // wall stubs (some 3-tall — beast-only ledges); destructible (#42)
       const STUB_CELLS = new Set();
@@ -733,15 +735,16 @@
       for (let i = 0; i < 3; i++) { const c0 = RI(10, W - 22); POOLS_GEN.push({ c0, c1: c0 + RI(6, 10), r: GROUND_R - 1 }); } // fewer wading traps (#49)
       POOLS_GEN.push({ c0: RI(20, W - 30), c1: RI(20, W - 30) + 7, r: FLOORS[2] - 1 });
       const TURRET_SPOTS = [];
-      for (const r of [FLOORS[0], FLOORS[1], FLOORS[2], GROUND_R]) {
+      for (const r of [FLOORS[0], FLOORS[0], FLOORS[1], FLOORS[1], FLOORS[2], FLOORS[2], GROUND_R, GROUND_R]) { // two per floor (#51)
         let c = RI(8, W - 12); while (c < W - 3 && !(GRID[r][c] === "=" && GRID[r - 1][c] === " ")) c++;
-        if (c < W - 3) TURRET_SPOTS.push([c, r]);
+        if (c < W - 3 && !TURRET_SPOTS.some(([tc, tr]) => tr === r && Math.abs(tc - c) < 14)) TURRET_SPOTS.push([c, r]);
       }
       const NEM_SPAWNS_GEN = [[W - 10, TOP_R - 1], [W - 6, GROUND_R - 2], [6, FLOORS[0] - 2], [Math.floor(W / 2), FLOORS[2] - 2]];
       // levers + gates (#39): pull a lever, a 3-tall gate slams open/shut across the corridor
       const LEVERS = [];
-      for (const r of [FLOORS[0], FLOORS[1], FLOORS[2], GROUND_R]) {
-        let g = RI(30, W - 30);
+      for (const r of [FLOORS[0], FLOORS[0], FLOORS[1], FLOORS[1], FLOORS[2], FLOORS[2], GROUND_R, GROUND_R]) { // two gates per floor (#51)
+        let g = RI(14, W - 40);
+        if (LEVERS.some((v) => v.r === r)) g = Math.max(g, LEVERS.find((v) => v.r === r).g + 24); // keep same-floor gates apart
         while (g < W - 6 && !(GRID[r][g] === "=" && GRID[r - 1][g] === " " && GRID[r - 2][g] === " " && GRID[r - 3][g] === " " && GRID[r - 4][g] === " ")) g++;
         let l = g - RI(7, 14);
         while (l > 3 && !(GRID[r][l] === "=" && GRID[r - 1][l] === " ")) l--;
@@ -1003,7 +1006,7 @@
         }));
         loop(0.25, () => steamVents.forEach((v) => { if (Math.abs(v.x - getCamPos().x) > 620) return; if (rand() < 0.7) add([circle(rand(4, 7)), pos(v.add(rand(-4, 4), 0)), anchor("center"), color(150, 150, 155), opacity(rand(0.12, 0.26)), z(3), lifespan(rand(0.8, 1.4), { fade: 1 }), { up: rand(20, 40), update() { this.pos.y -= this.up * dt(); this.radius += 6 * dt(); } }]); }));
         // steam vent LAUNCHERS (#20): periodic blast that hurls you upward — ride it
-        steamVents.slice(0, 6).forEach((v, i) => {
+        steamVents.slice(0, 8).forEach((v, i) => {
           add([sprite("lamp"), pos(v), anchor("center"), scale(0.4), opacity(0.22), color(170, 195, 210), z(1)]);
           loop(3.4, () => wait(i * 1.3, () => {
             for (let k2 = 0; k2 < 14; k2++) add([circle(rand(4, 9)), pos(v.add(rand(-10, 10), 0)), anchor("center"), color(190, 195, 200), opacity(rand(0.3, 0.5)), z(7), lifespan(rand(0.5, 0.9), { fade: 0.6 }), { up: rand(160, 300), update() { this.pos.y -= this.up * dt(); this.radius += 10 * dt(); } }]);
@@ -1125,9 +1128,9 @@
         function spawnCrateSynced(wkey, at) { const cr = spawnCrate(wkey, at); netSend({ t: "crate", w: wkey, x: cr.pos.x, y: cr.pos.y }); return cr; }
         if (!NET.connected || NET.role === "host") { // online: host owns crate spawns
           spawnCrateSynced(choose(WPOOL(sideKey)), vec2(spawn.x + 150, GROUND_R * TS - 4)); // guaranteed starter nearby (#33)
-          for (let i = 0; i < 4; i++) spawnCrateSynced(choose(WPOOL(sideKey)));
-          for (let i = 0; i < 3; i++) spawnCrateSynced(choose(WPOOL(NKEY2)));
-          loop(25, () => { if (get("wcrate").length < 8) spawnCrateSynced(choose(WPOOL(rand() < 0.6 ? sideKey : NKEY2))); });
+          for (let i = 0; i < 5; i++) spawnCrateSynced(choose(WPOOL(sideKey)));
+          for (let i = 0; i < 4; i++) spawnCrateSynced(choose(WPOOL(NKEY2)));
+          loop(20, () => { if (get("wcrate").length < 10) spawnCrateSynced(choose(WPOOL(rand() < 0.6 ? sideKey : NKEY2))); });
         }
 
         // --- player ---
