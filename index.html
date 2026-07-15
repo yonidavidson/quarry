@@ -418,7 +418,7 @@
       // =====================================================================
       // NET (issue #11): WebRTC 2P — manual code exchange, Google STUN
       // =====================================================================
-      const NET = { pc: null, dc: null, role: null, mySide: null, connected: false, onMsg: null, ping: 0, peerName: null, lastPacketAt: 0 };
+      const NET = { pc: null, dc: null, role: null, mySide: null, connected: false, onMsg: null, ping: 0, peerName: null, lastPacketAt: 0, series: { me: 0, them: 0 } };
       const CHAT = { lines: [], push(name, text) { this.lines.push({ name, text, at: Date.now() }); if (this.lines.length > 4) this.lines.shift(); } };
       const b64e = (s) => btoa(unescape(encodeURIComponent(s)));
       const b64d = (s) => decodeURIComponent(escape(atob(s.trim())));
@@ -449,6 +449,7 @@
       function wireDC(dc) {
         dc.onopen = () => {
           NET.connected = true;
+          NET.series = { me: 0, them: 0 }; // fresh link = fresh series (#48)
           setTimeout(() => detectPath(NET.pc), 1200); // direct vs relay (#44)
           if (NET.role === "host") { netSend({ t: "hello", side: NET.mySide, name: PLAYER_NAME }); netUIHide(); go("game", NET.mySide); }
         };
@@ -1709,18 +1710,39 @@
       // =====================================================================
       scene("over", ({ win, side, score, online, how }) => {
         const s = SIDES[side];
-        if (online) window.__netCancel(); // close the peer link cleanly
+        // rematch on the same peer link (#48): the connection stays open through
+        // game over — ENTER offers a rematch, both accept -> instant next round.
+        if (online && !NET.connected) { online = false; window.__netCancel(); } // link died en route
+        if (online) NET.series[win ? "me" : "them"]++;
         add([sprite("sky"), pos(0, 0), fixed(), z(-100)]); menuParallax(); addFog(); addDust();
         add([rect(width(), height()), pos(0, 0), fixed(), color(...(win ? [16, 26, 20] : [26, 14, 14])), opacity(0.45), z(-10)]);
         add([sprite(s.sprite, { anim: "idle" }), pos(width() / 2, 130), anchor("center"), scale(1.1)]);
         add([text(win ? (online ? "VICTORY" : "YOU ESCAPED") : "HUNTED DOWN", { size: 54 }), pos(width() / 2, 250), anchor("center"), color(win ? rgb(150, 220, 160) : rgb(220, 110, 100)), outline(4, rgb(20, 18, 16))]);
         if (how) add([text(how, { size: 20 }), pos(width() / 2, 296), anchor("center"), color(200, 188, 170)]);
         add([text(`${s.name}   •   Energy collected: ${score}`, { size: 22 }), pos(width() / 2, how ? 334 : 312), anchor("center"), color(210, 200, 186)]);
-        add([text(online ? "M — menu (reconnect for a rematch)" : "ENTER / A — play again      M — menu", { size: 17 }), pos(width() / 2, 384), anchor("center"), color(160, 150, 134)]);
+        if (online) add([text(`Series vs ${NET.peerName || "opponent"}:  you ${NET.series.me} — ${NET.series.them} them`, { size: 18 }), pos(width() / 2, 360), anchor("center"), color(200, 165, 95)]);
+        add([text(online ? "ENTER / A — rematch (same link)      M — menu (drops the link)" : "ENTER / A — play again      M — menu", { size: 17 }), pos(width() / 2, 392), anchor("center"), color(160, 150, 134)]);
+        const statusLn = add([text("", { size: 16 }), pos(width() / 2, 422), anchor("center"), color(240, 200, 120), { update() { this.opacity = 0.7 + Math.sin(time() * 4) * 0.3; } }]);
         addOverlay();
-        const again = () => (online ? go("select") : go("game", side));
+        let live = online, meReady = false, themReady = false;
+        const maybeStart = () => { if (meReady && themReady) { NET.onMsg = null; go("game", NET.mySide); } };
+        if (online) {
+          NET.onMsg = (m) => {
+            if (m.t === "rematch") { themReady = true; if (!meReady) statusLn.text = `${NET.peerName || "Opponent"} wants a rematch — ENTER to accept!`; maybeStart(); }
+            else if (m.t === "left") { live = false; NET.onMsg = null; window.__netCancel(); statusLn.text = `${NET.peerName || "Opponent"} left the hunt — M for menu`; }
+          };
+          loop(0.5, () => { if (live && !NET.connected) { live = false; statusLn.text = "LINK LOST — M for menu"; } });
+        }
+        const again = () => {
+          if (!online) return go("game", side);
+          if (!live || meReady) return;
+          meReady = true; netSend({ t: "rematch" });
+          if (!themReady) statusLn.text = `Rematch offered — waiting for ${NET.peerName || "opponent"}…`;
+          maybeStart();
+        };
         onKeyPress("enter", again); onKeyPress("space", again); onGamepadButtonPress("south", again);
-        onKeyPress("m", () => go("select")); onGamepadButtonPress("start", () => go("select"));
+        const toMenu = () => { if (live) netSend({ t: "left" }); if (online) { NET.onMsg = null; window.__netCancel(); } go("select"); };
+        onKeyPress("m", toMenu); onGamepadButtonPress("start", toMenu);
       });
 
       onLoad(() => go("splash"));

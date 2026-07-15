@@ -22,7 +22,7 @@ Multi-floor industrial complex: spikes, patrol drones, sewage pools that slow yo
 
 ## Online 2P — hunt a real friend
 
-Press **O** on the menu. A 3-step wizard walks you through it: pick your name and side, send the invite code, paste the answer back. In-game: floating name tags, **T to chat**, live link/ping indicator. (Two windows on one machine? Keep both visible — a hidden tab pauses its game.) Pure P2P over WebRTC — works across separate networks: Google STUN for most home connections, with a free TURN relay fallback for strict NATs (no server of ours, no accounts). First to kill the other — or escape — wins.
+Press **O** on the menu. A 3-step wizard walks you through it: pick your name and side, send the invite code, paste the answer back. In-game: floating name tags, **T to chat**, live link/ping indicator. (Two windows on one machine? Keep both visible — a hidden tab pauses its game.) Pure P2P over WebRTC — works across separate networks: Google STUN for most home connections, with a free TURN relay fallback for strict NATs (no server of ours, no accounts). First to kill the other — or escape — wins. The link survives game over: hit ENTER on the results screen to offer a **rematch** on the same connection — no new codes — with a running series score across games.
 
 ## Controls
 
