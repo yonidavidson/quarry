@@ -1658,7 +1658,7 @@
         }
         player.onCollideUpdate("lever", (lv) => { nearLever = lv; lastLeverTime = time(); });
         onKeyPress("e", () => { useDoor(); useTurret(); useLever(); }); onGamepadButtonPress("dpad-up", () => { useDoor(); useTurret(); useLever(); });
-        onKeyPress("r", () => go("game", sideKey));
+        onKeyPress("r", () => { if (isKeyDown("shift")) go("game", sideKey); }); // Shift+R: R alone sits too close to W/E to trust (#56)
         onKeyPress("n", () => popText(player.pos.add(0, -44), toggleMute() ? "MUTED" : "SOUND ON", rgb(210, 210, 210)));
 
         // =================================================================

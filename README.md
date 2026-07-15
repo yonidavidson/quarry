@@ -33,7 +33,7 @@ Press **O** on the menu. A 3-step wizard walks you through it: pick your name an
 | Attack | J / X | B / X |
 | Bomb (Jack) / Super leap (Beast) | K / C | Y |
 | Door | E | d-pad up |
-| Pause / Mute / Restart | Esc / N / R | — |
+| Pause / Mute / Restart | Esc / N / Shift+R | — |
 
 Wall-climb (Beast): hold into a wall + Up. Coyote time, jump buffering, and variable jump height are all in — the controls are forgiving on purpose.
 
