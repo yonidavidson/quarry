@@ -938,6 +938,20 @@
       // =====================================================================
       // WELCOME SPLASH (#25): ~2s of mood — the hunt — then the menu
       // =====================================================================
+      // audio gate (#59): browsers keep sound locked until a first gesture, which
+      // made the splash roar silent. One keypress here unlocks the context, then
+      // the cinematic runs WITH the roar and the theme.
+      scene("boot", () => {
+        add([sprite("sky"), pos(0, 0), fixed(), z(-100)]); addFog(); addDust();
+        add([rect(width(), height()), pos(0, 0), fixed(), color(4, 3, 4), opacity(0.6), z(-50)]);
+        add([text("QUARRY", { size: 72 }), pos(width() / 2, 208), anchor("center"), color(150, 140, 124), outline(5, rgb(10, 8, 6))]);
+        add([text("press any key", { size: 18 }), pos(width() / 2, 330), anchor("center"), color(210, 188, 148), { update() { this.opacity = 0.45 + Math.sin(time() * 3.4) * 0.35; } }]);
+        add([text("sound on — you'll want to hear it coming", { size: 13 }), pos(width() / 2, 362), anchor("center"), color(126, 118, 102), opacity(0.85)]);
+        addOverlay();
+        const enter = () => { ac(); sndInit(); go("splash"); };
+        onKeyPress(enter); onMousePress(enter); onGamepadButtonPress(enter);
+      });
+
       scene("splash", () => {
         onUpdate(() => themeVol(0.28)); // the theme rises as soon as the context unlocks (#58)
         add([sprite("sky"), pos(0, 0), fixed(), z(-100)]);
@@ -960,8 +974,9 @@
         tween(0, 1, 1.1, (v) => { title.opacity = v; sub.opacity = v * 0.9; }, easings.easeOutQuad);
         add([text("press any key", { size: 14 }), pos(width() / 2, 522), anchor("center"), color(130, 120, 104), opacity(0.7), z(5), { update() { this.opacity = 0.4 + Math.sin(time() * 4) * 0.3; } }]);
         addOverlay();
-        const skip = () => go("select");
-        wait(3.2, skip);
+        const born = time();
+        const skip = () => { if (time() - born > 0.5) go("select"); }; // swallow the boot-gate keypress
+        wait(3.4, () => go("select"));
         onKeyPress(skip); onMousePress(skip); onGamepadButtonPress("south", skip);
       });
 
@@ -2174,7 +2189,7 @@
         onKeyPress("m", toMenu); onGamepadButtonPress("start", toMenu);
       });
 
-      onLoad(() => go("splash"));
+      onLoad(() => go("boot"));
     </script>
   </body>
 </html>
