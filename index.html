@@ -258,6 +258,8 @@
 
       loadSprite("sign", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26"><rect x="1" y="1" width="24" height="24" rx="2" fill="#c8992e"/><rect x="3" y="3" width="20" height="20" rx="1" fill="#161514"/><path d="M13 6 L21 20 L5 20 Z" fill="#e8b13a"/><rect x="12" y="11" width="2" height="5" fill="#161514"/><rect x="12" y="17" width="2" height="2" fill="#161514"/></svg>`));
 
+      loadSprite("rope", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48"><path d="M24 0 q3 12 0 24 q-3 12 0 24" stroke="#6e5432" stroke-width="4.4" fill="none"/><path d="M24 0 q3 12 0 24 q-3 12 0 24" stroke="#8a6c42" stroke-width="1.6" fill="none"/><g fill="#4e3a20"><rect x="20.5" y="10" width="7" height="3.4" rx="1.4"/><rect x="20.5" y="34" width="7" height="3.4" rx="1.4"/></g></svg>`));
+
       loadSprite("cable", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="12" height="72"><path d="M6 0 q5 28 0 46 q-5 16 0 24" stroke="#141518" stroke-width="3" fill="none"/><circle cx="6" cy="70" r="3" fill="#2b2f33"/></svg>`));
 
       loadSprite("bomb", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="18" height="20"><rect x="8" y="0" width="2" height="4" fill="#7a4a28"/><circle cx="9" cy="2" r="1.6" fill="#e8b13a"/><circle cx="9" cy="12" r="7" fill="#2a2c2e" stroke="#131416"/><circle cx="6" cy="9" r="2" fill="#44484a" opacity="0.7"/></svg>`));
@@ -275,6 +277,14 @@
       // weapon pickup pad + per-weapon glyphs (issue #13)
       loadSprite("pad", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="40" height="10"><rect width="40" height="10" rx="2" fill="#22262a"/><g fill="#c8992e" opacity="0.8"><rect x="2" y="2" width="6" height="6"/><rect x="14" y="2" width="6" height="6"/><rect x="26" y="2" width="6" height="6"/></g><g fill="#131416"><rect x="8" y="2" width="6" height="6"/><rect x="20" y="2" width="6" height="6"/><rect x="32" y="2" width="6" height="6"/></g></svg>`));
       loadSprite("wpn-blaster", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="28" height="24"><rect x="2" y="10" width="18" height="5" rx="1" fill="#26262a"/><rect x="18" y="9" width="8" height="3" fill="#3a3a40"/><rect x="4" y="14" width="5" height="6" fill="#1e1e22"/></svg>`));
+      loadSprite("wpn-launcher", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="28" height="24"><rect x="2" y="8" width="20" height="8" rx="3" fill="#3d4a34"/><rect x="18" y="7" width="8" height="10" rx="3" fill="#2a3324"/><circle cx="22" cy="12" r="2.6" fill="#141a10"/><rect x="4" y="15" width="5" height="6" fill="#22281c"/><circle cx="8" cy="5" r="2.6" fill="#8aa060"/></svg>`));
+      loadSprite("wpn-ricochet", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="28" height="24"><circle cx="14" cy="12" r="8.5" fill="#d8c86a" stroke="#6a5a20" stroke-width="1.6"/><circle cx="14" cy="12" r="3" fill="#8a7a30"/><g fill="#6a5a20"><rect x="12.6" y="2.4" width="2.8" height="4"/><rect x="12.6" y="17.6" width="2.8" height="4"/><rect x="2.4" y="10.6" width="4" height="2.8"/><rect x="21.6" y="10.6" width="4" height="2.8"/></g></svg>`));
+      loadSprite("wpn-arc", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="28" height="24"><rect x="2" y="9" width="12" height="7" rx="2" fill="#33383e"/><rect x="4" y="16" width="5" height="5" fill="#22262a"/><path d="M14 12 l5 -5 -2 5 6 -2 -5 6 2 -1" stroke="#7ae0ff" stroke-width="2" fill="none"/><circle cx="14" cy="12" r="1.8" fill="#bff0ff"/></svg>`));
+      loadSprite("wpn-mine", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="28" height="24"><ellipse cx="14" cy="16" rx="10" ry="5" fill="#3a3e44" stroke="#1c2023" stroke-width="1.6"/><ellipse cx="14" cy="13.5" rx="10" ry="5" fill="#4a5055"/><circle cx="14" cy="13" r="2.2" fill="#e04040"/><g stroke="#2a2e33" stroke-width="1.6"><path d="M5 12 l-3 -3"/><path d="M23 12 l3 -3"/><path d="M14 8.6 l0 -4"/></g></svg>`));
+      loadSprite("wpn-tongue", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="28" height="24"><path d="M3 16 q6 -10 12 -6 q7 4 10 -2" stroke="#c46a9a" stroke-width="4.6" fill="none" stroke-linecap="round"/><path d="M3 16 q6 -10 12 -6" stroke="#e79ec0" stroke-width="1.8" fill="none"/><path d="M25 8 l3 -2 -1 4z" fill="#c46a9a"/></svg>`));
+      loadSprite("wpn-spit", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="28" height="24"><path d="M14 3 q7 8 7 13 a7 7 0 1 1 -14 0 q0 -5 7 -13z" fill="#7ecb4a" stroke="#3f7a1e" stroke-width="1.6"/><circle cx="11.5" cy="14" r="2.2" fill="#c6f09a" opacity="0.8"/></svg>`));
+      loadSprite("wpn-spear", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="28" height="24"><rect x="3" y="12.4" width="17" height="3.2" rx="1.6" fill="#ded4b8" stroke="#8a7a56" stroke-width="1" transform="rotate(-18 14 14)"/><path d="M19 5.5 L27 3 L23.5 10.5z" fill="#efe8d2" stroke="#8a7a56" stroke-width="1"/><circle cx="6" cy="16.4" r="2" fill="#b8ab88"/></svg>`));
+      loadSprite("wpn-shriek", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="28" height="24"><circle cx="7" cy="12" r="2.6" fill="#e8e2d0"/><g stroke="#cfd8ea" fill="none"><path d="M11 6 q6 6 0 12" stroke-width="2"/><path d="M16 3.5 q9 8.5 0 17" stroke-width="1.8" opacity="0.75"/><path d="M21 1.5 q12 10.5 0 21" stroke-width="1.6" opacity="0.5"/></g></svg>`));
       loadSprite("wpn-scatter", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="28" height="24"><rect x="2" y="9" width="14" height="7" rx="2" fill="#2e2622"/><rect x="14" y="8" width="12" height="4" fill="#3a3026"/><rect x="14" y="13" width="12" height="4" fill="#3a3026"/><rect x="4" y="15" width="5" height="6" fill="#1e1a16"/></svg>`));
       loadSprite("wpn-rail", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="28" height="24"><rect x="1" y="11" width="26" height="3" rx="1" fill="#2a3038"/><rect x="20" y="9" width="7" height="7" rx="3" fill="#4a90b8" opacity="0.8"/><rect x="3" y="14" width="5" height="6" fill="#1e2226"/><circle cx="27" cy="12.5" r="2" fill="#8ad0f0"/></svg>`));
       loadSprite("wpn-claws", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="28" height="24"><g stroke="#cfc0a8" stroke-width="3" stroke-linecap="round" fill="none"><path d="M6 4 q6 8 4 16"/><path d="M14 3 q6 9 4 17"/><path d="M22 4 q5 8 3 16"/></g></svg>`));
@@ -643,11 +653,19 @@
         mgun: { side: "human", name: "Machine Gun", cd: 0.13, auto: true },
         crossbow: { side: "human", name: "Crossbow", cd: 0.75 },
         flamer: { side: "human", name: "Flamethrower", cd: 0.09, auto: true },
+        launcher: { side: "human", name: "Grenade Launcher", cd: 1.15 },
+        ricochet: { side: "human", name: "Ricochet Disc", cd: 0.6 },
+        arc: { side: "human", name: "Arc Welder", cd: 0.12, auto: true },
+        mine: { side: "human", name: "Proximity Mine", cd: 0.85 },
         claws: { side: "stalker", name: "Claws", cd: 0.32 },
         spine: { side: "stalker", name: "Spine Volley", cd: 0.7 },
         scythe: { side: "stalker", name: "Bone Scythe", cd: 0.55 },
         whip: { side: "stalker", name: "Barb Whip", cd: 0.5 },
         bat: { side: "stalker", name: "Bone Bat", cd: 0.8 },
+        tongue: { side: "stalker", name: "Lash Tongue", cd: 0.55 }, // longest reach in the game — yanks prey closer
+        spit: { side: "stalker", name: "Acid Spit", cd: 0.6 },
+        spear: { side: "stalker", name: "Bone Spear", cd: 0.8 },
+        shriek: { side: "stalker", name: "Sonic Shriek", cd: 1.15 },
       };
       const WPOOL = (side) => Object.keys(WEAPONS).filter((k) => WEAPONS[k].side === side);
 
@@ -657,7 +675,7 @@
           blurb: ["Blaster (J/X) + Bomb (K/Y)", "Standard jump", "Fragile — 5 HP", "He is faster. Outsmart him."] },
         stalker: { name: "The STALKER — Beast", sprite: "stalker", color: [216, 140, 70], speed: 345, jumpForce: 800, doubleJump: true, maxHp: 6, mode: "melee", wallClimb: true,
           sc: 0.7, shadowY: 63, glow: [8, -31], cardScale: 0.85, frameW: 172, frameH: 138, areaX: 0.27, areaY: 0.71,
-          blurb: ["Claw lunge (J/X)", "Faster • wall-climb • dbl jump", "Tough — 6 HP", "Run him down."] },
+          blurb: ["Claw lunge (J/X) + Leap (K/Y)", "Faster • wall-climb • dbl jump", "Tough — 6 HP", "Run him down."] },
       };
 
       // =====================================================================
@@ -706,6 +724,14 @@
       for (let c = exitC; c > 4; c--) if (GRID[TOP_R][c] === "=" && GRID[FLOORS[0]][c] === "=") { LADDERS.push({ c, r0: TOP_R, r1: FLOORS[0] - 1 }); break; }
       for (const L of LADDERS) for (let r = L.r0; r <= L.r1; r++) if (GRID[r]) GRID[r][L.c] = "H";
       for (const N of NETS) for (let r = N.r0; r <= N.r1; r++) if (GRID[r] && GRID[r][N.c] === " ") GRID[r][N.c] = "N";
+      // hanging ropes (#53): threads from the corridor ceilings — leap thread to thread to cross long gaps
+      const ROPES = [];
+      for (const [rT] of pairs) for (let c = RI(5, 11); c < W - 4; c += RI(7, 12)) {
+        if (GRID[rT][c] !== "=") continue;
+        let ok = true; for (let r = rT + 1; r <= rT + 3; r++) if (!GRID[r] || GRID[r][c] !== " ") ok = false;
+        if (ok) ROPES.push({ c, r0: rT + 1, r1: rT + 3 });
+      }
+      for (const R of ROPES) for (let r = R.r0; r <= R.r1; r++) GRID[r][R.c] = "|";
       // doors snapped to valid floor cells
       const fixDoor = ([c, r]) => {
         const good = (cc) => cc > 1 && cc < W - 2 && GRID[r][cc] === "=" && GRID[r - 1][cc] === " " && GRID[r - 2][cc] === " ";
@@ -728,7 +754,7 @@
         let ok = GRID[w.r1 + 1] && GRID[w.r1 + 1][w.c] === "=";
         for (let r = w.r0 - 1; r <= w.r1 + 1 && ok; r++) for (let c = w.c - 3; c <= w.c + 3; c++) {
           const ch = GRID[r] && GRID[r][c];
-          if (ch === "e" || ch === "@" || ch === ">" || ch === "H" || ch === "^" || ch === "N") ok = false;
+          if (ch === "e" || ch === "@" || ch === ">" || ch === "H" || ch === "^" || ch === "N" || ch === "|") ok = false;
         }
         for (const [dc, dr] of DOOR_CELLS) if (Math.abs(dc - w.c) <= 2 && w.r1 >= dr - 2 && w.r0 <= dr) ok = false;
         if (ok) for (let r = w.r0; r <= w.r1; r++) if (GRID[r][w.c] === " ") { GRID[r][w.c] = "="; STUB_CELLS.add(w.c + "," + r); }
@@ -845,7 +871,7 @@
         const maxJumps = CFG.doubleJump ? 2 : 1;
         const CLIMB = 155;
         let hp = CFG.maxHp, score = 0, invuln = false, facing = 1, jumpsLeft = maxJumps;
-        let lastAtk = 0, airTime = 0, spawn = vec2(0, 0), camReady = false, lastBomb = 0;
+        let lastAtk = 0, airTime = 0, spawn = vec2(0, 0), camReady = false, lastBomb = 0, ropeBoostT = 0, ropeBoost = 240, leapAt = -99;
         let lastGroundedAt = 0, jumpBufferedAt = -1; // coyote time + jump buffering
         let weapon = CFG.mode === "ranged" ? "blaster" : "claws"; // one weapon at a time (#13)
         let stepAt = 0, stepAlt = false; // footstep cadence
@@ -934,6 +960,7 @@
           }
           else if (ch === "H") add([sprite("ladder"), pos(x, y), anchor("center"), z(1), offscreen({ hide: true, distance: 120 })]); // visual; climb areas merged below
           else if (ch === "N") add([sprite("net"), pos(x, y), anchor("center"), z(1), offscreen({ hide: true, distance: 120 })]);
+          else if (ch === "|") add([sprite("rope"), pos(x, y), anchor("center"), z(1), rotate(0), offscreen({ hide: true, distance: 120 }), { s: c * 0.7 + r, update() { this.angle = Math.sin(time() * 1.3 + this.s) * 2.2; } }]);
           else if (ch === "^") add([sprite("spikes"), pos(x, r * TS + TS), anchor("bot"), area(), z(3), "danger"]);
           else if (ch === "$") spawnCell(x, y);
           else if (ch === "+") add([sprite("medkit"), pos(x, y), anchor("center"), area({ scale: 1.2 }), z(3), "medkit", { s: x, update() { this.pos.y = y + Math.sin(time() * 2.2 + this.s) * 3; } }]);
@@ -965,7 +992,7 @@
         for (let c = 0; c < W; c++) { // climb areas merged per column
           let cr0 = -1;
           for (let r = 0; r <= GRID.length; r++) {
-            const isL = r < GRID.length && (GRID[r][c] === "H" || GRID[r][c] === "N");
+            const isL = r < GRID.length && (GRID[r][c] === "H" || GRID[r][c] === "N" || GRID[r][c] === "|");
             if (isL && cr0 < 0) cr0 = r;
             if (!isL && cr0 >= 0) { add([rect(TS, (r - cr0) * TS), pos(c * TS + TS / 2, cr0 * TS + ((r - cr0) * TS) / 2), anchor("center"), area(), opacity(0), "ladder"]); cr0 = -1; }
           }
@@ -1211,7 +1238,7 @@
         const ladderActive = () => time() - lastLadderTime < 0.06 && time() > ladderCd;
 
         // --- HUD v2 (#10): panel with HP pips, energy, weapon, bomb cooldown ---
-        add([rect(210, CFG.bomb ? 96 : 84, { radius: 8 }), pos(10, 8), fixed(), z(198), color(16, 16, 18), opacity(0.72), outline(2, rgb(60, 58, 52))]);
+        add([rect(210, 96, { radius: 8 }), pos(10, 8), fixed(), z(198), color(16, 16, 18), opacity(0.72), outline(2, rgb(60, 58, 52))]);
         add([text(CFG.name, { size: 15 }), pos(20, 16), fixed(), z(200), color(...CFG.color)]);
         const pips = [];
         for (let i = 0; i < CFG.maxHp; i++) pips.push(add([sprite("pip"), pos(20 + i * 20, 38), fixed(), z(200), opacity(1)]));
@@ -1226,8 +1253,13 @@
           bombBar.onUpdate(() => { bombBar.width = 120 * clamp((time() - lastBomb) / 1.1, 0, 1); });
           const flTxt = add([text("", { size: 13 }), pos(148, 86), fixed(), z(200), color(240, 110, 80)]);
           flTxt.onUpdate(() => (flTxt.text = "✹".repeat(flares) + (flares < 2 ? " (L)" : " L")));
+        } else { // beast: super-leap cooldown (#53)
+          add([rect(120, 5, { radius: 2 }), pos(20, 90), fixed(), z(199), color(40, 38, 34)]);
+          const leapBar = add([rect(120, 5, { radius: 2 }), pos(20, 90), fixed(), z(200), color(216, 140, 70)]);
+          leapBar.onUpdate(() => { leapBar.width = 120 * clamp((time() - leapAt) / 6, 0, 1); });
+          add([text("LEAP", { size: 11 }), pos(148, 87), fixed(), z(200), color(216, 140, 70)]);
         }
-        const ctrl = CFG.bomb ? "Bomb: K/Y   " : "Wall: into-wall+Up   ";
+        const ctrl = CFG.bomb ? "Bomb: K/Y   " : "Leap: K/Y   Wall: into-wall+Up   ";
         addTicker("Move ←→/AD   Jump Space   Attack J/X   " + ctrl + "Climb ↑↓   Door: E   Pause: Esc   Mute: N");
         liveSend(`${PLAYER_NAME} enters the hunt as ${sideKey === "human" ? "JACK" : "the BEAST"}${NET.connected ? " (online duel!)" : ""}`);
         const updateHUD = () => {
@@ -1341,18 +1373,68 @@
               fl.onCollide("breakable", (o) => breakObj(o));
             }
           }
+          else if (weapon === "launcher") { // lobbed shell -> full explosion
+            SFX.toss(); shake(3); casings(1);
+            const g = add([circle(5.5), pos(player.pos.x + facing * 24, player.pos.y - 8), anchor("center"), color(170, 210, 110), outline(2, rgb(60, 80, 30)), area(), z(5), offscreen({ destroy: true }),
+              { v: vec2(facing * 540, -280), update() { this.v.y += 680 * dt(); this.move(this.v); } }]);
+            const boom = () => { if (g.exists()) { const p = g.pos.clone(); destroy(g); explode(p); } };
+            ["platform", "nemesis", "enemy", "breakable"].forEach((tg) => g.onCollide(tg, boom));
+            wait(2.2, boom);
+          }
+          else if (weapon === "ricochet") { // bounces off the complex itself
+            SFX.crossbowS();
+            const d2 = add([circle(6), pos(player.pos.x + facing * 24, player.pos.y - 6), anchor("center"), color(235, 220, 110), outline(2, rgb(110, 90, 20)), area(), z(5), opacity(1), lifespan(2.6, { fade: 0.2 }), rotate(0),
+              { v: vec2(facing * 640, -120), b: 3, update() { this.move(this.v); this.angle += 720 * dt(); } }]);
+            d2.onCollide("platform", (pl, col) => { if (--d2.b < 0) return destroy(d2); SFX.thunk(); if (col && (col.isLeft() || col.isRight())) d2.v.x *= -1; else d2.v.y *= -1; });
+            d2.onCollide("enemy", (e) => { killEnemy(e); destroy(d2); });
+            d2.onCollide("nemesis", (n) => { hitNemesis(n); destroy(d2); });
+            d2.onCollide("breakable", (o) => breakObj(o));
+          }
+          else if (weapon === "arc") { // crackling short-range welder stream
+            SFX.flamerS();
+            for (let i = 0; i < 2; i++) {
+              const seg = add([rect(rand(10, 18), 2.6, { radius: 1 }), pos(player.pos.x + facing * (30 + i * 26), player.pos.y - 4 + rand(-9, 9)), anchor("center"),
+                color(140, rand(200, 240), 255), opacity(0.9), area(), rotate(rand(-30, 30)), lifespan(0.11, { fade: 0.09 }), z(8), "flare",
+                { v: vec2(facing * rand(300, 380), rand(-30, 30)), update() { this.move(this.v); } }]);
+              seg.onCollide("enemy", (e) => killEnemy(e));
+              seg.onCollide("nemesis", (n) => { if (n.exists() && time() > (n.burnCd || 0)) { n.burnCd = time() + 0.4; hitNemesis(n); } });
+              seg.onCollide("breakable", (o) => breakObj(o));
+            }
+          }
+          else if (weapon === "mine") { // plant it, lure them over it
+            if (get("mine").length >= 3) { popText(player.pos.add(0, -42), "3 MINES ARMED", rgb(240, 180, 110)); return; }
+            SFX.toss();
+            const mn = add([sprite("wpn-mine"), pos(player.pos.x + facing * 20, player.pos.y + HIT_H / 2 - 8), anchor("center"), scale(0.8), area({ scale: 0.8 }), z(4), opacity(1), "mine", { armAt: time() + 0.9 }]);
+            const boom = () => { if (mn.exists()) { const p = mn.pos.clone(); destroy(mn); explode(p); } };
+            mn.onUpdate(() => {
+              mn.opacity = time() < mn.armAt ? 0.9 : 0.75 + Math.abs(Math.sin(time() * 6)) * 0.25;
+              if (time() < mn.armAt) return;
+              if (get("enemy").some((e) => e.pos.dist(mn.pos) < 58) || get("nemesis").some((n) => n.pos.dist(mn.pos) < 58) || get("remote").some((r2) => r2.pos.dist(mn.pos) < 58)) boom();
+            });
+            wait(18, boom);
+          }
           else { SFX.shoot(); mkBullet(0, {}); }
         }
         function fireSpines() { // the beast's ranged option (#39)
           SFX.spineS();
           for (const dy2 of [-0.16, 0, 0.14]) mkBullet(dy2, { spd: 700, len: 20, h: 4, drop: 320, col: [216, 204, 174], life: 0.9 });
         }
-        const SLASH_TINT = { claws: [255, 208, 160], scythe: [225, 228, 255], whip: [255, 224, 130], bat: [210, 196, 168] };
+        function fireSpit() { SFX.spineS(); mkBullet(-0.12, { spd: 640, drop: 420, len: 12, h: 9, col: [140, 225, 90], life: 1.1 }); }
+        function fireSpear() { SFX.crossbowS(); shake(2); mkBullet(0, { pierce: true, spd: 1050, len: 30, h: 4, col: [232, 226, 205] }); }
+        function fireShriek() { // radial concussion — everything near the beast staggers
+          SFX.roar(); shake(8); lungeUntil = time() + 0.3;
+          const ring = add([circle(12), pos(player.pos), anchor("center"), color(235, 238, 255), opacity(0.5), lifespan(0.34, { fade: 0.3 }), z(35)]);
+          tween(12, 125, 0.32, (r2) => (ring.radius = r2), easings.easeOutQuad);
+          get("enemy").forEach((e) => { if (e.pos.dist(player.pos) < 120) killEnemy(e); });
+          get("nemesis").forEach((n) => { if (n.pos.dist(player.pos) < 130) { hitNemesis(n); if (n.exists()) n.move((n.pos.x > player.pos.x ? 1 : -1) * 380, 0); } });
+          get("breakable").forEach((b) => { if (b.pos.dist(player.pos) < 120) breakObj(b); });
+        }
+        const SLASH_TINT = { claws: [255, 208, 160], scythe: [225, 228, 255], whip: [255, 224, 130], bat: [210, 196, 168], tongue: [255, 150, 205] };
         function meleeStrike() {
-          weapon === "whip" ? SFX.whipS() : weapon === "bat" ? SFX.batS() : SFX.claw();
+          weapon === "whip" || weapon === "tongue" ? SFX.whipS() : weapon === "bat" ? SFX.batS() : SFX.claw();
           lungeUntil = time() + 0.28;
-          const [w, h, reach] = weapon === "scythe" ? [84, 60, 44] : weapon === "whip" ? [110, 18, 66] : weapon === "bat" ? [96, 68, 52] : [54, 42, 36];
-          player.move(facing * (weapon === "whip" ? 80 : 200), 0); squash(1.24, 0.86);
+          const [w, h, reach] = weapon === "scythe" ? [84, 60, 44] : weapon === "whip" ? [110, 18, 66] : weapon === "bat" ? [96, 68, 52] : weapon === "tongue" ? [156, 14, 94] : [54, 42, 36];
+          player.move(facing * (weapon === "whip" || weapon === "tongue" ? 40 : 200), 0); squash(1.24, 0.86);
           // visible slash arc (#21): tinted crescent sweeping with the strike
           const arc = add([sprite("slash"), pos(player.pos.x + facing * reach, player.pos.y - 4), anchor("center"),
             scale((facing < 0 ? -1 : 1) * (w / 66), h / 66), rotate(facing * -18), color(...(SLASH_TINT[weapon] || SLASH_TINT.claws)), opacity(0.85), lifespan(0.16, { fade: 0.12 }), z(8)]);
@@ -1362,12 +1444,13 @@
           hb.onCollide("breakable", (o) => breakObj(o));
           hb.onCollide("nemesis", (n) => {
             hitNemesis(n);
-            if (n.exists()) { if (weapon === "whip") n.move(facing * 320, 0); else if (weapon === "bat") { SFX.thunk(); n.move(facing * 420, 0); n.jump && n.vel && (n.vel = vec2(n.vel.x, -260)); } }
+            if (n.exists()) { if (weapon === "whip") n.move(facing * 320, 0); else if (weapon === "tongue") n.move(-facing * 380, 0); else if (weapon === "bat") { SFX.thunk(); n.move(facing * 420, 0); n.jump && n.vel && (n.vel = vec2(n.vel.x, -260)); } } // the tongue YANKS prey toward the beast
           });
         }
         function attack() {
           if (time() - lastAtk < WEAPONS[weapon].cd) return; lastAtk = time();
-          weapon === "spine" ? fireSpines() : CFG.mode === "ranged" ? fireRanged() : meleeStrike();
+          const SPECIAL = { spine: fireSpines, spit: fireSpit, spear: fireSpear, shriek: fireShriek };
+          SPECIAL[weapon] ? SPECIAL[weapon]() : CFG.mode === "ranged" ? fireRanged() : meleeStrike();
           netSend({ t: "atk", kind: weapon, x: Math.round(player.pos.x), y: Math.round(player.pos.y), dir: facing });
         }
         // debug hook (used by the headless test harness)
@@ -1426,7 +1509,7 @@
             facing = -wallStick; player.flipX = facing < 0; jumpsLeft = maxJumps - 1;
             squash(0.72, 1.3); dust(player.pos.add(wallStick * 8, 12)); SFX.jump2(); return;
           }
-          if (jumpsLeft > 0) { const mid = jumpsLeft < maxJumps; player.jump(CFG.jumpForce); jumpsLeft -= 1; squash(0.74, 1.28); dust(player.pos.add(0, CFG.shadowY * CFG.sc - 2)); mid ? SFX.jump2() : SFX.jump(); }
+          if (jumpsLeft > 0) { const mid = jumpsLeft < maxJumps; player.jump(CFG.jumpForce); if (onLadderNow) { ropeBoost = 240; ropeBoostT = time() + 0.32; } jumpsLeft -= 1; squash(0.74, 1.28); dust(player.pos.add(0, CFG.shadowY * CFG.sc - 2)); mid ? SFX.jump2() : SFX.jump(); }
           else jumpBufferedAt = time(); // buffer a jump pressed just before landing
         }
         const cutJump = () => { if (player.vel.y < -80) player.vel = vec2(player.vel.x, player.vel.y * 0.45); }; // variable jump height
@@ -1434,7 +1517,15 @@
         onGamepadButtonRelease("south", cutJump);
         onKeyPress("space", jump); onGamepadButtonPress("south", jump);
         ["j", "x"].forEach((key) => onKeyPress(key, attack)); onGamepadButtonPress("west", attack); onGamepadButtonPress("east", attack);
-        ["k", "c"].forEach((key) => onKeyPress(key, () => { if (CFG.bomb) throwBomb(); })); onGamepadButtonPress("north", () => { if (CFG.bomb) throwBomb(); });
+        // beast super leap (#53): K/C/Y — a thunderous forward pounce on a 6s cooldown
+        function superLeap() {
+          if (CFG.bomb || time() - leapAt < 6 || (!player.isGrounded() && !onLadderNow && !wallStick)) return;
+          leapAt = time(); SFX.jump2(); SFX.claw(); shake(4); squash(0.62, 1.4);
+          player.jump(CFG.jumpForce * 0.72); ropeBoost = 430; ropeBoostT = time() + 0.55; lungeUntil = time() + 0.55;
+          dust(player.pos.add(0, CFG.shadowY * CFG.sc - 2)); burst(player.pos.add(0, 20), rgb(216, 140, 70), 8, 180, 5);
+        }
+        const secondary = () => (CFG.bomb ? throwBomb() : superLeap());
+        ["k", "c"].forEach((key) => onKeyPress(key, secondary)); onGamepadButtonPress("north", secondary);
         onKeyPress("l", throwFlare); onGamepadButtonPress("rshoulder", throwFlare);
         function useTurret() {
           if (!nearTurret || !nearTurret.exists() || time() - lastTurretTime > 0.15 || nearTurret.active || !CFG.bomb) return;
@@ -1546,7 +1637,7 @@
                   const nb = add([rect(18, 5, { radius: 2 }), pos(n.pos.x + dirx * 24, n.pos.y - 4), anchor("center"), color(255, 130, 110), outline(2, rgb(90, 30, 20)), area(), move(vec2(dirx, 0), 700), offscreen({ destroy: true }), z(5), "nbullet"]);
                   nb.onCollide("player", () => { destroy(nb); hurt(); });
                   nb.onCollide("platform", () => destroy(nb));
-                } else if (NCFG.mode === "melee" && dist < (n.weapon === "whip" ? 130 : n.weapon === "bat" ? 120 : n.weapon === "scythe" ? 110 : 90)) {
+                } else if (NCFG.mode === "melee" && dist < (n.weapon === "tongue" ? 170 : n.weapon === "whip" ? 130 : n.weapon === "bat" ? 120 : n.weapon === "scythe" ? 110 : 90)) {
                   n.atkCd = time() + 0.9; SFX.claw(); n.move((toP.x > 0 ? 1 : -1) * 220, 0);
                 }
               }
@@ -1646,6 +1737,46 @@
                 s2.onCollide("player", () => { destroy(s2); hurt(); });
                 s2.onCollide("platform", () => destroy(s2));
               }
+            } else if (m.kind === "launcher") {
+              SFX.toss();
+              const g = add([circle(5.5), pos(m.x + m.dir * 24, m.y - 8), anchor("center"), color(255, 150, 110), outline(2, rgb(90, 40, 20)), area(), z(5), offscreen({ destroy: true }),
+                { v: vec2(m.dir * 540, -280), update() { this.v.y += 680 * dt(); this.move(this.v); } }]);
+              const boom = () => { if (g.exists()) { const p = g.pos.clone(); destroy(g); SFX.boom(); shake(9); burst(p, rgb(240, 170, 80), 18, 300, 8); if (player.pos.dist(p) < 105) hurt(); } };
+              g.onCollide("platform", boom); g.onCollide("player", boom);
+              wait(2.2, boom);
+            } else if (m.kind === "ricochet") {
+              SFX.crossbowS();
+              const d2 = add([circle(6), pos(m.x + m.dir * 24, m.y - 6), anchor("center"), color(255, 170, 110), outline(2, rgb(110, 50, 20)), area(), z(5), opacity(1), lifespan(2.6, { fade: 0.2 }), rotate(0),
+                { v: vec2(m.dir * 640, -120), b: 3, update() { this.move(this.v); this.angle += 720 * dt(); } }]);
+              d2.onCollide("platform", (pl, col) => { if (--d2.b < 0) return destroy(d2); if (col && (col.isLeft() || col.isRight())) d2.v.x *= -1; else d2.v.y *= -1; });
+              d2.onCollide("player", () => { destroy(d2); hurt(); });
+            } else if (m.kind === "arc") {
+              SFX.flamerS();
+              for (let i = 0; i < 2; i++) {
+                const seg = add([rect(rand(10, 18), 2.6, { radius: 1 }), pos(m.x + m.dir * (30 + i * 26), m.y - 4 + rand(-9, 9)), anchor("center"), color(140, rand(200, 240), 255), opacity(0.9), area(), rotate(rand(-30, 30)), lifespan(0.12, { fade: 0.09 }), z(8), { v: vec2(m.dir * rand(300, 380), rand(-30, 30)), update() { this.move(this.v); } }]);
+                seg.onCollide("player", () => { if (time() > (player.burnCd2 || 0)) { player.burnCd2 = time() + 0.4; hurt(); } });
+              }
+            } else if (m.kind === "mine") {
+              SFX.toss();
+              const mn = add([sprite("wpn-mine"), pos(m.x + m.dir * 20, m.y + 20), anchor("center"), scale(0.8), area({ scale: 0.8 }), z(4), opacity(1), { armAt: time() + 0.9 }]);
+              const boom = () => { if (mn.exists()) { const p = mn.pos.clone(); destroy(mn); SFX.boom(); shake(9); burst(p, rgb(240, 170, 80), 16, 280, 8); if (player.pos.dist(p) < 100) hurt(); } };
+              mn.onUpdate(() => { mn.opacity = time() < mn.armAt ? 0.9 : 0.75 + Math.abs(Math.sin(time() * 6)) * 0.25; if (time() > mn.armAt && player.pos.dist(mn.pos) < 58) boom(); });
+              wait(18, boom);
+            } else if (m.kind === "spit") {
+              SFX.spineS();
+              const s2 = add([rect(12, 9, { radius: 4 }), pos(m.x + m.dir * 24, m.y - 4), anchor("center"), color(140, 225, 90), outline(2, rgb(50, 100, 25)), area(), opacity(1), lifespan(1.1), z(5), { v: vec2(m.dir, -0.12).unit().scale(640), update() { this.v.y += 420 * dt(); this.move(this.v); } }]);
+              s2.onCollide("player", () => { destroy(s2); hurt(); });
+              s2.onCollide("platform", () => { burst(s2.pos, rgb(140, 225, 90), 6, 120, 4); destroy(s2); });
+            } else if (m.kind === "spear") {
+              SFX.crossbowS();
+              const s2 = add([rect(30, 4, { radius: 2 }), pos(m.x + m.dir * 24, m.y - 4), anchor("center"), color(232, 226, 205), outline(2, rgb(90, 60, 20)), area(), move(vec2(m.dir, 0), 1050), offscreen({ destroy: true }), z(5)]);
+              s2.onCollide("player", () => { destroy(s2); hurt(); });
+              s2.onCollide("platform", () => destroy(s2));
+            } else if (m.kind === "shriek") {
+              SFX.roar(); shake(6);
+              const ring = add([circle(12), pos(m.x, m.y), anchor("center"), color(235, 238, 255), opacity(0.5), lifespan(0.34, { fade: 0.3 }), z(35)]);
+              tween(12, 125, 0.32, (r2) => (ring.radius = r2), easings.easeOutQuad);
+              if (player.pos.dist(vec2(m.x, m.y)) < 125) { hurt(); player.move((player.pos.x > m.x ? 1 : -1) * 320, 0); }
             } else if (WEAPONS[m.kind] && WEAPONS[m.kind].side === "human") {
               const mk = (dy, opts = {}) => {
                 const b = add([rect(opts.len || 18, 5, { radius: 2 }), pos(m.x + m.dir * 24, m.y - 4), anchor("center"), color(255, 130, 110), outline(2, rgb(90, 30, 20)), area(), move(vec2(m.dir, dy).unit(), opts.spd || 780), offscreen({ destroy: true }), z(5), ...(opts.life ? [lifespan(opts.life)] : [])]);
@@ -1656,9 +1787,9 @@
               else if (m.kind === "rail") { mk(0, { pierce: true, spd: 1300, len: 36 }); SFX.rail(); }
               else { mk(0, {}); SFX.shoot(); }
             } else { // melee swing
-              const [w2, h2, reach] = m.kind === "scythe" ? [84, 60, 44] : m.kind === "whip" ? [110, 18, 66] : [54, 42, 36];
+              const [w2, h2, reach] = m.kind === "scythe" ? [84, 60, 44] : m.kind === "whip" ? [110, 18, 66] : m.kind === "tongue" ? [156, 14, 94] : [54, 42, 36];
               const hb = add([rect(w2, h2, { radius: 6 }), pos(m.x + m.dir * reach, m.y - 2), anchor("center"), color(255, 130, 110), opacity(0.3), area(), lifespan(0.14, { fade: 0.14 }), z(5)]);
-              hb.onCollide("player", () => hurt()); SFX.claw();
+              hb.onCollide("player", () => { hurt(); if (m.kind === "tongue") player.move(-m.dir * 300, 0); }); SFX.claw();
             }
           }
 
@@ -1711,7 +1842,7 @@
           if (CFG.bomb && flares < 2 && time() > flareAt) { flares++; flareAt = time() + 20; }
           const wading = inWater();
           if (Math.abs(dx) > 0.05) {
-            player.move(dx * CFG.speed * (wading ? 0.55 : 1), 0); facing = dx > 0 ? 1 : -1; player.flipX = facing < 0;
+            player.move(dx * (CFG.speed * (wading ? 0.55 : 1) + (time() < ropeBoostT ? ropeBoost : 0)), 0); facing = dx > 0 ? 1 : -1; player.flipX = facing < 0; // thread-leap + super leap (#53): momentum carries
             if (player.isGrounded() && time() > stepAt) { stepAt = time() + (wading ? 0.34 : 0.27); stepAlt = !stepAlt; wading ? SFX.slosh() : SFX.step(stepAlt); }
           }
           // sewage: splash on entry, capped sink speed, always able to hop out

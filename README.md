@@ -9,16 +9,16 @@ A browser hunt-or-be-hunted platformer inspired by the asymmetric design of the 
 | | 🔵 **JACK — Human** | 🔴 **The STALKER — Beast** |
 |---|---|---|
 | **Edge** | Blaster + throwable bombs | Claw lunge up close |
-| **Mobility** | Standard jump | **Faster than you** • double jump • wall-climb |
+| **Mobility** | Standard jump • thread-leaps | **Faster than you** • double jump • wall-climb • super leap (K/Y) |
 | **Toughness** | Fragile (5 HP) | Tough (6 HP) |
 
 Whichever side you pick, **the other side hunts you** across the complex — an AI nemesis that patrols, spots you, chases across floors, and attacks. When the heartbeat starts, run.
 
 ## The world wants you dead too
 
-Multi-floor industrial complex: spikes, patrol drones, sewage pools that slow your wading, ladders, climbable chain-nets, teleport doors, flickering lamps, steam vents, ceiling drips. The roofline opens onto a **dusk vista of mountains and a sunset lake** where crows wheel overhead (land hard and they scatter); steel-framed windows glimpse the outside from the upper floors, and each depth has its own light — cool daylight up top, green industry mid, rust-warm depths. Lever-gates open for only a few seconds — sprint through before they slam, because **the gate coming down on you is instant death**. Health pods are stashed around the complex for whoever reaches them first. Grab energy cells, find the glowing **EXIT** on the roof.
+Multi-floor industrial complex: spikes, patrol drones, sewage pools that slow your wading, ladders, climbable chain-nets, teleport doors, flickering lamps, steam vents, ceiling drips. The roofline opens onto a **dusk vista of mountains and a sunset lake** where crows wheel overhead (land hard and they scatter); steel-framed windows glimpse the outside from the upper floors, and each depth has its own light — cool daylight up top, green industry mid, rust-warm depths. Ropes hang from every corridor ceiling — grab one, kick off with real momentum, and chain thread-to-thread leaps across long gaps (Prince-of-Persia-style ledge grabs catch you if you miss). Lever-gates open for only a few seconds — sprint through before they slam, because **the gate coming down on you is instant death**. Health pods are stashed around the complex for whoever reaches them first. Grab energy cells, find the glowing **EXIT** on the roof.
 
-**Random weapons** spawn on pads — you can hold only one; swapping drops your current where you stand. Human pool: Blaster / Scattergun / Rail Lance / Shotgun / Machine Gun. Beast pool: Claws / Bone Scythe / Barb Whip / Bone Bat. Every weapon has its own attack visuals and sound. The hunter arms itself too.
+**Random weapons** spawn on pads — you can hold only one; swapping drops your current where you stand. Human pool: Blaster / Scattergun / Rail Lance / Shotgun / Machine Gun / Crossbow / Flamethrower / Grenade Launcher / Ricochet Disc / Arc Welder / Proximity Mine. Beast pool: Claws / Spine Volley / Bone Scythe / Barb Whip / Bone Bat / Lash Tongue (longest reach in the game — yanks prey closer) / Acid Spit / Bone Spear / Sonic Shriek. Every weapon has its own attack visuals and sound. The hunter arms itself too.
 
 ## Online 2P — hunt a real friend
 
@@ -31,7 +31,7 @@ Press **O** on the menu. A 3-step wizard walks you through it: pick your name an
 | Move / climb | ←→↑↓ / WASD | stick / d-pad |
 | Jump | Space | A |
 | Attack | J / X | B / X |
-| Bomb (Jack) | K / C | Y |
+| Bomb (Jack) / Super leap (Beast) | K / C | Y |
 | Door | E | d-pad up |
 | Pause / Mute / Restart | Esc / N / R | — |
 
