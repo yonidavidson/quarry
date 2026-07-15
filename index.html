@@ -180,6 +180,8 @@
 
       loadSprite("cell", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="22" height="28"><circle cx="11" cy="15" r="10" fill="#5ee08a" opacity="0.16"/><rect x="8" y="0" width="6" height="4" fill="#3a3d3f"/><rect x="4" y="3" width="14" height="23" rx="3" fill="#2c2f31" stroke="#1c1f21"/><rect x="7" y="7" width="8" height="15" rx="2" fill="#3aa06a"/><rect x="7" y="7" width="8" height="6" rx="2" fill="#7ee0a0" opacity="0.5"/></svg>`));
 
+      loadSprite("medkit", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="22"><circle cx="12" cy="11" r="10" fill="#ff6a5a" opacity="0.15"/><rect x="3" y="6" width="18" height="13" rx="2" fill="#3a4232" stroke="#1e241a"/><rect x="3" y="6" width="18" height="4" fill="#4a5340"/><rect x="9" y="3" width="6" height="4" rx="1" fill="#2c3324"/><rect x="8" y="9" width="8" height="8" rx="1" fill="#e8e4da"/><rect x="11" y="10" width="2" height="6" fill="#c23b2e"/><rect x="9" y="12" width="6" height="2" fill="#c23b2e"/></svg>`));
+
       loadSprite("exit", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="48" height="72"><rect x="4" y="2" width="40" height="70" rx="3" fill="#2c3033"/><rect x="8" y="6" width="32" height="62" fill="#3c4144" stroke="#20242a" stroke-width="2"/><g opacity="0.85"><path d="M11 62 l20 -22" stroke="#c8992e" stroke-width="5"/><path d="M20 64 l14 -16" stroke="#1c1c1c" stroke-width="5"/></g><circle cx="24" cy="18" r="10" fill="#e8b13a" opacity="0.3"/><circle cx="24" cy="18" r="5" fill="#f0c04a"/></svg>`));
 
       // drone: 2-frame strip (rotor flicker + eye pulse)
@@ -650,12 +652,12 @@
       const WPOOL = (side) => Object.keys(WEAPONS).filter((k) => WEAPONS[k].side === side);
 
       const SIDES = {
-        human: { name: "JACK — Human", sprite: "human", color: [120, 165, 210], speed: 250, jumpForce: 720, doubleJump: false, maxHp: 3, mode: "ranged", bomb: true,
+        human: { name: "JACK — Human", sprite: "human", color: [120, 165, 210], speed: 250, jumpForce: 720, doubleJump: false, maxHp: 5, mode: "ranged", bomb: true,
           sc: 0.5, shadowY: 64, cardScale: 0.66, frameW: 108, frameH: 141, areaX: 0.55, areaY: 0.81,
-          blurb: ["Blaster (J/X) + Bomb (K/Y)", "Standard jump", "Fragile — 3 HP", "He is faster. Outsmart him."] },
-        stalker: { name: "The STALKER — Beast", sprite: "stalker", color: [216, 140, 70], speed: 345, jumpForce: 800, doubleJump: true, maxHp: 4, mode: "melee", wallClimb: true,
+          blurb: ["Blaster (J/X) + Bomb (K/Y)", "Standard jump", "Fragile — 5 HP", "He is faster. Outsmart him."] },
+        stalker: { name: "The STALKER — Beast", sprite: "stalker", color: [216, 140, 70], speed: 345, jumpForce: 800, doubleJump: true, maxHp: 6, mode: "melee", wallClimb: true,
           sc: 0.7, shadowY: 63, glow: [8, -31], cardScale: 0.85, frameW: 172, frameH: 138, areaX: 0.27, areaY: 0.71,
-          blurb: ["Claw lunge (J/X)", "Faster • wall-climb • dbl jump", "Tough — 4 HP", "Run him down."] },
+          blurb: ["Claw lunge (J/X)", "Faster • wall-climb • dbl jump", "Tough — 6 HP", "Run him down."] },
       };
 
       // =====================================================================
@@ -683,6 +685,7 @@
         if (v < 0.045) GRID[r - 1][c] = "$";
         else if (v < 0.056 && r !== TOP_R) GRID[r - 1][c] = "e";
         else if (v < 0.061 && GRID[r][c + 1] === "=" && GRID[r - 1][c + 1] === " ") { GRID[r - 1][c] = "^"; GRID[r - 1][c + 1] = "^"; }
+        else if (v < 0.0685) GRID[r - 1][c] = "+"; // health pods (#52): patch yourself up mid-hunt
       }
       GRID[GROUND_R - 1][3] = "@";
       let exitC = W - 5;
@@ -933,6 +936,7 @@
           else if (ch === "N") add([sprite("net"), pos(x, y), anchor("center"), z(1), offscreen({ hide: true, distance: 120 })]);
           else if (ch === "^") add([sprite("spikes"), pos(x, r * TS + TS), anchor("bot"), area(), z(3), "danger"]);
           else if (ch === "$") spawnCell(x, y);
+          else if (ch === "+") add([sprite("medkit"), pos(x, y), anchor("center"), area({ scale: 1.2 }), z(3), "medkit", { s: x, update() { this.pos.y = y + Math.sin(time() * 2.2 + this.s) * 3; } }]);
           else if (ch === "e") { if (!NET.connected) spawnEnemy(x, y); } // online: the other player IS the hunter
           else if (ch === ">") {
             add([sprite("exit"), pos(x, r * TS + TS), anchor("bot"), area(), z(3), "exit"]);
@@ -1085,28 +1089,50 @@
           });
         });
 
-        // --- levers + gates (#39): pull a lever, the corridor gate opens/slams ---
+        // --- levers + gates (#39/#52): a pull opens the gate for a few seconds — sprint through before it slams ---
+        const GATE_OPEN_T = 3.5;
         let nearLever = null, lastLeverTime = -1;
         LEVERS.forEach((LV) => {
           const gx = LV.g * TS + TS / 2;
           const tiles = [];
           for (let i = 1; i <= 4; i++) tiles.push(add([sprite("gatecell"), pos(gx, (LV.r - i) * TS + TS / 2), anchor("center"), z(2), scale(1), opacity(1), { baseY: (LV.r - i) * TS + TS / 2 }])); // 4-tall: seals the taller corridors (#49)
-          LV.closed = true; LV.busy = false;
+          LV.closed = true; LV.busy = false; LV.closeAt = 0;
           const setCells = (on) => { for (let i = 1; i <= 4; i++) GRID[LV.r - i][LV.g] = on ? "=" : " "; for (let i = 1; i <= 4; i++) buildRowColliders(LV.r - i); };
           setCells(true);
-          LV.toggle = (silent) => {
-            if (LV.busy) return; LV.busy = true; LV.closed = !LV.closed;
-            SFX.clunk(); shake(3);
-            const topY = tiles[3].baseY;
-            tiles.forEach((t) => {
-              tween(t.pos.y, LV.closed ? t.baseY : topY - 16, 0.5, (v) => (t.pos.y = v), easings.easeOutQuad);
-              tween(t.scale.y, LV.closed ? 1 : 0.1, 0.5, (v) => (t.scale = vec2(1, v)), easings.easeOutQuad);
+          // countdown blink: the last second before the slam, the hovering gate flickers
+          tiles.forEach((t) => t.onUpdate(() => { t.opacity = !LV.closed && LV.closeAt && LV.closeAt - time() < 1.0 ? 0.35 + Math.abs(Math.sin(time() * 16)) * 0.65 : 1; }));
+          const armOf = () => get("lever").find((o) => o.LV === LV);
+          const inGate = (o, hw, hh) => o.pos.x + hw > LV.g * TS && o.pos.x - hw < LV.g * TS + TS && o.pos.y + hh > (LV.r - 4) * TS && o.pos.y - hh < LV.r * TS;
+          LV.slam = () => { // timed gates (#52): it comes down HARD — being under it is death
+            if (LV.closed || LV.busy) return;
+            LV.busy = true; LV.closed = true; LV.closeAt = 0; SFX.clunk(); shake(6);
+            tiles.forEach((t) => { tween(t.pos.y, t.baseY, 0.13, (v) => (t.pos.y = v), easings.easeInQuad); tween(t.scale.y, 1, 0.13, (v) => (t.scale = vec2(1, v)), easings.easeInQuad); });
+            wait(0.13, () => {
+              setCells(true); LV.busy = false; const a2 = armOf(); if (a2) a2.flipX = false;
+              dust(vec2(LV.g * TS + TS / 2, LV.r * TS));
+              get("nemesis").forEach((n) => { if (inGate(n, 18, 32)) { n.iframes = 0; n.hp = 1; hitNemesis(n); } });
+              if (inGate(player, HIT_W / 2, HIT_H / 2)) {
+                popText(player.pos.add(0, -50), "CRUSHED", rgb(240, 80, 60)); burst(player.pos, rgb(200, 50, 40), 18, 260, 8); shake(14);
+                liveSend(`${PLAYER_NAME} was crushed by a gate (${score} energy)`); netSend({ t: "dead" }); SFX.lose();
+                go("over", { win: false, side: sideKey, score, online: NET.connected, how: "The gate slammed down on you." });
+              }
             });
-            wait(0.45, () => { setCells(LV.closed); LV.busy = false; });
-            if (!silent) netSend({ t: "lever", g: LV.g, r: LV.r, closed: LV.closed });
+          };
+          LV.toggle = (silent) => {
+            if (LV.busy || !LV.closed) return; // a pull only OPENS — then the clock is running
+            LV.busy = true; LV.closed = false;
+            SFX.clunk(); shake(3);
+            const topY = tiles[3].baseY, a2 = armOf(); if (a2) a2.flipX = true;
+            tiles.forEach((t) => {
+              tween(t.pos.y, topY - 16, 0.5, (v) => (t.pos.y = v), easings.easeOutQuad);
+              tween(t.scale.y, 0.1, 0.5, (v) => (t.scale = vec2(1, v)), easings.easeOutQuad);
+            });
+            wait(0.45, () => { setCells(false); LV.busy = false; LV.closeAt = time() + GATE_OPEN_T; });
+            if (!silent) netSend({ t: "lever", g: LV.g, r: LV.r, closed: false });
           };
           add([sprite("lever"), pos(LV.l * TS + TS / 2, LV.r * TS), anchor("bot"), area({ scale: 1.6 }), z(3), "lever", { LV }]);
         });
+        loop(0.05, () => LEVERS.forEach((LV) => { if (!LV.closed && !LV.busy && LV.closeAt && time() > LV.closeAt) LV.slam(); }));
 
         // --- weapon crates on pads (#13): spawn on random floor cells ---
         const NKEY2 = sideKey === "human" ? "stalker" : "human";
@@ -1259,6 +1285,11 @@
           invuln = true; const blink = loop(0.09, () => (player.opacity = player.opacity === 1 ? 0.35 : 1)); wait(1.1, () => { blink.cancel(); player.opacity = 1; invuln = false; });
         }
         player.onCollide("energy", (c) => { burst(c.pos, rgb(120, 220, 150), 10, 170, 6); popText(c.pos, "+1", rgb(180, 240, 190)); SFX.pickup(); destroy(c); score += 1; updateHUD(); });
+        player.onCollide("medkit", (m2) => { // health pods (#52) — both sides can patch up
+          if (hp >= CFG.maxHp) return; // full — leave it for when it counts
+          hp += 1; updateHUD(); SFX.pickup(); popText(m2.pos, "+1 HP", rgb(150, 240, 160)); burst(m2.pos, rgb(230, 90, 80), 10, 180, 6);
+          netSend({ t: "pod", x: Math.round(m2.pos.x), y: Math.round(m2.pos.y) }); destroy(m2);
+        });
         player.onCollide("wcrate", (c) => {
           if (WEAPONS[c.wkey].side !== sideKey || time() - c.born < 1) return; // 1s grace stops swap loops
           const old = weapon; weapon = c.wkey;
@@ -1413,7 +1444,7 @@
         }
         player.onCollideUpdate("turret", (t) => { nearTurret = t; lastTurretTime = time(); });
         function useLever() {
-          if (nearLever && nearLever.exists() && time() - lastLeverTime < 0.15) { nearLever.flipX = !nearLever.flipX; nearLever.LV.toggle(); }
+          if (nearLever && nearLever.exists() && time() - lastLeverTime < 0.15) nearLever.LV.toggle();
         }
         player.onCollideUpdate("lever", (lv) => { nearLever = lv; lastLeverTime = time(); });
         onKeyPress("e", () => { useDoor(); useTurret(); useLever(); }); onGamepadButtonPress("dpad-up", () => { useDoor(); useTurret(); useLever(); });
@@ -1635,7 +1666,8 @@
             if (m.t === "s") { rTarget = vec2(m.x, m.y); remote.flipX = m.f < 0; rHp = m.hp; if (m.w) remoteWeapon = m.w; if (remote.anim !== m.a) { remote.anim = m.a; remote.play(m.a); } }
             else if (m.t === "atk") remoteAttack(m);
             else if (m.t === "crate") spawnCrate(m.w, vec2(m.x, m.y));
-            else if (m.t === "lever") { const lv = get("lever").find((o) => o.LV.g === m.g && o.LV.r === m.r); if (lv && lv.LV.closed !== m.closed) { lv.flipX = !lv.flipX; lv.LV.toggle(true); } }
+            else if (m.t === "lever") { const lv = get("lever").find((o) => o.LV.g === m.g && o.LV.r === m.r); if (lv && lv.LV.closed !== m.closed) lv.LV.toggle(true); }
+            else if (m.t === "pod") { const p2 = get("medkit").find((o) => Math.abs(o.pos.x - m.x) < 3 && Math.abs(o.pos.y - m.y) < 26); if (p2) destroy(p2); }
             else if (m.t === "crateTake") { const c = get("wcrate").sort((a, b) => a.pos.dist(vec2(m.x, m.y)) - b.pos.dist(vec2(m.x, m.y)))[0]; if (c && c.pos.dist(vec2(m.x, m.y)) < 40) destroy(c); }
             else if (m.t === "dead") { SFX.win(); go("over", { win: true, side: sideKey, score, online: true, how: "You hunted them down." }); }
             else if (m.t === "escaped") { SFX.lose(); go("over", { win: false, side: sideKey, score, online: true, how: "Your prey escaped." }); }

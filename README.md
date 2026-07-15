@@ -10,13 +10,13 @@ A browser hunt-or-be-hunted platformer inspired by the asymmetric design of the 
 |---|---|---|
 | **Edge** | Blaster + throwable bombs | Claw lunge up close |
 | **Mobility** | Standard jump | **Faster than you** • double jump • wall-climb |
-| **Toughness** | Fragile (3 HP) | Tough (4 HP) |
+| **Toughness** | Fragile (5 HP) | Tough (6 HP) |
 
 Whichever side you pick, **the other side hunts you** across the complex — an AI nemesis that patrols, spots you, chases across floors, and attacks. When the heartbeat starts, run.
 
 ## The world wants you dead too
 
-Multi-floor industrial complex: spikes, patrol drones, sewage pools that slow your wading, ladders, climbable chain-nets, teleport doors, flickering lamps, steam vents, ceiling drips. The roofline opens onto a **dusk vista of mountains and a sunset lake** where crows wheel overhead (land hard and they scatter); steel-framed windows glimpse the outside from the upper floors, and each depth has its own light — cool daylight up top, green industry mid, rust-warm depths. Grab energy cells, find the glowing **EXIT** on the roof.
+Multi-floor industrial complex: spikes, patrol drones, sewage pools that slow your wading, ladders, climbable chain-nets, teleport doors, flickering lamps, steam vents, ceiling drips. The roofline opens onto a **dusk vista of mountains and a sunset lake** where crows wheel overhead (land hard and they scatter); steel-framed windows glimpse the outside from the upper floors, and each depth has its own light — cool daylight up top, green industry mid, rust-warm depths. Lever-gates open for only a few seconds — sprint through before they slam, because **the gate coming down on you is instant death**. Health pods are stashed around the complex for whoever reaches them first. Grab energy cells, find the glowing **EXIT** on the roof.
 
 **Random weapons** spawn on pads — you can hold only one; swapping drops your current where you stand. Human pool: Blaster / Scattergun / Rail Lance / Shotgun / Machine Gun. Beast pool: Claws / Bone Scythe / Barb Whip / Bone Bat. Every weapon has its own attack visuals and sound. The hunter arms itself too.
 
