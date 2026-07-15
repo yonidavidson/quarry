@@ -30,6 +30,7 @@ Press **O** on the menu. A 3-step wizard walks you through it: pick your name an
 |--------|----------|---------|
 | Move / climb | ←→↑↓ / WASD | stick / d-pad |
 | Jump | Space | A |
+| Crouch / crawl | hold ↓ / S | stick down |
 | Attack | J / X | B / X |
 | Bomb (Jack) / Super leap (Beast) | K / C | Y |
 | Door | E | d-pad up |

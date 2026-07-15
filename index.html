@@ -966,7 +966,7 @@
         const maxJumps = CFG.doubleJump ? 2 : 1;
         const CLIMB = 155;
         let hp = CFG.maxHp, score = 0, invuln = false, facing = 1, jumpsLeft = maxJumps;
-        let lastAtk = 0, airTime = 0, spawn = vec2(0, 0), camReady = false, lastBomb = 0, ropeBoostT = 0, ropeBoost = 240, leapAt = -99;
+        let lastAtk = 0, airTime = 0, spawn = vec2(0, 0), camReady = false, lastBomb = 0, ropeBoostT = 0, ropeBoost = 240, leapAt = -99, crouching = false;
         let lastGroundedAt = 0, jumpBufferedAt = -1; // coyote time + jump buffering
         let weapon = CFG.mode === "ranged" ? "blaster" : "claws"; // one weapon at a time (#13)
         let stepAt = 0, stepAlt = false; // footstep cadence
@@ -1961,7 +1961,7 @@
           if (CFG.bomb && flares < 2 && time() > flareAt) { flares++; flareAt = time() + 20; }
           const wading = inWater();
           if (Math.abs(dx) > 0.05) {
-            player.move(dx * (CFG.speed * (wading ? 0.55 : 1) + (time() < ropeBoostT ? ropeBoost : 0)), 0); facing = dx > 0 ? 1 : -1; player.flipX = facing < 0; // thread-leap + super leap (#53): momentum carries
+            player.move(dx * (CFG.speed * (wading ? 0.55 : crouching ? 0.42 : 1) + (time() < ropeBoostT ? ropeBoost : 0)), 0); facing = dx > 0 ? 1 : -1; player.flipX = facing < 0; // thread-leap + super leap (#53): momentum carries
             if (player.isGrounded() && time() > stepAt) { stepAt = time() + (wading ? 0.34 : 0.27); stepAlt = !stepAlt; wading ? SFX.slosh() : SFX.step(stepAlt); }
           }
           // sewage: splash on entry, capped sink speed, always able to hop out
@@ -1977,6 +1977,17 @@
 
           // apex hang: floatier at the top of the jump arc
           if (!onLadderNow) player.gravityScale = !player.isGrounded() && Math.abs(player.vel.y) < 70 ? 0.72 : 1;
+
+          // crouch (#57): hold Down to duck and crawl — low enough to fit the 1-row
+          // spaces under mezzanines. Sticky while there's no headroom to stand.
+          const headroom = () => { const c2 = Math.floor(player.pos.x / TS), r2 = Math.floor((player.pos.y + HIT_H / 2 - HIT_H + 6) / TS); return !(GRID[r2] && GRID[r2][c2] === "="); };
+          const wantCrouch = down && player.isGrounded() && !onLadderNow && !hanging && !ceilStick;
+          const nowCrouch = wantCrouch || (crouching && player.isGrounded() && !headroom());
+          if (nowCrouch !== crouching) {
+            crouching = nowCrouch;
+            player.area.scale = vec2(CFG.areaX, CFG.areaY * (crouching ? 0.55 : 1));
+            player.area.offset = vec2(0, crouching ? CFG.frameH * CFG.areaY * 0.225 : 0); // keep the feet planted
+          }
 
           // ledge grab (#40): fall past a lip with your hands close — catch it, hang, climb up
           const solidCell = (c2, r2) => GRID[r2] && GRID[r2][c2] === "=";
@@ -2030,6 +2041,7 @@
           else if (!player.isGrounded() && !onLadderNow) setAnim("jump");
           else if (onLadderNow) setAnim("climb"); // back view on ladders (#28)
           else if (player.isGrounded() && time() < landUntil) setAnim("land");
+          else if (crouching) setAnim("land"); // the land frame IS the crouch pose (proper crawl cycle: #50 backlog)
           else if (Math.abs(dx) > 0.05) setAnim("run");
           else setAnim("idle");
           // stalker ichor drips while moving
