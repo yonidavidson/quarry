@@ -683,20 +683,96 @@
       // Ladders connect them; doors teleport across the map.
       // =====================================================================
       // ===== LEVEL GENERATOR (#37): ~5x map, tall ceilings for ceiling ambushes =====
-      const W = 200, GROUND_R = 24, TOP_R = 4;
+      const W = 220, GROUND_R = 24, TOP_R = 4, DEEP_R = 31; // (#54) below the ground slab: the UNDERDEEP caverns
       const FLOORS = [9, 14, 19, GROUND_R]; // 4-row (192px) corridors (#49): air to jump, room to run, ceiling ambushes from real height
       const sRand = (() => { let s = 20260714; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; })();
       const RI = (a, b) => a + Math.floor(sRand() * (b - a + 1));
-      const GRID = Array.from({ length: GROUND_R + 2 }, () => Array(W).fill(" "));
+      const GRID = Array.from({ length: DEEP_R + 2 }, () => Array(W).fill(" "));
       const fillRow = (r, c0, c1, ch) => { for (let c = Math.max(0, c0); c <= c1 && c < W; c++) GRID[r][c] = ch; };
-      fillRow(GROUND_R, 0, W - 1, "=");
+      // hilly ground (#54): the surface rolls between rows 22-24 — hills, downs, and sightline breaks
+      const GH = []; { let h2 = GROUND_R, next = 10;
+        for (let c = 0; c < W; c++) {
+          if (c >= next) { h2 = Math.min(GROUND_R, Math.max(GROUND_R - 2, h2 + RI(-1, 1))); next = c + RI(3, 7); }
+          GH.push(c < 10 || c > W - 6 ? GROUND_R : h2);
+        }
+      }
+      const POOL_SPANS = []; // pools need flat basins — carve them out of the hills
+      for (let i = 0; i < 3; i++) { const c0 = RI(12, W - 24); POOL_SPANS.push([c0, c0 + RI(6, 10)]); }
+      const inPool = (c) => POOL_SPANS.some(([a, b]) => c >= a - 2 && c <= b + 2);
+      for (const [p0, p1] of POOL_SPANS) for (let c = Math.max(0, p0 - 1); c <= Math.min(W - 1, p1 + 1); c++) GH[c] = GROUND_R;
+      // chasms (#54): in three places the floor simply ENDS — a long drop into the dark
+      const CHASMS = [];
+      for (const fx of [0.3, 0.55, 0.85]) {
+        let c0 = Math.floor(W * fx) + RI(-3, 3);
+        while (inPool(c0) || inPool(c0 + 4)) c0 += 9;
+        CHASMS.push([c0, c0 + RI(3, 4)]);
+      }
+      const inChasm = (c) => CHASMS.some(([a, b]) => c >= a && c <= b);
+      for (let c = 0; c < W; c++) if (!inChasm(c)) for (let r = GH[c]; r <= GROUND_R; r++) GRID[r][c] = "=";
+      // the underdeep: a hilly cavern floor far below, rich and dangerous
+      const DH = []; { let h2 = DEEP_R - 1, next = 0;
+        for (let c = 0; c < W; c++) { if (c >= next) { h2 = Math.min(DEEP_R, Math.max(GROUND_R + 4, h2 + RI(-1, 1))); next = c + RI(3, 6); } DH.push(h2); }
+      }
+      for (let c = 0; c < W; c++) for (let r = DH[c]; r < GRID.length; r++) GRID[r][c] = "=";
+      const CHASM_LADDERS = CHASMS.map(([a, b]) => { const mid = Math.floor((a + b) / 2); return { c: mid, r0: GH[a - 1] || GROUND_R, r1: DH[mid] - 1 }; });
       for (const r of FLOORS.slice(0, -1)) {
         fillRow(r, 0, W - 1, "=");
         for (let g = 0, n = RI(5, 7); g < n; g++) { const gx = RI(6, W - 10); fillRow(r, gx, gx + RI(2, 3), " "); } // fewer, narrower holes (#49): floors you can actually sprint on
       }
       for (let cx0 = RI(4, 10); cx0 < W - 14;) { const seg = RI(10, 22); fillRow(TOP_R, cx0, Math.min(cx0 + seg, W - 3), "="); cx0 += seg + RI(6, 12); }
-      // items / drones / spikes on every floor
+      // ===== NON-LINEAR PASS (#54): the complex is a maze, not a stack of corridors =====
       const floorsAll = [TOP_R, ...FLOORS];
+      const EXTRA_TOPS = []; // new platform cells that deserve loot too
+      // 1) atrium wells: open shafts punched clean through the interior floors —
+      //    hop the alternating platforms up, or drop four storeys in one fall
+      const WELLS = [];
+      for (const wx of [Math.floor(W * 0.18), Math.floor(W * 0.46), Math.floor(W * 0.74)]) {
+        const c0 = wx + RI(-4, 4), wWide = RI(6, 9), c1 = c0 + wWide;
+        WELLS.push({ c0, c1 });
+        for (const r of FLOORS.slice(0, -1)) fillRow(r, c0, c1, " ");
+        let side = RI(0, 1);
+        for (const pr of [7, 10, 12, 15, 17, 20, 22]) { // alternating hop-up perches
+          const pw = RI(2, 3), pc = side ? c0 : c1 - pw + 1; side = 1 - side;
+          fillRow(pr, pc, pc + pw - 1, "=");
+          for (let c = pc; c < pc + pw; c++) EXTRA_TOPS.push([c, pr]);
+        }
+      }
+      const inWell = (c) => WELLS.some((wl) => c >= wl.c0 - 2 && c <= wl.c1 + 2);
+      // 1.5) underdeep perches + loot: the caverns pay for the risk of the drop
+      for (let c = RI(8, 14); c < W - 8; c += RI(9, 14)) {
+        if (inChasm(c) || inChasm(c + 3)) continue;
+        const pw = RI(2, 3), pr = GROUND_R + RI(2, 3);
+        let ok = true;
+        for (let cc = c; cc < c + pw && cc < W; cc++) if (GRID[pr][cc] !== " " || GRID[pr - 1][cc] !== " " || DH[cc] - pr < 2) ok = false;
+        if (!ok) continue;
+        fillRow(pr, c, c + pw - 1, "=");
+        for (let cc = c; cc < c + pw; cc++) EXTRA_TOPS.push([cc, pr]);
+      }
+      for (let c = 3; c < W - 3; c++) { // cavern floor: dense energy, pods, and the odd drone in the dark
+        if (GRID[DH[c]][c] !== "=" || GRID[DH[c] - 1][c] !== " ") continue;
+        const v = sRand();
+        if (v < 0.09) GRID[DH[c] - 1][c] = "$";
+        else if (v < 0.12) GRID[DH[c] - 1][c] = "+";
+        else if (v < 0.14) GRID[DH[c] - 1][c] = "e";
+      }
+      for (let c = 12; c < W - 12; c++) { // hilltops carry loot worth the climb
+        if (GH[c] === GROUND_R || inChasm(c) || GRID[GH[c]][c] !== "=" || GRID[GH[c] - 1][c] !== " ") continue;
+        if (sRand() < 0.07) GRID[GH[c] - 1][c] = "$";
+      }
+      // 2) mezzanines: half-height platforms along every corridor — a high road and a low road
+      for (let i = 0; i < floorsAll.length - 1; i++) {
+        const rB = floorsAll[i + 1], mr = rB - 2;
+        for (let c = RI(8, 16); c < W - 8; c += RI(10, 16)) {
+          const mw = RI(3, 5);
+          if (inWell(c) || inWell(c + mw)) continue;
+          let ok = true;
+          for (let cc = c; cc < c + mw && ok; cc++) if (GRID[mr][cc] !== " " || GRID[mr - 1][cc] !== " " || GRID[mr + 1][cc] !== " ") ok = false;
+          if (!ok) continue;
+          fillRow(mr, c, c + mw - 1, "=");
+          for (let cc = c; cc < c + mw; cc++) EXTRA_TOPS.push([cc, mr]);
+        }
+      }
+      // items / drones / spikes on every floor
       for (const r of floorsAll) for (let c = 2; c < W - 2; c++) {
         if (GRID[r][c] !== "=" || GRID[r - 1][c] !== " ") continue;
         const v = sRand();
@@ -705,6 +781,12 @@
         else if (v < 0.061 && GRID[r][c + 1] === "=" && GRID[r - 1][c + 1] === " ") { GRID[r - 1][c] = "^"; GRID[r - 1][c + 1] = "^"; }
         else if (v < 0.0685) GRID[r - 1][c] = "+"; // health pods (#52): patch yourself up mid-hunt
       }
+      for (const [c, r] of EXTRA_TOPS) { // perches and mezzanines carry loot worth the detour (#54)
+        if (GRID[r - 1][c] !== " ") continue;
+        const v = sRand();
+        if (v < 0.16) GRID[r - 1][c] = "$";
+        else if (v < 0.20) GRID[r - 1][c] = "+";
+      }
       GRID[GROUND_R - 1][3] = "@";
       let exitC = W - 5;
       for (let c = W - 4; c > 2; c--) if (GRID[TOP_R][c] === "=" && GRID[TOP_R - 1][c] === " ") { GRID[TOP_R - 1][c] = ">"; exitC = c; break; }
@@ -712,7 +794,11 @@
       const LADDERS = [], NETS = [];
       const pairs = []; for (let i = 0; i < floorsAll.length - 1; i++) pairs.push([floorsAll[i], floorsAll[i + 1]]);
       for (const [rT, rB] of pairs) {
-        for (let c = RI(4, 14); c < W - 4; c += RI(13, 20)) if (GRID[rT][c] === "=" && GRID[rB][c] === "=") LADDERS.push({ c, r0: rT, r1: rB - 1 }); // denser ladders (#49): always a way out
+        for (let c = RI(4, 14); c < W - 4; c += RI(13, 20)) { // denser ladders (#49): always a way out
+          if (GRID[rT][c] !== "=" || GRID[rB][c] !== "=") continue;
+          let clear2 = true; for (let r = rT + 1; r < rB; r++) if (GRID[r][c] !== " ") clear2 = false; // don't cut through mezzanines (#54)
+          if (clear2) LADDERS.push({ c, r0: rT, r1: rB - 1 });
+        }
         for (let c = RI(10, 20); c < W - 4; c += RI(18, 28)) {
           // net must sit beside a floor edge (climb past the lip) and land on solid ground
           if (GRID[rT][c] !== "=" || (GRID[rT][c + 1] === "=" && GRID[rT][c - 1] === "=") || GRID[rB][c] !== "=") continue;
@@ -721,7 +807,12 @@
         }
       }
       // guaranteed route to the exit
-      for (let c = exitC; c > 4; c--) if (GRID[TOP_R][c] === "=" && GRID[FLOORS[0]][c] === "=") { LADDERS.push({ c, r0: TOP_R, r1: FLOORS[0] - 1 }); break; }
+      for (let c = exitC; c > 4; c--) {
+        if (GRID[TOP_R][c] !== "=" || GRID[FLOORS[0]][c] !== "=") continue;
+        let clear2 = true; for (let r = TOP_R + 1; r < FLOORS[0]; r++) if (GRID[r][c] !== " ") clear2 = false;
+        if (clear2) { LADDERS.push({ c, r0: TOP_R, r1: FLOORS[0] - 1 }); break; }
+      }
+      LADDERS.push(...CHASM_LADDERS); // every chasm has a way back up — and the AI hunter knows it
       for (const L of LADDERS) for (let r = L.r0; r <= L.r1; r++) if (GRID[r]) GRID[r][L.c] = "H";
       for (const N of NETS) for (let r = N.r0; r <= N.r1; r++) if (GRID[r] && GRID[r][N.c] === " ") GRID[r][N.c] = "N";
       // hanging ropes (#53): threads from the corridor ceilings — leap thread to thread to cross long gaps
@@ -730,6 +821,11 @@
         if (GRID[rT][c] !== "=") continue;
         let ok = true; for (let r = rT + 1; r <= rT + 3; r++) if (!GRID[r] || GRID[r][c] !== " ") ok = false;
         if (ok) ROPES.push({ c, r0: rT + 1, r1: rT + 3 });
+      }
+      for (let c = RI(6, 12); c < W - 4; c += RI(9, 14)) { // underdeep ropes: threads in the dark (#54)
+        if (GRID[GROUND_R][c] !== "=" || inChasm(c)) continue;
+        let ok = true; for (let r = GROUND_R + 1; r <= GROUND_R + 3; r++) if (!GRID[r] || GRID[r][c] !== " ") ok = false;
+        if (ok) ROPES.push({ c, r0: GROUND_R + 1, r1: GROUND_R + 3 });
       }
       for (const R of ROPES) for (let r = R.r0; r <= R.r1; r++) GRID[r][R.c] = "|";
       // doors snapped to valid floor cells
@@ -760,9 +856,8 @@
         if (ok) for (let r = w.r0; r <= w.r1; r++) if (GRID[r][w.c] === " ") { GRID[r][w.c] = "="; STUB_CELLS.add(w.c + "," + r); }
       }
       // pools + turret spots + nemesis spawns, all generated
-      const POOLS_GEN = [];
-      for (let i = 0; i < 3; i++) { const c0 = RI(10, W - 22); POOLS_GEN.push({ c0, c1: c0 + RI(6, 10), r: GROUND_R - 1 }); } // fewer wading traps (#49)
-      POOLS_GEN.push({ c0: RI(20, W - 30), c1: RI(20, W - 30) + 7, r: FLOORS[2] - 1 });
+      const POOLS_GEN = POOL_SPANS.map(([a, b]) => ({ c0: a, c1: b, r: GROUND_R - 1 })); // basins carved flat during the hill pass (#54)
+      { let mc = RI(20, W - 30); while (inWell(mc) || inWell(mc + 7)) mc += 11; POOLS_GEN.push({ c0: mc, c1: mc + 7, r: FLOORS[2] - 1 }); }
       const TURRET_SPOTS = [];
       for (const r of [FLOORS[0], FLOORS[0], FLOORS[1], FLOORS[1], FLOORS[2], FLOORS[2], GROUND_R, GROUND_R]) { // two per floor (#51)
         let c = RI(8, W - 12); while (c < W - 3 && !(GRID[r][c] === "=" && GRID[r - 1][c] === " ")) c++;
