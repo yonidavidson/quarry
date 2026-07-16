@@ -1759,7 +1759,7 @@
           if (jumpsLeft > 0) {
             const mid = jumpsLeft < maxJumps; player.jump(CFG.jumpForce);
             if (onLadderNow) { ropeBoost = 240; ropeBoostT = time() + 0.32; }
-            else if (!mid && Math.abs(dx) > 0.05) { ropeBoost = 140; ropeBoostT = time() + 0.35; } // (#68) running ledge-jumps carry — longer, flatter, PoP
+            else if (!mid && (isKeyDown("left") || isKeyDown("a") || isKeyDown("right") || isKeyDown("d") || isGamepadButtonDown("dpad-left") || isGamepadButtonDown("dpad-right") || Math.abs((getGamepadStick("left") || vec2(0, 0)).x) > 0.4)) { ropeBoost = 140; ropeBoostT = time() + 0.35; } // (#68) running ledge-jumps carry — longer, flatter, PoP
             jumpsLeft -= 1; squash(0.74, 1.28); dust(player.pos.add(0, CFG.shadowY * CFG.sc - 2)); mid ? SFX.jump2() : SFX.jump();
           }
           else jumpBufferedAt = time(); // buffer a jump pressed just before landing
