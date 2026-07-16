@@ -248,6 +248,13 @@
         { sliceX: 5, anims: { fly: { from: 0, to: 3, speed: 9, loop: true }, glide: 4 } });
       loadSprite("cloud", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="140" height="44"><g fill="#9a7aa8" opacity="0.55"><ellipse cx="46" cy="28" rx="40" ry="14"/><ellipse cx="86" cy="22" rx="34" ry="12"/><ellipse cx="110" cy="30" rx="26" ry="9"/></g><g fill="#c9a0b8" opacity="0.35"><ellipse cx="60" cy="18" rx="26" ry="9"/><ellipse cx="96" cy="14" rx="18" ry="7"/></g></svg>`));
 
+      // HUD portraits (#63): cropped from the character art, framed like the original's tray
+      loadSprite("face-human", "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACgAAAAoCAMAAAC7IEhfAAABgFBMVEUAAQGgezBRZjPklmOPSSuuZTcSEw5PWjAtOinJeUrQhFCUUyvtqG7jl1syRCwZJxf6w49tMhYqOB7dkWK3aENSNhfysnsdKSN3OCNXKRVvSCekWjOPilBMVlMhKyXdl1s3JBYnGw380p3EbkVnLRedlVRdaF4+TEhMHBR3gUj2uIPAbz+8gk0xQR/AcDyVnJdFTkVcOyWkpp7gj1q0ckccMRtjKSSgl1airKiDPxwiDAh1eG0AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA3mZ7RAAAAYHRSTlP///////////////////////////////////////////////////////////////////////////////8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAtQLhCAAABtElEQVR42s3VaW+jMBAG4Df2GHxgAqGEQO5N02vv+/r//2vHkLa0WgVW6oedDyCLR+MZjwBMRgb+AWJE/H8w4hgBy+gUQzDq5G63G1FjXTduv3+hZpqmKe2orsvSJMk8SZIv5+EW1iIJMZDRldY23PsedB6+KdVWSml3QxmhlJJe2v0gZGm9t9YOQeKU3uf5MGTqvPdD50j0DeSVwjC8yDHZ+jPw6yyOAUPG5u16GpZ/zTjTsYhhnF0s6jrPET/IPjwcDuggWUtEjgfD0D2DxkglJSDit1ylk4pIGsz4iXwOlcwyBT2DtkVBFMYIbIDXpgc/tvAu89CpQFEUUjqGKa4/IDEXvYxkwgPvl9x4vILMGGYQ+HH93n9+ComhUj8DFKsowGglgPUavg8vOePkncvD2c2EEMfj9yPfBLTm3vowJ7VcXqI+wfvoRvUIiRje3PxiqOPogd3eIk37kHhqVMhXXMx0qrF6kpHm80foTHaCTJEGkrZXVJXqQcfQdPDqCrxdG5ojqjZ9uFgsMyP54DYVb73+zQVMWxa+U+rO9mGShFFvwt5V9Qm6dXrdvUEn+MJ/hT/tmRq+DUB8pgAAAABJRU5ErkJggg==");
+      loadSprite("face-stalker", "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACgAAAAoCAMAAAC7IEhfAAABgFBMVEUCBQWgey8mKCocJSowNipKNygOFRRqVSXy12/txU+rhCnNpTlMSCpTWCfNmjNIS1JNU1dFKi2LaByPaSQZHiiadyvVtDvWqEROWGN0VBq5lyvpuUry+ftzZS0uKRqxt7I8SEv54nObdhrL2NRveXrtyWRXZ2lsSSxJNRm0lErPiDNUaivbtkeDVBmRm6M6RCvv2rVoeS97g39uTBuOWS5CLRbUm0WRPhWFSij84YFnaW7trUWThTlpZUKkWSxxe4H52oBfcC2rokS5rJQzUU+WfWapkYOhpam3oSsxNB6xbDSqdx1bRRrVeSoxPkNhNSWmhRl9ZByBjJBdUgfd5uyMThi4XB2JaExPMUOFlJd/j4+Wp7EAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAApnCSNAAAAYHRSTlP//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////wAAAACA1CstAAACpElEQVR42r3VZ3PiMBAG4BfJFpLcwMY4QOg1IZBe73K53nsv//9/3MpAzpBJJjdzczt8AM3jXe9KNsjdMvAXELeI/wGZZVnMxI3QZsa9cMMw1LFlXQdtCpKRS6E1XdG4AeajKHbrvud5jkM5rWtKFyuVMPR9xzHOcRJ9KZchK8L1/ZCgUuPx+L5jXebMwhJlJOn6nQ7Bdru2mzhOdBW2SpwTtW10aqpTk3K3P64pb57yD2wJBAEHp5ZOgFBpaUJVqytwygUzjoOBnby08V7K51J65ZWMwbSAFmOcbLon9sE7fJKyXC5XLXe5dKHXZeAshSbvvSIqBKtVdwm2qI9fEF0SBcbectLsoAhHVqs6ykJyZxCt7gCDqclJn0O6AUBpXc9Ai9o447xAK92pWDcLIxs7QANaYwVSFLhZs9YHtKAPALoClRXIjTUwYKUA/DMmMm1yNAqXIPXARWC2hhpfIw68SqTfCQ+VUhn400AzRECwUgptITbvAImY3cEclqz1PXOTBpZAsID85pHT+PrmO7poZmBhfQ9sAZsMvQKLohxMTshKBpotCdj8tAXpHDE8tI+Pv9Q2feUvIF/sHfIUs4EXadp+Tti5hE78HK6lU6RjY1j+boO+gQlhT/q55YcrhWKWjiI2kENgcpr2cRVubz9st9uyWmGwTPWJhNlUNwsZExhR2Qe7W54XA0fAuQ3/G1pLT+EM2nnP60uvvhXv79NE8ooNd3ZgNZu9BbRmEHEu9pytsn7dyNd8JesbQzx59BSiF+zNIWbQzW17SbkcjhraO1cbaiNOq4rexeDy4BpokfR0FJlfbqLq6iii57z5DLiYl348h1qL+gfsG2nHqraR0JsDPz5mxkO1aTy27vcrW6dJmL6v7rm54ZC+DTJd/+N/hd+AXTNJRlOadAAAAABJRU5ErkJggg==");
+      loadSprite("clawmark", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="34" height="30"><g stroke="#cfc8bc" stroke-width="3" opacity="0.55" stroke-linecap="round"><path d="M6 4 L14 26"/><path d="M15 3 L23 25"/><path d="M24 4 L32 26"/></g></svg>`));
+      loadSprite("redcross", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22"><rect width="22" height="22" rx="3" fill="#e8dfd2"/><rect x="8" y="3" width="6" height="16" fill="#b3352c"/><rect x="3" y="8" width="16" height="6" fill="#b3352c"/><rect x="0.5" y="0.5" width="21" height="21" rx="3" fill="none" stroke="#4a4238"/></svg>`));
+      loadSprite("cone", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="120" height="150"><defs><linearGradient id="cg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#ffe9b0" stop-opacity="0.32"/><stop offset="100%" stop-color="#ffe9b0" stop-opacity="0"/></linearGradient></defs><polygon points="50,0 70,0 120,150 0,150" fill="url(#cg)"/></svg>`));
+
       loadSprite("redglow", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80"><defs><radialGradient id="rg" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#ff5040" stop-opacity="0.55"/><stop offset="100%" stop-color="#ff5040" stop-opacity="0"/></radialGradient></defs><circle cx="40" cy="40" r="40" fill="url(#rg)"/></svg>`));
 
       loadSprite("barrel", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="30" height="38"><ellipse cx="15" cy="36" rx="12" ry="2.5" fill="#000" opacity="0.3"/><rect x="3" y="4" width="24" height="30" rx="3" fill="#5a4632"/><rect x="3" y="4" width="7" height="30" rx="3" fill="#6b543c"/><rect x="3" y="10" width="24" height="4" fill="#33281c"/><rect x="3" y="24" width="24" height="4" fill="#33281c"/><ellipse cx="15" cy="5" rx="12" ry="3" fill="#4a3a28"/><path d="M15 15 l5 9 -10 0 z" fill="#c8992e"/></svg>`));
@@ -684,10 +691,16 @@
       setTimeout(livePoll, 2500);
       const CODENAME = "Hunter-" + Math.abs((Date.now() * 2654435761) % 899 + 100); // anonymous fun name
       PLAYER_NAME = (() => { try { return localStorage.getItem("quarry-name"); } catch (e) { return null; } })() || CODENAME;
-      // bottom bar that alternates between controls hint and live events
-      function addTicker(controlsLine) {
-        add([rect(width(), 24), pos(0, height() - 24), fixed(), z(196), color(12, 12, 14), opacity(0.85)]);
-        const bar = add([text("", { size: 13 }), pos(12, height() - 18), fixed(), z(200), color(150, 140, 124)]);
+      // bottom bar that alternates between controls hint and live events;
+      // tray mode (#63) grows it into the original's full-width status tray
+      function addTicker(controlsLine, tray) {
+        const H = tray ? 48 : 24;
+        add([rect(width(), H), pos(0, height() - H), fixed(), z(196), color(15, 15, 16), opacity(tray ? 0.94 : 0.85)]);
+        if (tray) {
+          add([rect(width(), 2), pos(0, height() - H), fixed(), z(197), color(74, 68, 54)]);
+          add([rect(width(), 1), pos(0, height() - H + 2), fixed(), z(197), color(30, 28, 24)]);
+        }
+        const bar = add([text("", { size: tray ? 11 : 13 }), pos(tray ? 56 : 12, height() - (tray ? 13 : 18)), fixed(), z(200), color(150, 140, 124)]);
         bar.onUpdate(() => {
           const showEvents = TICKER.items.length && Math.floor(time() / 8) % 2 === 1;
           if (showEvents) { bar.text = "◆ " + TICKER.items.slice(-3).map((i) => i.msg).join("   •   "); bar.color = rgb(220, 180, 110); }
@@ -1105,6 +1118,30 @@
           return cr;
         };
         for (let i = 0; i < 9; i++) spawnCrow(rand(100, LEVEL_W - 100), rand(0, 190));
+        // ===== SET DRESSING (#63): the complex TALKS, like the original =====
+        // gold chevrons pulse toward the exit
+        for (const cr2 of floorsAll) for (let c = 14; c < W - 10; c += 26) {
+          if (GRID[cr2][c] !== "=" || GRID[cr2 - 1][c] !== " " || rand() < 0.45) continue;
+          add([text("»»", { size: 22 }), pos(c * TS, cr2 * TS - 56), anchor("center"), z(-34), color(200, 158, 52), opacity(0.3), offscreen({ hide: true, distance: 140 }), { s: c, update() { this.opacity = 0.22 + Math.sin(time() * 2 + this.s) * 0.14; } }]);
+        }
+        // zone names painted huge and faint on the back walls
+        for (const [znm, zr] of [["THE ROOST", 6.4], ["THE WORKS", 12], ["OLD LINE", 17], ["KILLING FLOOR", 22], ["THE UNDERDEEP", 27.5]])
+          for (let zx = 500 + rand(0, 400); zx < LEVEL_W - 300; zx += rand(1900, 2600))
+            add([text(znm, { size: 42 }), pos(zx, zr * TS), anchor("center"), z(-37), color(150, 118, 62), opacity(0.15), offscreen({ hide: true, distance: 400 })]);
+        // DUCK hints at the crawl gaps under decks
+        GRID.forEach((row2, r2) => row2.forEach((ch2, c2) => {
+          if (ch2 !== "=" || row2[c2 - 1] === "=" || !GRID[r2 + 1] || GRID[r2 + 1][c2] !== " " || !GRID[r2 + 2] || GRID[r2 + 2][c2] !== "=") return;
+          add([text("DUCK", { size: 12 }), pos(c2 * TS - 34, (r2 + 1) * TS + 22), anchor("center"), z(-34), color(176, 152, 96), opacity(0.4), offscreen({ hide: true, distance: 120 })]);
+        }));
+        // red LED floor numbers where the ladders land
+        LADDERS.forEach((L) => {
+          const fi = floorsAll.indexOf(L.r0);
+          if (fi < 0) return;
+          add([rect(20, 17, { radius: 2 }), pos(L.c * TS + TS / 2 + 27, L.r0 * TS - 26), anchor("center"), z(-33), color(10, 8, 8), outline(2, rgb(64, 30, 26)), offscreen({ hide: true, distance: 120 })]);
+          add([text("" + (fi + 1), { size: 12 }), pos(L.c * TS + TS / 2 + 27, L.r0 * TS - 26), anchor("center"), z(-32), color(236, 62, 48), offscreen({ hide: true, distance: 120 }), { s: L.c, update() { this.opacity = rand() < 0.004 ? 0.2 : 0.9; } }]);
+        });
+        // the beast marks its territory — claw gouges in the lower complex
+        for (let i = 0; i < 14; i++) add([sprite("clawmark"), pos(rand(200, LEVEL_W - 200), rand(OUTDOOR_Y + 150, LEVEL_H - 150)), anchor("center"), z(-42), rotate(rand(-25, 25)), opacity(rand(0.35, 0.6)), offscreen({ hide: true, distance: 120 })]);
         // zone ambience (#49): wind on the roof, machinery in the halls, drips in the underdeep
         onUpdate(() => {
           const y = getCamPos().y;
@@ -1125,7 +1162,10 @@
           else if (ch === "|") add([sprite("rope"), pos(x, y), anchor("center"), z(1), rotate(0), offscreen({ hide: true, distance: 120 }), { s: c * 0.7 + r, update() { this.angle = Math.sin(time() * 1.3 + this.s) * 2.2; } }]);
           else if (ch === "^") add([sprite("spikes"), pos(x, r * TS + TS), anchor("bot"), area(), z(3), "danger"]);
           else if (ch === "$") spawnCell(x, y);
-          else if (ch === "+") add([sprite("medkit"), pos(x, y), anchor("center"), area({ scale: 1.2 }), z(3), "medkit", { s: x, update() { this.pos.y = y + Math.sin(time() * 2.2 + this.s) * 3; } }]);
+          else if (ch === "+") {
+            add([sprite("medkit"), pos(x, y), anchor("center"), area({ scale: 1.2 }), z(3), "medkit", { s: x, update() { this.pos.y = y + Math.sin(time() * 2.2 + this.s) * 3; } }]);
+            add([sprite("redcross"), pos(x, y - 34), anchor("center"), z(-40), opacity(0.85), offscreen({ hide: true, distance: 120 })]); // wall sign (#63)
+          }
           else if (ch === "e") { if (!NET.connected) spawnEnemy(x, y); } // online: the other player IS the hunter
           else if (ch === ">") {
             add([sprite("exit"), pos(x, r * TS + TS), anchor("bot"), area(), z(3), "exit"]);
@@ -1230,7 +1270,11 @@
               if (kind === "vent") steamVents.push(vec2(x, r * TS - 6));
             }
           }
-          if (above === " " && lampCount < 34 && rand() < 0.16) { add([sprite("lamp"), pos(x, r * TS - 40), anchor("center"), z(-8), color(...(r < 10 ? [168, 200, 242] : r < 19 ? [255, 226, 168] : [255, 158, 84])), { s: rand(0, 6), update() { this.opacity = rand() < 0.006 ? 0.04 : 0.55 + Math.sin(time() * 3 + this.s) * 0.2; } }]); lampCount++; }
+          if (above === " " && lampCount < 34 && rand() < 0.16) {
+            add([sprite("lamp"), pos(x, r * TS - 40), anchor("center"), z(-8), color(...(r < 10 ? [168, 200, 242] : r < 19 ? [255, 226, 168] : [255, 158, 84])), { s: rand(0, 6), update() { this.opacity = rand() < 0.006 ? 0.04 : 0.55 + Math.sin(time() * 3 + this.s) * 0.2; } }]);
+            add([sprite("cone"), pos(x, r * TS - 44), anchor("top"), z(-9), color(...(r < 10 ? [190, 214, 250] : r < 19 ? [255, 232, 180] : [255, 176, 110])), { s: rand(0, 6), update() { this.opacity = 0.4 + Math.sin(time() * 3 + this.s) * 0.14; } }, offscreen({ hide: true, distance: 200 })]); // visible beam (#63)
+            lampCount++;
+          }
           if (below === " " && rand() < 0.09) add([sprite("cable"), pos(x + rand(-10, 10), r * TS + TS - 2), anchor("top"), z(1), opacity(0.9)]);
         }));
         loop(0.25, () => steamVents.forEach((v) => { if (Math.abs(v.x - getCamPos().x) > 620) return; if (rand() < 0.7) add([circle(rand(4, 7)), pos(v.add(rand(-4, 4), 0)), anchor("center"), color(150, 150, 155), opacity(rand(0.12, 0.26)), z(3), lifespan(rand(0.8, 1.4), { fade: 1 }), { up: rand(20, 40), update() { this.pos.y -= this.up * dt(); this.radius += 6 * dt(); } }]); }));
@@ -1435,34 +1479,44 @@
         const wallActive = () => time() - lastWallTime < 0.06;
         const ladderActive = () => time() - lastLadderTime < 0.06 && time() > ladderCd;
 
-        // --- HUD v2 (#10): panel with HP pips, energy, weapon, bomb cooldown ---
-        add([rect(210, 96, { radius: 8 }), pos(10, 8), fixed(), z(198), color(16, 16, 18), opacity(0.72), outline(2, rgb(60, 58, 52))]);
-        add([text(CFG.name, { size: 15 }), pos(20, 16), fixed(), z(200), color(...CFG.color)]);
+        // --- HUD v3 (#63): the original's full-width bottom tray — portrait,
+        // heart pips, the armed weapon in a lit slot, LED counters ---
+        const HY = height() - 48; // tray top
+        const face = add([sprite("face-" + CFG.sprite), pos(5, HY + 4), fixed(), z(200)]);
+        face.onUpdate(() => (face.opacity = hp === 1 ? 0.55 + Math.abs(Math.sin(time() * 5)) * 0.45 : 1)); // the portrait panics at 1 HP
         const pips = [];
-        for (let i = 0; i < CFG.maxHp; i++) pips.push(add([sprite("pip"), pos(20 + i * 20, 38), fixed(), z(200), opacity(1)]));
-        add([sprite("cell"), pos(20 + CFG.maxHp * 20 + 14, 36), fixed(), z(200), scale(0.75)]);
-        const energyTxt = add([text("0", { size: 16 }), pos(20 + CFG.maxHp * 20 + 34, 40), fixed(), z(200), color(70, 240, 74)]);
-        const wIcon = add([sprite("wpn-" + weapon), pos(20, 60), fixed(), z(200)]);
-        const wTxt = add([text(WEAPONS[weapon].name, { size: 14 }), pos(52, 66), fixed(), z(200), color(255, 210, 62)]);
-        let bombBar = null;
-        if (CFG.bomb) {
-          add([rect(120, 5, { radius: 2 }), pos(20, 90), fixed(), z(199), color(40, 38, 34)]);
-          bombBar = add([rect(120, 5, { radius: 2 }), pos(20, 90), fixed(), z(200), color(230, 170, 70)]);
-          bombBar.onUpdate(() => { bombBar.width = 120 * clamp((time() - lastBomb) / 1.1, 0, 1); });
-          const flTxt = add([text("", { size: 13 }), pos(148, 86), fixed(), z(200), color(240, 110, 80)]);
-          flTxt.onUpdate(() => (flTxt.text = "✹".repeat(flares) + (flares < 2 ? " (L)" : " L")));
-        } else { // beast: super-leap cooldown (#53)
-          add([rect(120, 5, { radius: 2 }), pos(20, 90), fixed(), z(199), color(40, 38, 34)]);
-          const leapBar = add([rect(120, 5, { radius: 2 }), pos(20, 90), fixed(), z(200), color(216, 140, 70)]);
-          leapBar.onUpdate(() => { leapBar.width = 120 * clamp((time() - leapAt) / 6, 0, 1); });
-          add([text("LEAP", { size: 11 }), pos(148, 87), fixed(), z(200), color(216, 140, 70)]);
-        }
+        for (let i = 0; i < CFG.maxHp; i++) pips.push(add([sprite("pip"), pos(54 + i * 19, HY + 8), fixed(), z(200), opacity(1)]));
+        // armed weapon socket — yellow-lit like the original's active slot
+        add([rect(40, 36, { radius: 3 }), pos(188, HY + 5), fixed(), z(198), color(24, 22, 16), outline(2, rgb(196, 158, 44))]);
+        const wIcon = add([sprite("wpn-" + weapon), pos(194, HY + 11), fixed(), z(200)]);
+        const wTxt = add([text(WEAPONS[weapon].name, { size: 12 }), pos(236, HY + 9), fixed(), z(200), color(255, 210, 62)]);
+        // cooldown bar (bomb / leap) under the weapon name
+        add([rect(110, 4, { radius: 2 }), pos(236, HY + 26), fixed(), z(199), color(40, 38, 34)]);
+        const cdBar = add([rect(110, 4, { radius: 2 }), pos(236, HY + 26), fixed(), z(200), color(...(CFG.bomb ? [230, 170, 70] : [216, 140, 70]))]);
+        cdBar.onUpdate(() => { cdBar.width = 110 * clamp(CFG.bomb ? (time() - lastBomb) / 1.1 : (time() - leapAt) / 6, 0, 1); });
+        const cdTxt = add([text("", { size: 10 }), pos(352, HY + 22), fixed(), z(200), color(240, 110, 80)]);
+        cdTxt.onUpdate(() => (cdTxt.text = CFG.bomb ? "✹".repeat(flares) + (flares < 2 ? " (L)" : " L") : "LEAP  ROAR: L"));
+        // LED energy counter, green digits on black — pure 1996
+        add([rect(84, 26, { radius: 3 }), pos(width() - 96, HY + 9), fixed(), z(198), color(6, 8, 6), outline(2, rgb(52, 50, 42))]);
+        add([sprite("cell"), pos(width() - 116, HY + 12), fixed(), z(200), scale(0.7)]);
+        const energyTxt = add([text("0000", { size: 17 }), pos(width() - 88, HY + 14), fixed(), z(200), color(70, 240, 74)]);
         const ctrl = CFG.bomb ? "Bomb: K/Y   " : "Leap: K/Y   Roar: L   ";
-        addTicker("Move ←→/AD   Jump Space   Attack J/X   " + ctrl + "Climb ↑↓   Use/Take: E   Pause: Esc   Mute: N");
+        addTicker("Move ←→/AD   Jump Space   Attack J/X   " + ctrl + "Climb ↑↓   Use/Take: E   Pause: Esc   Mute: N", true);
+        // mission briefing (#63): the terms of the hunt, GO! — straight from the original
+        {
+          const bx = width() / 2, els = [
+            add([rect(360, 122, { radius: 5 }), pos(bx, 168), anchor("center"), fixed(), z(240), color(198, 178, 112), outline(3, rgb(66, 54, 22)), opacity(0.97)]),
+            add([text(CFG.bomb ? "HUNTED: THE COMPLEX" : "HUNTER: THE COMPLEX", { size: 15 }), pos(bx, 126), anchor("center"), fixed(), z(241), color(96, 32, 20)]),
+            add([text(CFG.bomb ? "Reach the EXIT on the roof.\nCollect energy. Stay alive.\nThe Stalker is loose." : "Hunt the human down.\nDo not let him reach the roof.\nThe complex is yours.", { size: 13, width: 320, align: "center" }), pos(bx, 168), anchor("center"), fixed(), z(241), color(44, 34, 16)]),
+            add([text("— GO !  (any key) —", { size: 12 }), pos(bx, 212), anchor("center"), fixed(), z(241), color(96, 32, 20), { update() { this.opacity = 0.55 + Math.sin(time() * 5) * 0.4; } }]),
+          ];
+          const dismiss = () => els.forEach((o) => o.exists() && destroy(o));
+          wait(6, dismiss); onKeyPress(dismiss); onGamepadButtonPress(dismiss);
+        }
         liveSend(`${PLAYER_NAME} enters the hunt as ${sideKey === "human" ? "JACK" : "the BEAST"}${NET.connected ? " (online duel!)" : ""}`);
         const updateHUD = () => {
           pips.forEach((p, i) => (p.opacity = i < hp ? 1 : 0.18));
-          energyTxt.text = "" + score;
+          energyTxt.text = String(score).padStart(4, "0");
           wIcon.use(sprite("wpn-" + weapon));
           wTxt.text = WEAPONS[weapon].name;
         };
