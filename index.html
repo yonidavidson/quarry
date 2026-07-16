@@ -1458,7 +1458,7 @@
           add([text("LEAP", { size: 11 }), pos(148, 87), fixed(), z(200), color(216, 140, 70)]);
         }
         const ctrl = CFG.bomb ? "Bomb: K/Y   " : "Leap: K/Y   Roar: L   ";
-        addTicker("Move ←→/AD   Jump Space   Attack J/X   " + ctrl + "Climb ↑↓   Door: E   Pause: Esc   Mute: N");
+        addTicker("Move ←→/AD   Jump Space   Attack J/X   " + ctrl + "Climb ↑↓   Use/Take: E   Pause: Esc   Mute: N");
         liveSend(`${PLAYER_NAME} enters the hunt as ${sideKey === "human" ? "JACK" : "the BEAST"}${NET.connected ? " (online duel!)" : ""}`);
         const updateHUD = () => {
           pips.forEach((p, i) => (p.opacity = i < hp ? 1 : 0.18));
@@ -1483,6 +1483,7 @@
           if (nearDoor && time() - lastDoorTime < 0.15) { doorHint.text = "E — enter"; doorHint.pos = nearDoor.pos.add(0, -78); doorHint.opacity = 0.85; }
           else if (CFG.bomb && nearTurret && nearTurret.exists() && !nearTurret.active && time() - lastTurretTime < 0.15) { doorHint.text = "E — activate turret (2 energy)"; doorHint.pos = nearTurret.pos.sub(0, 44); doorHint.opacity = 0.85; }
           else if (nearLever && nearLever.exists() && time() - lastLeverTime < 0.15) { doorHint.text = "E — pull lever"; doorHint.pos = nearLever.pos.sub(0, 44); doorHint.opacity = 0.85; }
+          else if (nearCrate && nearCrate.exists() && time() - lastCrateTime < 0.15 && nearCrate.wkey !== weapon) { doorHint.text = "E — take " + WEAPONS[nearCrate.wkey].name; doorHint.pos = nearCrate.pos.sub(0, 42); doorHint.opacity = 0.85; }
           else doorHint.opacity = 0;
         });
 
@@ -1520,15 +1521,18 @@
           hp += 1; updateHUD(); SFX.pickup(); popText(m2.pos, "+1 HP", rgb(150, 240, 160)); burst(m2.pos, rgb(230, 90, 80), 10, 180, 6);
           netSend({ t: "pod", x: Math.round(m2.pos.x), y: Math.round(m2.pos.y) }); destroy(m2);
         });
-        player.onCollide("wcrate", (c) => {
-          if (WEAPONS[c.wkey].side !== sideKey || time() - c.born < 1) return; // 1s grace stops swap loops
-          const old = weapon; weapon = c.wkey;
+        // manual pickup (#61): E to arm — pacing over a drop no longer swaps your loadout
+        let nearCrate = null, lastCrateTime = -1;
+        player.onCollideUpdate("wcrate", (c) => { if (WEAPONS[c.wkey].side === sideKey) { nearCrate = c; lastCrateTime = time(); } });
+        function takeWeapon() {
+          if (!nearCrate || !nearCrate.exists() || time() - lastCrateTime > 0.15 || nearCrate.wkey === weapon) return;
+          const c = nearCrate, old = weapon; weapon = c.wkey;
           const dropAt = c.pos.clone(); netSend({ t: "crateTake", x: c.pos.x, y: c.pos.y }); destroy(c);
           spawnCrate(old, dropAt); netSend({ t: "crate", w: old, x: dropAt.x, y: dropAt.y });
           SFX.pickup(); popText(player.pos.add(0, -34), WEAPONS[weapon].name + "!", rgb(240, 220, 160));
           burst(dropAt.add(0, -10), rgb(240, 220, 160), 8, 140, 5); updateHUD();
           TICKER.push(`You armed the ${WEAPONS[weapon].name}`);
-        });
+        }
         player.onCollide("danger", () => hurt());
         player.onCollide("enemy", () => hurt());
         player.onCollide("exit", () => { liveSend(`${PLAYER_NAME} ESCAPED as ${sideKey === "human" ? "JACK" : "the BEAST"} with ${score} energy`); netSend({ t: "escaped" }); SFX.win(); go("over", { win: true, side: sideKey, score, online: NET.connected, how: NET.connected ? "You escaped the hunt." : undefined }); });
@@ -1747,7 +1751,8 @@
           if (nearLever && nearLever.exists() && time() - lastLeverTime < 0.15) nearLever.LV.toggle();
         }
         player.onCollideUpdate("lever", (lv) => { nearLever = lv; lastLeverTime = time(); });
-        onKeyPress("e", () => { useDoor(); useTurret(); useLever(); }); onGamepadButtonPress("dpad-up", () => { useDoor(); useTurret(); useLever(); });
+        const interact = () => { useDoor(); useTurret(); useLever(); takeWeapon(); };
+        onKeyPress("e", interact); onGamepadButtonPress("dpad-up", interact);
         onKeyPress("r", () => { if (isKeyDown("shift")) go("game", sideKey); }); // Shift+R: R alone sits too close to W/E to trust (#56)
         onKeyPress("n", () => popText(player.pos.add(0, -44), toggleMute() ? "MUTED" : "SOUND ON", rgb(210, 210, 210)));
 
