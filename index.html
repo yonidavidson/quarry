@@ -1547,8 +1547,11 @@
           if (hp === 1 && time() > lowBeatAt) { lowBeatAt = time() + 1.0; SFX.heart(false); }
         });
         // pause (freeze via timeScale so input still works)
+        // (#55) epsilon freeze, NOT 0: at timeScale 0 kaplay's body comp nulls its interpolation
+        // snapshot (restDt()==0) and the next unpaused frame crashes reading s.x — a kaplay bug.
+        const PAUSE_TS = 0.0001;
         const pausedTxt = add([text("PAUSED — ESC to resume", { size: 30 }), pos(width() / 2, height() / 2), anchor("center"), fixed(), z(300), color(230, 220, 200), outline(4, rgb(0, 0, 0)), opacity(0)]);
-        onKeyPress("escape", () => { debug.timeScale = debug.timeScale === 0 ? 1 : 0; pausedTxt.opacity = debug.timeScale === 0 ? 1 : 0; });
+        onKeyPress("escape", () => { debug.timeScale = debug.timeScale === PAUSE_TS ? 1 : PAUSE_TS; pausedTxt.opacity = debug.timeScale === PAUSE_TS ? 1 : 0; });
         // door hint
         const doorHint = add([text("E — enter", { size: 14 }), pos(0, 0), anchor("center"), z(60), color(230, 190, 110), outline(3, rgb(0, 0, 0)), opacity(0)]);
         doorHint.onUpdate(() => {
@@ -1622,7 +1625,7 @@
           b.onCollide("breakable", (o) => { if (!opts.pierce) destroy(b); breakObj(o); });
           b.onCollide("platform", () => destroy(b));
         }
-        const hitStop = () => { if (debug.timeScale > 0.5) { debug.timeScale = 0.12; setTimeout(() => { if (debug.timeScale !== 0) debug.timeScale = 1; }, 60); } };
+        const hitStop = () => { if (debug.timeScale > 0.5) { debug.timeScale = 0.12; setTimeout(() => { if (debug.timeScale === 0.12) debug.timeScale = 1; }, 60); } }; // restore only from hitStop, never unpause (#55)
         function casings(n2) {
           for (let i = 0; i < n2; i++) add([rect(4, 2), pos(player.pos.x - facing * 8, player.pos.y - 8), anchor("center"), color(200, 165, 70), rotate(rand(0, 360)), opacity(1), lifespan(0.6, { fade: 0.3 }), z(7),
             { v: vec2(-facing * rand(60, 140), rand(-180, -100)), update() { this.move(this.v); this.v.y += 800 * dt(); this.angle += 600 * dt(); } }]);
