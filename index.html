@@ -1315,6 +1315,37 @@
           }));
         });
 
+        // rats (#61): skittish scavengers down in the underdeep — pure ambience, no mechanics
+        {
+          let ratN = 0;
+          for (let tries = 0; tries < 500 && ratN < 7; tries++) {
+            const rc = Math.floor(rand(2, W - 2)), rr = Math.floor(rand(GROUND_R + 2, GRID.length - 2));
+            if (!GRID[rr] || GRID[rr][rc] !== " " || !GRID[rr + 1] || GRID[rr + 1][rc] !== "=") continue;
+            const rat = add([rect(9, 4.5, { radius: 2 }), pos(rc * TS + TS / 2, (rr + 1) * TS), anchor("bot"), color(58, 48, 44), z(3), rotate(0), offscreen({ hide: true, distance: 200, pause: true, unpause: true }),
+              { dir: choose([-1, 1]), homeX: rc * TS + TS / 2, range: rand(60, 130), baseY: (rr + 1) * TS, sniffUntil: 0, update() {
+                const pl = get("player")[0];
+                const pdx = pl ? pl.pos.x - this.pos.x : 1e9, pdy = pl ? Math.abs(pl.pos.y - this.pos.y) : 1e9;
+                const near = Math.abs(pdx) < 110 && pdy < 64;
+                if (near) this.dir = pdx > 0 ? -1 : 1; // bolt!
+                else if (time() > this.sniffUntil && rand() < 0.003) {
+                  this.sniffUntil = time() + rand(0.5, 1.2);
+                  if (Math.abs(pdx) < 300 && pdy < 200 && rand() < 0.4) tone({ f0: 2900, f1: 3600, dur: 0.05, vol: 0.03, type: "sine" }); // faint squeak
+                }
+                const sniffing = time() < this.sniffUntil && !near;
+                const spd = near ? 185 : sniffing ? 0 : 44;
+                if (spd > 0) {
+                  const aheadC = Math.floor((this.pos.x + this.dir * 7) / TS), belowR = Math.floor(this.pos.y / TS), bodyR = Math.floor((this.pos.y - 5) / TS);
+                  if ((GRID[belowR] && GRID[belowR][aheadC] !== "=") || (GRID[bodyR] && GRID[bodyR][aheadC] === "=") || (!near && Math.abs(this.pos.x - this.homeX) > this.range)) this.dir *= -1;
+                  this.move(this.dir * spd, 0);
+                }
+                this.angle = sniffing ? -9 : spd > 0 ? Math.sin(time() * (near ? 30 : 18) + this.homeX) * 2.6 : 0; // nose-up sniff / scuttle wiggle
+                this.pos.y = this.baseY; // glued to the slab
+              } }]);
+            rat.add([rect(6, 1.4, { radius: 1 }), pos(0, -1.5), anchor("center"), color(46, 38, 34), { update() { this.pos.x = -this.parent.dir * 5; } }]); // tail trails behind
+            ratN++;
+          }
+        }
+
         // --- doors ---
         const makeDoor = (c, row) => add([sprite("door"), pos(c * TS + TS / 2, row * TS), anchor("bot"), area({ scale: vec2(0.5, 0.9) }), z(1), "door", { partner: null }]);
         DOOR_PAIRS.forEach(([a, b]) => { const da = makeDoor(a[0], a[1]), db = makeDoor(b[0], b[1]); da.partner = db.pos.clone(); db.partner = da.pos.clone(); });
