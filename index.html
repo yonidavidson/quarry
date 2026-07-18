@@ -1097,6 +1097,27 @@
           const cl = add([sprite("cloud"), pos(rand(0, LEVEL_W), rand(-30, 150)), anchor("center"), scale(rand(0.8, 1.6)), z(-64), opacity(rand(0.5, 0.85)), { spd: rand(6, 18) }]);
           cl.onUpdate(() => { cl.pos.x -= cl.spd * dt(); if (cl.pos.x < -160) cl.pos.x = LEVEL_W + 160; });
         }
+        // rain (#62): thin streaks over the vista — z-tucked BEHIND the walls, so the building never rains inside
+        loop(0.05, () => {
+          if (getCamPos().y > 500) return; // nobody's watching the sky
+          for (let i = 0; i < 2; i++) {
+            const sx = getCamPos().x + rand(-width() / 2 - 60, width() / 2 + 60);
+            add([rect(1, rand(8, 14)), pos(sx, rand(-70, -30)), anchor("center"), color(178, 192, 214), opacity(rand(0.14, 0.28)), z(-48), rotate(-7),
+              { update() { this.move(-62, 505); if (this.pos.y > 440) destroy(this); } }]);
+          }
+        });
+        // distant lightning (#62): a soft double-blink behind the mountains, thunder rolling in late
+        let nextBolt = time() + rand(7, 15);
+        onUpdate(() => {
+          if (time() < nextBolt) return;
+          nextBolt = time() + rand(9, 22);
+          const bolt = add([rect(width(), height()), pos(0, 0), fixed(), color(216, 226, 244), z(-65), opacity(0)]);
+          bolt.opacity = 0.42;
+          wait(0.08, () => { if (bolt.exists()) bolt.opacity = 0.05; });
+          wait(0.16, () => { if (bolt.exists()) bolt.opacity = 0.3; });
+          wait(0.3, () => { if (bolt.exists()) destroy(bolt); });
+          wait(rand(0.7, 1.5), () => noise({ dur: rand(1.1, 1.7), vol: rand(0.09, 0.15), type: "lowpass", f0: 150, f1: 52 })); // the rumble arrives late — it's far away
+        });
         for (let wy = 0; wy < LEVEL_H; wy += 256) for (let wx = 0; wx < LEVEL_W; wx += 256) { // 2x2 blocks (#55 perf): quarter the wall sprite count
           if (wy < OUTDOOR_Y) continue; // open air above the roofline
           const v = ((wx / 256 + wy / 256) * 2654435761) % 7 < 2 ? "wall2" : "wall"; // deterministic variety
