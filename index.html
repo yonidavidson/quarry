@@ -726,10 +726,10 @@
 
       const SIDES = {
         human: { name: "JACK — Human", sprite: "human", color: [120, 165, 210], speed: 250, jumpForce: 720, doubleJump: false, maxHp: 5, mode: "ranged", bomb: true,
-          sc: 0.5, shadowY: 64, cardScale: 0.66, frameW: 148, frameH: 156, areaX: 0.4, areaY: 0.73,
+          sc: 0.85, shadowY: 42, cardScale: 0.66, frameW: 148, frameH: 156, areaX: 0.4, areaY: 0.73,
           blurb: ["Blaster (J/X) + Bomb (K/Y)", "Standard jump", "Fragile — 5 HP", "He is faster. Outsmart him."] },
         stalker: { name: "The STALKER — Beast", sprite: "stalker", color: [216, 140, 70], speed: 345, jumpForce: 800, doubleJump: true, maxHp: 6, mode: "melee", wallClimb: true,
-          sc: 0.7, shadowY: 69, glow: [8, -35], cardScale: 0.85, frameW: 184, frameH: 151, areaX: 0.25, areaY: 0.65,
+          sc: 0.95, shadowY: 44, glow: [8, -35], cardScale: 0.85, frameW: 184, frameH: 151, areaX: 0.25, areaY: 0.65,
           blurb: ["Claw lunge (J/X) + Leap (K/Y)", "Faster • wall-climb • dbl jump", "Tough — 6 HP", "Run him down."] },
       };
 
@@ -934,7 +934,7 @@
       function spawnEnemy(x, y, kind = "drone") {
         if (kind === "hunterbot") { // (#69) heavy hunter-killer: tough, and it COMES for you
           const e = add([sprite("hunterbot"), pos(x, y), anchor("center"), area({ scale: 0.8 }), z(4), rotate(0), "enemy",
-            { hp: 3, dir: choose([-1, 1]), homeX: x, range: 120, update() {
+            { hp: 3, kind, dir: choose([-1, 1]), homeX: x, range: 120, update() {
               const pl = get("player")[0];
               const chasing = pl && Math.abs(pl.pos.y - this.pos.y) < 90 && Math.abs(pl.pos.x - this.pos.x) < 300;
               if (chasing) this.dir = pl.pos.x > this.pos.x ? 1 : -1;
@@ -949,7 +949,7 @@
         }
         if (kind === "crawlbot") { // (#69) underdeep skitterer: hugs the floor, hits like a truck
           const e = add([sprite("crawlbot"), pos(x, y + 4), anchor("bot"), area({ scale: 0.8 }), z(4), rotate(0), "enemy",
-            { hp: 2, dir: choose([-1, 1]), homeX: x, range: 130, update() {
+            { hp: 2, kind, dir: choose([-1, 1]), homeX: x, range: 130, update() {
               this.move(this.dir * 92, 0); this.flipX = this.dir < 0;
               if (this.pos.x > this.homeX + this.range) this.dir = -1; if (this.pos.x < this.homeX - this.range) this.dir = 1;
               this.angle = Math.sin(time() * 14 + this.homeX) * 1.6; // leg skitter
@@ -959,7 +959,7 @@
           return e;
         }
         const e = add([sprite("drone", { anim: "spin" }), pos(x, y), anchor("center"), area({ scale: 0.85 }), z(4), "enemy",
-          { hp: 1, dir: choose([-1, 1]), homeX: x, range: 95, update() { this.move(this.dir * 78, 0); this.flipX = this.dir < 0; if (this.pos.x > this.homeX + this.range) this.dir = -1; if (this.pos.x < this.homeX - this.range) this.dir = 1; } }]);
+          { hp: 1, kind, dir: choose([-1, 1]), homeX: x, range: 95, update() { this.move(this.dir * 78, 0); this.flipX = this.dir < 0; if (this.pos.x > this.homeX + this.range) this.dir = -1; if (this.pos.x < this.homeX - this.range) this.dir = 1; } }]);
         e.add([sprite("shadow"), pos(0, 16), anchor("center"), z(-1), opacity(0.4), scale(0.6)]);
         return e;
       }
@@ -1301,7 +1301,7 @@
           loop(3.4, () => wait(i * 1.3, () => {
             for (let k2 = 0; k2 < 14; k2++) add([circle(rand(4, 9)), pos(v.add(rand(-10, 10), 0)), anchor("center"), color(190, 195, 200), opacity(rand(0.3, 0.5)), z(7), lifespan(rand(0.5, 0.9), { fade: 0.6 }), { up: rand(160, 300), update() { this.pos.y -= this.up * dt(); this.radius += 10 * dt(); } }]);
             noise({ dur: 0.5, vol: 0.13, type: "highpass", f0: 1400, f1: 500 });
-            const tryLaunch = () => { if (Math.abs(player.pos.x - v.x) < 26 && player.pos.y > v.y - 100 && player.pos.y < v.y + 10) { player.vel = vec2(player.vel.x, -900); jumpsLeft = maxJumps; SFX.jump2(); } };
+            const tryLaunch = () => { if (player && player.exists() && Math.abs(player.pos.x - v.x) < 26 && player.pos.y > v.y - 100 && player.pos.y < v.y + 10) { player.vel = vec2(player.vel.x, -900); jumpsLeft = maxJumps; SFX.jump2(); } };
             tryLaunch(); wait(0.2, tryLaunch); wait(0.4, tryLaunch);
           }));
         });
@@ -1519,7 +1519,7 @@
         add([sprite("cell"), pos(width() - 116, HY + 12), fixed(), z(200), scale(0.7)]);
         const energyTxt = add([text("0000", { size: 17 }), pos(width() - 88, HY + 14), fixed(), z(200), color(70, 240, 74)]);
         const ctrl = CFG.bomb ? "Bomb: K/Y   " : "Leap: K/Y   Roar: L   ";
-        addTicker("Move ←→/AD   Jump Space   Attack J/X   " + ctrl + "Climb ↑↓   Use/Take: E   Pause: Esc   Mute: N", true);
+        addTicker("Move ←→/AD    Jump: Space    Attack: J/X    " + ctrl + "Climb: ↑↓    Use/Take: E    Pause: Esc    Mute: N", true);
         // mission briefing (#63): the terms of the hunt, GO! — straight from the original
         {
           const bx = width() / 2, els = [
@@ -1861,8 +1861,13 @@
 
         function spawnNemesis(returning) {
           const far = NEM_SPAWNS.slice().sort((a, b) => b.dist(player.pos) - a.dist(player.pos))[0];
+          // snap spawn to the floor below so the nemesis always lands on solid ground
+          const spawnC = Math.floor(far.x / TS), spawnR = Math.floor(far.y / TS);
+          let groundR = spawnR;
+          while (groundR < GRID.length - 1 && !(GRID[groundR + 1] && GRID[groundR + 1][spawnC] === "=")) groundR++;
+          const spawnPos = vec2(spawnC * TS + TS / 2, groundR * TS);
           nemesis = add([
-            sprite(NCFG.sprite, { anim: "idle" }), pos(far), anchor("center"), scale(NCFG.sc),
+            sprite(NCFG.sprite, { anim: "idle" }), pos(spawnPos), anchor("center"), scale(NCFG.sc),
             area({ scale: vec2(NCFG.areaX, NCFG.areaY) }), body({ jumpForce: NCFG.jumpForce }), opacity(1), z(6), "nemesis",
             { hp: 3, iframes: 0, flash: 0, dir: choose([-1, 1]), state: "patrol", anim: "idle", atkCd: 0, climbing: false, senseAt: time() + 16, weapon: NCFG.mode === "ranged" ? "blaster" : "claws" },
           ]);
@@ -1950,8 +1955,8 @@
               if (n.isGrounded() && vx !== 0 && !gapAhead && !n.crouched && solid(pc + (vx > 0 ? 1 : -1), pr)) n.jump(NCFG.jumpForce * 0.9);
             } else if (vx !== 0) n.move(vx * spd * 0.4, 0);
             n.flipX = n.dir < 0;
-            // anims + hit flash
-            const want = n.crouched ? "crawl" : !n.isGrounded() && !n.climbing ? "jump" : Math.abs(vx) > 0 || n.climbing ? "run" : "idle";
+            // anims + hit flash — if we're moving horizontally, always show run even mid-air
+            const want = n.crouched ? "crawl" : n.climbing ? "climb" : Math.abs(vx) > 0 ? "run" : !n.isGrounded() ? "jump" : "idle";
             if (n.anim !== want) { n.anim = want; n.play(want); }
             n.opacity = time() < n.flash ? 0.5 : 1;
             if (n.pos.y > LEVEL_H + 200) { n.pos = NEM_SPAWNS[0].clone(); n.vel = vec2(0, 0); n.climbing = false; n.gravityScale = 1; }
