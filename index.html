@@ -1066,6 +1066,8 @@
         const CLIMB = 155;
         let hp = CFG.maxHp, score = 0, invuln = false, facing = 1, jumpsLeft = maxJumps;
         let lastAtk = 0, airTime = 0, spawn = vec2(0, 0), camReady = false, lastBomb = 0, ropeBoostT = 0, ropeBoost = 240, leapAt = -99, crouching = false;
+        let rolling = false, rollStart = 0, rollSpd = 0, rollFrames = 0, lastRunDir = 0, lastTurnAt = 0, lastDirAt = 0; // (#63) Flashback landing roll + PoP turn skid
+        const ROLL_DUR = 0.34;
         let lastGroundedAt = 0, jumpBufferedAt = -1; // coyote time + jump buffering
         let weapon = CFG.mode === "ranged" ? "blaster" : "claws"; // one weapon at a time (#13)
         let stepAt = 0, stepAlt = false; // footstep cadence
@@ -1538,10 +1540,19 @@
         const squash = (sx, sy) => { player.scale = vec2(sx * CFG.sc, sy * CFG.sc); tween(player.scale, vec2(CFG.sc, CFG.sc), 0.18, (v) => (player.scale = v), easings.easeOutQuad); };
         player.onGround(() => {
           jumpsLeft = maxJumps;
-          if (airTime > 0.16) { squash(1.28, 0.74); dust(player.pos.add(0, CFG.shadowY * CFG.sc - 2)); shake(2); SFX.land(Math.min(airTime, 0.8)); }
+          // landing roll (#63): a hard fall with a held direction becomes a Flashback tumble, not a thud
+          const steer = (isKeyDown("right") || isKeyDown("d") ? 1 : 0) - (isKeyDown("left") || isKeyDown("a") ? 1 : 0);
+          if (airTime > 0.5 && steer !== 0 && !crouching) {
+            rolling = true; rollStart = time(); rollSpd = CFG.speed * 0.95; rollFrames = 0;
+            facing = steer; player.flipX = facing < 0; player.angle = 0;
+            noise({ dur: 0.22, vol: 0.09, type: "bandpass", f0: 900, f1: 260 }); // whoosh
+            dust(player.pos.add(0, CFG.shadowY * CFG.sc - 2));
+          } else {
+            if (airTime > 0.16) { squash(1.28, 0.74); dust(player.pos.add(0, CFG.shadowY * CFG.sc - 2)); shake(2); SFX.land(Math.min(airTime, 0.8)); }
+            if (airTime > 0.28) landUntil = time() + 0.16; // recovery pose (#28)
+          }
           // rooftop landings startle the crows (#50)
           if (airTime > 0.12 && player.pos.y < OUTDOOR_Y + 60 && get("crow").length < 15) for (let i = 0; i < 3; i++) spawnCrow(player.pos.x + rand(-40, 40), player.pos.y - rand(30, 80), true);
-          if (airTime > 0.28) landUntil = time() + 0.16; // recovery pose (#28)
           airTime = 0;
           if (time() - jumpBufferedAt < 0.12) { jumpBufferedAt = -1; jump(); } // buffered jump fires on landing
         });
@@ -1794,6 +1805,7 @@
         }
         // debug hook (used by the headless test harness)
         window.__quarry = { give: (w) => { if (WEAPONS[w]) { weapon = w; updateHUD(); } }, weapon: () => weapon, attack,
+          skid: () => ({ lastRunDir, lastTurnAt, rolling }), // (#63) test introspection
           ceil: () => ({ stick: ceilStick, sinceContact: +(time() - lastCeilTime).toFixed(3), grounded: player.isGrounded(), y: Math.round(player.pos.y), g: player.gravityScale }),
           lad: () => ({ onLad: onLadderNow, sinceLad: +(time() - lastLadderTime).toFixed(3), cd: time() > ladderCd, g: player.gravityScale, vy: Math.round(player.vel.y), y: Math.round(player.pos.y) }) };
         function explode(p) {
@@ -2215,9 +2227,27 @@
           // flares recharge slowly (#31)
           if (CFG.bomb && flares < 2 && time() > flareAt) { flares++; flareAt = time() + 20; }
           const wading = inWater();
-          if (Math.abs(dx) > 0.05) {
+          if (!rolling && Math.abs(dx) > 0.05) {
+            // turn skid (#63): reversing at a run plants a foot — pose, scrape, dust
+            if (Math.sign(dx) !== lastRunDir && lastRunDir !== 0 && player.isGrounded() && time() - lastTurnAt > 0.4) {
+              lastTurnAt = time(); landUntil = time() + 0.08; squash(1.12, 0.88);
+              dust(player.pos.add(-dx * 6, CFG.shadowY * CFG.sc - 2));
+              noise({ dur: 0.09, vol: 0.05, type: "highpass", f0: 900, f1: 300 });
+            }
+            lastRunDir = Math.sign(dx); lastDirAt = time();
             player.move(dx * (CFG.speed * (wading ? 0.55 : crouching ? 0.42 : 1) + (time() < ropeBoostT ? ropeBoost : 0)), 0); facing = dx > 0 ? 1 : -1; player.flipX = facing < 0; // thread-leap + super leap (#53): momentum carries
             if (player.isGrounded() && time() > stepAt) { stepAt = time() + (wading ? 0.34 : 0.27); stepAlt = !stepAlt; wading ? SFX.slosh() : SFX.step(stepAlt); }
+          } else if (player.isGrounded() && time() - lastDirAt > 0.25) lastRunDir = 0; // stopped for real — the next takeoff is not a reversal
+          // the roll itself (#63): a full forward tumble that carries momentum, then hands you back
+          if (rolling) {
+            const pr = (time() - rollStart) / ROLL_DUR;
+            if (pr >= 1 || (!player.isGrounded() && ++rollFrames > 3) || (Math.abs(dx) > 0.05 && dx * facing < 0)) { rolling = false; player.angle = 0; } // ~3 airborne frames of grace: landing jitter is not a ledge
+            else {
+              player.angle = facing * 360 * pr;
+              const bx = player.pos.x;
+              player.move(facing * rollSpd * (1 - pr * 0.45), 0);
+              if (pr > 0.08 && Math.abs(player.pos.x - bx) < 0.3) { rolling = false; player.angle = 0; } // rolled nose-first into a wall
+            }
           }
           // sewage: splash on entry, capped sink speed, always able to hop out
           if (wading && !wasInWater) { SFX.splash(); burst(player.pos.add(0, 10), rgb(110, 160, 130), 10, 160, 5); }
@@ -2226,7 +2256,7 @@
 
           // ladder
           if (ladderActive()) {
-            onLadderNow = true; player.gravityScale = 0; jumpsLeft = maxJumps;
+            onLadderNow = true; player.gravityScale = 0; jumpsLeft = maxJumps; airTime = 0; // climbing is not falling (#63)
             player.vel = vec2(player.vel.x, up ? -CLIMB : down ? CLIMB : 0);
             player.pos.x += (lastClimbX - player.pos.x) * Math.min(1, dt() * 8); // (#65) hands find the line — gentle centering, weak enough to push off
           } else { onLadderNow = false; player.gravityScale = 1; }
@@ -2297,6 +2327,7 @@
           // animation state (beast gets cling/crawl on walls + ceiling + tucked drop)
           if (time() < roarUntil) setAnim("roar"); // reared up, mandibles wide (#60)
           else if (time() < mantleUntil) setAnim("mantle"); // pulling up over the lip (#65)
+          else if (rolling) setAnim("crouch"); // tucked into the tumble (#63)
           else if (time() < lungeUntil) setAnim("jump");
           else if (hanging) setAnim("hang"); // real two-hand ledge dangle, both hunters (#60)
           else if (ceilStick) setAnim("ceil");
@@ -2322,7 +2353,7 @@
             : hanging || ceilStick || onLadderNow || crouching || wallStick !== 0 ? 0
             : !player.isGrounded() ? facing * clamp((6 + player.vel.y / 55) * (Math.abs(dx) > 0.05 ? 1.3 : 1), -3, 24) // (#69) dive: apex ~8°, full fall up to 24° nose-first
             : Math.abs(dx) > 0.05 ? facing * 5 : 0;
-          player.angle += (tiltTarget - player.angle) * Math.min(1, dt() * 14);
+          if (!rolling) player.angle += (tiltTarget - player.angle) * Math.min(1, dt() * 14); // the roll owns the angle while it lasts (#63)
           // stalker ichor drips while moving
           if (CFG.wallClimb && Math.abs(dx) > 0.05 && rand() < 0.12)
             add([circle(rand(1.5, 2.5)), pos(player.pos.add(rand(-8, 8), rand(0, 14))), anchor("center"), color(90, 20, 30), opacity(0.7), lifespan(0.5, { fade: 0.4 }), z(5), { update() { this.move(0, 90); } }]);
