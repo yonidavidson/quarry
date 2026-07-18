@@ -2254,12 +2254,13 @@
             : ceilStick || curAnim === "crawl" ? (Math.abs(dx) > 0.05 ? 1 : 0)
             : curAnim === "run" ? (wading ? 0.72 : 1)
             : 1;
-          // subtle body language (#62): lean into the run, nose-up on the rise, settle back in the fall
+          // subtle body language (#62): lean into the run, and pitch forward through the jump arc —
+          // launch upright, commit nose-first into the fall like a diver, so big leaps READ as big
           const tiltTarget =
             onLadderNow && lastClimbKind === "rope" ? Math.sin(time() * 1.6) * 1.2 // (#65) barely-there rope sway — stability first
             : hanging || ceilStick || onLadderNow || crouching || wallStick !== 0 ? 0
-            : !player.isGrounded() ? facing * clamp(-player.vel.y / 130, -5, 7) * (Math.abs(dx) > 0.05 ? 1.8 : 1) // (#69) directional leaps lean HARD — up to ~12 degrees nose-first
-            : Math.abs(dx) > 0.05 ? facing * 3 : 0;
+            : !player.isGrounded() ? facing * clamp((6 + player.vel.y / 55) * (Math.abs(dx) > 0.05 ? 1.3 : 1), -3, 24) // (#69) dive: apex ~8°, full fall up to 24° nose-first
+            : Math.abs(dx) > 0.05 ? facing * 5 : 0;
           player.angle += (tiltTarget - player.angle) * Math.min(1, dt() * 14);
           // stalker ichor drips while moving
           if (CFG.wallClimb && Math.abs(dx) > 0.05 && rand() < 0.12)
