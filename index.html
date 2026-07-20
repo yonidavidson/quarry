@@ -234,6 +234,8 @@
       loadSprite("bird", "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAANwAAAAkCAMAAADVRaTHAAAA/1BMVEUAAAAcGSkQDBkpJjowLEEVER42NRI0MTBWSQ5FHkt3FF1+bgMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABxj8T/AAAAQHRSTlMA//////////////8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAANG/KNQAAAuRJREFUeNrtWIuOozAMzPix9/r//73YCTSBOC1ci66rWluxiAQ8nhknkNInPvEfB39ncJDvDI4G6FB/IdnvUhElHtGpGpYDifEexGki3qIjlUShGcGJNZ2FdynnGYSCe02yCk/AScpX9QwwXNzAMm9KQEOEioARgssX7aqe6MsZnEAvFSYzEeGmTccGnoLDhNkYHBs4uhScB63Oy8gs+8gbVMGBj0oSuWoUzBORR5M93C8ttKCDWu7g6GEqhiwX4+BTXAyZ8JEkxIK9yHMwzHLTlOcZK6yO4UId5dJac7GzsJCVtnxQPihJnwbam44tJP8Jatyy75g2QdlQKTn7ke2gE+aJKncQ1TInXjpQs5xubbYccCXGOMcAHBk4cA0nhKX8rzsLFcIKJygekhDd4jrnbnlAKGFP0W6ImQabloQ+dg0lLzuGzf24zTxHR7R65EQJWCshLDE6pTXKDOsuEvrT62+/yc5gJaGywM6LDOQj6zjiJmG1YjuSIN+OQ5mgW5nztsL84w9R2C2peq5Ft1WhBvLhXQoiRgSV+jZ8eS6zHggtuRoVdl/6CtBRGyhqjzTc1AyrzXcrA4p6CGjYWErcCbhwg1Y4eWY+v9fhi2brPJHfNElZF+4WqY+EmTMjXp1/S5yHIt3JB7E5muI6cXf3MaQtI3bjuMV3Q3OkkTA9syKwue97+VAnHw7ko10Kj67O1Uy4t+S199bRC10pO7e+x8T3Y/n8DOXToNMH32jKYF3OYnSCO4WrLQm88T0dko+3zKAQqDQc21s11eHJ/mix3bByGdcXCZdtqPvelht9JAHtDRUX+HHWgukRcTKFZgOYftlae8j3O/lYF+VXvdRpvB8mzFTh7YjROZPOyQeXvrHmDeWKLd5gW2PQbdt5qnxegk3LSwymLw8LpxWg4unyec1HIoc2ryc33f4ffX/tR+dC2zzfS6X01I9E1sDucIGU3vazM7+Nzk59d06f+MQnXhd/AQe3DuNLGJCRAAAAAElFTkSuQmCC",
         { sliceX: 5, anims: { fly: { from: 0, to: 3, speed: 9, loop: true }, glide: 4 } });
       loadSprite("cloud", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="140" height="44"><g fill="#9a7aa8" opacity="0.55"><ellipse cx="46" cy="28" rx="40" ry="14"/><ellipse cx="86" cy="22" rx="34" ry="12"/><ellipse cx="110" cy="30" rx="26" ry="9"/></g><g fill="#c9a0b8" opacity="0.35"><ellipse cx="60" cy="18" rx="26" ry="9"/><ellipse cx="96" cy="14" rx="18" ry="7"/></g></svg>`));
+      // chain-link fence (#66): procedural diamond crosshatch — the one-file promise holds
+      loadSprite("fence", svg(`<svg xmlns="http://www.w3.org/2000/svg" width="192" height="144"><defs><pattern id="cl" width="16" height="16" patternUnits="userSpaceOnUse"><path d="M0 8 L8 0 L16 8 L8 16 Z" fill="none" stroke="#969ea6" stroke-width="1.3" opacity="0.55"/></pattern></defs><rect width="192" height="144" fill="url(#cl)"/><rect width="192" height="144" fill="none" stroke="#3c4046" stroke-width="6"/><rect x="3" y="3" width="186" height="138" fill="none" stroke="#6e747c" stroke-width="2"/></svg>`));
 
       // HUD portraits (#63): cropped from the character art, framed like the original's tray
       loadSprite("face-human", "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACgAAAAoCAMAAAC7IEhfAAABgFBMVEUAAQGgezBRZjPklmOPSSuuZTcSEw5PWjAtOinJeUrQhFCUUyvtqG7jl1syRCwZJxf6w49tMhYqOB7dkWK3aENSNhfysnsdKSN3OCNXKRVvSCekWjOPilBMVlMhKyXdl1s3JBYnGw380p3EbkVnLRedlVRdaF4+TEhMHBR3gUj2uIPAbz+8gk0xQR/AcDyVnJdFTkVcOyWkpp7gj1q0ckccMRtjKSSgl1airKiDPxwiDAh1eG0AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA3mZ7RAAAAYHRSTlP///////////////////////////////////////////////////////////////////////////////8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAtQLhCAAABtElEQVR42s3VaW+jMBAG4Df2GHxgAqGEQO5N02vv+/r//2vHkLa0WgVW6oedDyCLR+MZjwBMRgb+AWJE/H8w4hgBy+gUQzDq5G63G1FjXTduv3+hZpqmKe2orsvSJMk8SZIv5+EW1iIJMZDRldY23PsedB6+KdVWSml3QxmhlJJe2v0gZGm9t9YOQeKU3uf5MGTqvPdD50j0DeSVwjC8yDHZ+jPw6yyOAUPG5u16GpZ/zTjTsYhhnF0s6jrPET/IPjwcDuggWUtEjgfD0D2DxkglJSDit1ylk4pIGsz4iXwOlcwyBT2DtkVBFMYIbIDXpgc/tvAu89CpQFEUUjqGKa4/IDEXvYxkwgPvl9x4vILMGGYQ+HH93n9+ComhUj8DFKsowGglgPUavg8vOePkncvD2c2EEMfj9yPfBLTm3vowJ7VcXqI+wfvoRvUIiRje3PxiqOPogd3eIk37kHhqVMhXXMx0qrF6kpHm80foTHaCTJEGkrZXVJXqQcfQdPDqCrxdG5ojqjZ9uFgsMyP54DYVb73+zQVMWxa+U+rO9mGShFFvwt5V9Qm6dXrdvUEn+MJ/hT/tmRq+DUB8pgAAAABJRU5ErkJggg==");
@@ -1135,6 +1137,28 @@
           add([sprite(choose(["window1", "window2"])), pos(c * TS, wr * TS - 12), anchor("topleft"), z(-40), offscreen({ hide: true, distance: 160 })]);
           add([sprite("lamp"), pos(c * TS + 44, wr * TS + 40), anchor("center"), scale(1.2), opacity(0.13), color(255, 178, 120), z(-39)]);
           c += 6;
+        }
+        // HH atmosphere (#66): chain-link fence sections + red alarm panels, like the original's arenas
+        let fenceN = 0;
+        for (let fr = 8; fr < GRID.length - 4 && fenceN < 6; fr += 2) for (let fc = 6; fc < W - 12; fc += 6) {
+          if (fenceN >= 6 || rand() > 0.3) continue;
+          let free = true;
+          for (let dr = 0; dr < 3 && free; dr++) for (let dc = 0; dc < 4; dc++) if (GRID[fr + dr][fc + dc] !== " ") { free = false; break; }
+          if (!free) continue;
+          fenceN++;
+          add([sprite("fence"), pos(fc * TS - 4, fr * TS - 6), anchor("topleft"), z(-43), opacity(0.55), offscreen({ hide: true, distance: 220 })]);
+        }
+        let alarmN = 0;
+        for (let ar = 8; ar < GRID.length - 1 && alarmN < 42; ar += 2) for (let ac = 4; ac < W - 5; ac += 9) {
+          if (alarmN >= 42 || GRID[ar][ac] !== " " || (GRID[ar + 1][ac] !== "=" && GRID[ar][ac + 1] !== "=" && GRID[ar][ac - 1] !== "=")) continue;
+          if (rand() > (ar > DEEP_R ? 0.6 : 0.35)) continue; // the deep levels are angrier
+          alarmN++;
+          const pan = add([rect(13, 19), pos(ac * TS + TS / 2, ar * TS + TS / 2 - 4), anchor("center"), color(156, 42, 34), outline(2, rgb(64, 20, 16)), z(-43), opacity(0.8), offscreen({ hide: true, distance: 170, pause: true, unpause: true }),
+            { s: rand(0, 6), alarmT: 0, update() {
+              if (rand() < 0.0025) this.alarmT = time() + 1.2;
+              this.opacity = time() < this.alarmT ? 0.5 + Math.abs(Math.sin(time() * 14)) * 0.5 : 0.62 + Math.sin(time() * 2.1 + this.s) * 0.24;
+            } }]);
+          pan.add([circle(2.6), pos(0, -5), anchor("center"), color(255, 110, 84), z(1), { update() { this.opacity = this.parent.opacity; } }]); // the telltale LED
         }
         // long pipe runs crossing the complex (silhouette depth layer) — sparser (#49): the eye needs resting space
         for (let py = 340; py < LEVEL_H; py += 460) for (let px = -40; px < LEVEL_W; px += 288) add([sprite("pipeH"), pos(px, py + (px / 288 % 2 ? 2 : 0)), anchor("topleft"), z(-38), opacity(0.8), offscreen({ hide: true, distance: 220 })]);
