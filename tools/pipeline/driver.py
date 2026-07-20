@@ -47,6 +47,8 @@ def jack():
     f.append((load("jack/leap_3.png"), "leap"))                           # 37 parkour stretch
     for i in range(8):                       # 38-45 interpolated mantle: hang -> crouch on the lip (#67)
         f.append((load(f"jack/mantleflow_{i}.png"), f"mantle{i}"))
+    for i in range(4):                       # aim cycle: two-hand blaster aim + recoil beat (#67)
+        f.append((load(f"jack/aim_{i}.png"), f"aim{i}"))
     return bake("jack", f)
 
 if __name__ == "__main__":
