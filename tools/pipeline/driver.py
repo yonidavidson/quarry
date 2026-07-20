@@ -24,6 +24,12 @@ def stalker():
     f.append((load("stalker/bellycrawl2_3.png"), "crawl1"))
     f.append((load("stalker/lunge_2.png"), "rise"))                       # 30-31 jump arc phases (#62)
     f.append((load("stalker/lunge_4.png"), "fall"))
+    for i in range(4):                       # slash: predatory diagonal swipe (#68)
+        f.append((load(f"stalker/slash_{i}.png"), f"slash{i}"))
+    for i in range(4):                       # spit: rear-back head-snap (#68)
+        f.append((load(f"stalker/spit_{i}.png"), f"spit{i}"))
+    for i in range(4):                       # spear: overhand hurl wind-up (#68)
+        f.append((load(f"stalker/spear_{i}.png"), f"spear{i}"))
     return bake("stalker", f)
 
 def jack():

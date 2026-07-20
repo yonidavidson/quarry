@@ -1,0 +1,12 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "pixellab": {
+      "type": "http",
+      "url": "https://api.pixellab.ai/mcp",
+      "headers": {
+        "Authorization": "Bearer {env:PIXELLAB_API_KEY}"
+      }
+    }
+  }
+}
