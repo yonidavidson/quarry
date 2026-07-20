@@ -49,6 +49,14 @@ def jack():
         f.append((load(f"jack/mantleflow_{i}.png"), f"mantle{i}"))
     for i in range(4):                       # aim cycle: two-hand blaster aim + recoil beat (#67)
         f.append((load(f"jack/aim_{i}.png"), f"aim{i}"))
+    for i in range(4):                       # launcher: shoulder-brace + recoil stagger (#67)
+        f.append((load(f"jack/launcher_{i}.png"), f"launch{i}"))
+    for i in range(4):                       # disc: sidearm throw follow-through (#67)
+        f.append((load(f"jack/disc_{i}.png"), f"disc{i}"))
+    for i in range(4):                       # plant: kneel + press the mine down (#67)
+        f.append((load(f"jack/plant_{i}.png"), f"plant{i}"))
+    for i in range(4):                       # welder: braced two-hand hold (#67)
+        f.append((load(f"jack/welder_{i}.png"), f"welder{i}"))
     return bake("jack", f)
 
 if __name__ == "__main__":
