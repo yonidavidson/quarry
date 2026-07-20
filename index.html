@@ -1068,6 +1068,7 @@
         let lastAtk = 0, airTime = 0, spawn = vec2(0, 0), camReady = false, lastBomb = 0, ropeBoostT = 0, ropeBoost = 240, leapAt = -99, crouching = false;
         let rolling = false, rollStart = 0, rollSpd = 0, rollFrames = 0, lastRunDir = 0, lastTurnAt = 0, lastDirAt = 0; // (#63) Flashback landing roll + PoP turn skid
         let grabAt = 0, swayAmp = 0, shimStepAt = 0; // (#64) PoP ledge language: pendulum catch, shimmy, mantle kick
+        let flattened = 0; // (#65) back to the wall — Blackthorne dodge, projectiles whiff past
         const ROLL_DUR = 0.34;
         let lastGroundedAt = 0, jumpBufferedAt = -1; // coyote time + jump buffering
         let weapon = CFG.mode === "ranged" ? "blaster" : "claws"; // one weapon at a time (#13)
@@ -1799,6 +1800,7 @@
           });
         }
         function attack() {
+          if (flattened) return; // (#65) flat against the wall — no way to swing
           if (time() - lastAtk < WEAPONS[weapon].cd) return; lastAtk = time();
           const SPECIAL = { spine: fireSpines, spit: fireSpit, spear: fireSpear, shriek: fireShriek };
           SPECIAL[weapon] ? SPECIAL[weapon]() : CFG.mode === "ranged" ? fireRanged() : meleeStrike();
@@ -1806,7 +1808,7 @@
         }
         // debug hook (used by the headless test harness)
         window.__quarry = { give: (w) => { if (WEAPONS[w]) { weapon = w; updateHUD(); } }, weapon: () => weapon, attack,
-          skid: () => ({ lastRunDir, lastTurnAt, rolling }), // (#63) test introspection
+          skid: () => ({ lastRunDir, lastTurnAt, rolling, flattened, hp }), // (#63/#65) test introspection
           hang: () => ({ hanging, swayAmp, grabAt, mantle: time() < mantleUntil }), // (#64) test introspection
           tile: (c, r, ch) => { GRID[r][c] = ch; buildRowColliders(r); }, // test hook: carve geometry, colliders follow
           ceil: () => ({ stick: ceilStick, sinceContact: +(time() - lastCeilTime).toFixed(3), grounded: player.isGrounded(), y: Math.round(player.pos.y), g: player.gravityScale }),
@@ -2012,7 +2014,7 @@
                   n.atkCd = time() + 1.35; SFX.shoot();
                   const dirx = toP.x > 0 ? 1 : -1;
                   const nb = add([rect(18, 5, { radius: 2 }), pos(n.pos.x + dirx * 24, n.pos.y - 4), anchor("center"), color(255, 130, 110), outline(2, rgb(90, 30, 20)), area(), move(vec2(dirx, 0), 700), offscreen({ destroy: true }), z(5), "nbullet"]);
-                  nb.onCollide("player", () => { destroy(nb); hurt(); });
+                   nb.onCollide("player", () => { if (flattened) return; destroy(nb); hurt(); }); // (#65) whiff
                   nb.onCollide("platform", () => destroy(nb));
                 } else if (NCFG.mode === "melee" && dist < (n.weapon === "tongue" ? 170 : n.weapon === "whip" ? 130 : n.weapon === "bat" ? 120 : n.weapon === "scythe" ? 110 : 90)) {
                   n.atkCd = time() + 0.9; SFX.claw(); n.move((toP.x > 0 ? 1 : -1) * 220, 0);
@@ -2120,7 +2122,7 @@
               SFX.spineS();
               for (const dy2 of [-0.16, 0, 0.14]) {
                 const s2 = add([rect(20, 4, { radius: 2 }), pos(m.x + m.dir * 24, m.y - 4), anchor("center"), color(216, 204, 174), outline(2, rgb(90, 60, 20)), area(), rotate(0), lifespan(0.9), opacity(1), z(5), { v: vec2(m.dir, dy2).unit().scale(700), update() { this.v.y += 320 * dt(); this.move(this.v); } }]);
-                s2.onCollide("player", () => { destroy(s2); hurt(); });
+                 s2.onCollide("player", () => { if (flattened) return; destroy(s2); hurt(); }); // (#65) whiff
                 s2.onCollide("platform", () => destroy(s2));
               }
             } else if (m.kind === "roar") {
@@ -2138,7 +2140,7 @@
               const d2 = add([circle(6), pos(m.x + m.dir * 24, m.y - 6), anchor("center"), color(255, 170, 110), outline(2, rgb(110, 50, 20)), area(), z(5), opacity(1), lifespan(2.6, { fade: 0.2 }), rotate(0),
                 { v: vec2(m.dir * 640, -120), b: 3, update() { this.move(this.v); this.angle += 720 * dt(); } }]);
               d2.onCollide("platform", (pl, col) => { if (--d2.b < 0) return destroy(d2); if (col && (col.isLeft() || col.isRight())) d2.v.x *= -1; else d2.v.y *= -1; });
-              d2.onCollide("player", () => { destroy(d2); hurt(); });
+               d2.onCollide("player", () => { if (flattened) return; destroy(d2); hurt(); }); // (#65) whiff
             } else if (m.kind === "arc") {
               SFX.flamerS();
               for (let i = 0; i < 2; i++) {
@@ -2230,7 +2232,7 @@
           // flares recharge slowly (#31)
           if (CFG.bomb && flares < 2 && time() > flareAt) { flares++; flareAt = time() + 20; }
           const wading = inWater();
-          if (!rolling && Math.abs(dx) > 0.05) {
+          if (!rolling && !flattened && Math.abs(dx) > 0.05) {
             // turn skid (#63): reversing at a run plants a foot — pose, scrape, dust
             if (Math.sign(dx) !== lastRunDir && lastRunDir !== 0 && player.isGrounded() && time() - lastTurnAt > 0.4) {
               lastTurnAt = time(); landUntil = time() + 0.08; squash(1.12, 0.88);
@@ -2276,6 +2278,16 @@
             crouching = nowCrouch;
             player.area.scale = vec2(CFG.areaX, CFG.areaY * (crouching ? 0.55 : 1));
             player.area.offset = vec2(0, crouching ? CFG.frameH * CFG.areaY * 0.225 : 0); // keep the feet planted
+          }
+
+          // wall flatten (#65): hold toward the wall to press flat against it — bullets and spines whiff
+          // past while you hold. THE signature Hunter Hunted move. You can't move or attack while flat.
+          const wantFlat = player.isGrounded() && !onLadderNow && !hanging && !rolling && !crouching && wallActive() &&
+            ((wallDir > 0 && dx > 0.1) || (wallDir < 0 && dx < -0.1));
+          if (wantFlat && !flattened) { flattened = wallDir; dust(player.pos.add(wallDir * 8, 10)); SFX.step(false); }
+          if (flattened) {
+            if (!wantFlat) flattened = 0;
+            else { player.move(flattened * 26, 0); player.vel = vec2(0, player.vel.y); player.flipX = flattened > 0; } // cheek to the concrete
           }
 
           // ledge grab (#40): fall past a lip with your hands close — catch it, hang, climb up
@@ -2343,6 +2355,7 @@
           if (time() < roarUntil) setAnim("roar"); // reared up, mandibles wide (#60)
           else if (time() < mantleUntil) setAnim("mantle"); // pulling up over the lip (#65)
           else if (rolling) setAnim("crouch"); // tucked into the tumble (#63)
+          else if (flattened) setAnim("climb"); // back to the wall, pressed flat (#65)
           else if (time() < lungeUntil) setAnim("jump");
           else if (hanging) setAnim("hang"); // real two-hand ledge dangle, both hunters (#60)
           else if (ceilStick) setAnim("ceil");
@@ -2370,7 +2383,7 @@
             onLadderNow && lastClimbKind === "rope" ? Math.sin(time() * 1.6) * 1.2 // (#65) barely-there rope sway — stability first
             : time() < mantleUntil ? facing * 20 * Math.sin((1 - (mantleUntil - time()) / 0.3) * Math.PI) // (#64) the leg swings up over the lip
             : hanging ? swayAngle
-            : ceilStick || onLadderNow || crouching || wallStick !== 0 ? 0
+            : ceilStick || onLadderNow || crouching || wallStick !== 0 || flattened ? 0
             : !player.isGrounded() ? facing * clamp((6 + player.vel.y / 55) * (Math.abs(dx) > 0.05 ? 1.3 : 1), -3, 24) // (#69) dive: apex ~8°, full fall up to 24° nose-first
             : Math.abs(dx) > 0.05 ? facing * 5 : 0;
           if (!rolling) player.angle += (tiltTarget - player.angle) * Math.min(1, dt() * 14); // the roll owns the angle while it lasts (#63)
