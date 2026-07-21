@@ -18,9 +18,9 @@ def stalker():
     f.append((load("garathe/crawl_0.png"), "land"))                       # 26 landing crouch
     for i in (0, 2, 4, 6):                  # 27-30 roar
         f.append((load(f"garathe/roar_{i}.png"), f"roar{i}"))
-    for i in (0, 2, 4, 6):                  # 31-34 overhead grip
+    for i in range(9):                       # 31-39 overhead hang (hang4)
         f.append((load(f"garathe/hang_{i}.png"), f"hang{i}"))
-    for i in (0, 2, 4, 6):                  # 35-38 low prowl (35 = crouch)
+    for i in range(9):                       # 40-48 low prowl (crawl4)
         f.append((load(f"garathe/crawl_{i}.png"), f"crawl{i}"))
     for i in (0, 2, 4, 6):                  # 39-42 rear-view rope climb
         f.append((load(f"garathe/rope_{i}.png"), f"rope{i}"))
@@ -43,10 +43,10 @@ def jack():
     for i in range(8):                       # 13-20 posed ladder climb (back view)
         f.append((load(f"jack/climb3_{i}.png"), f"climb{i}"))
     f.append((load("jack/jump_6.png"), "land"))                           # 21 landing crouch
-    for i in range(4, 8):                    # 22-25 overhead ledge hang
-        f.append((load(f"jack/hang2_{i}.png"), f"hang{i}"))
-    for i in range(4, 8):                    # 26-29 low crawl (26 = crouch)
-        f.append((load(f"jack/crawl2_{i}.png"), f"crawl{i}"))
+    for i in range(8):                       # 22-29 overhead hang (hang4, frames 1-8 upscaled)
+        f.append((load(f"jack/hang_{i}.png"), f"hang{i}"))
+    for i in range(9):                       # 30-38 prone crawl (crawl4)
+        f.append((load(f"jack/crawl_{i}.png"), f"crawl{i}"))
     for i in range(8):                       # 30-37 posed rope climb
         f.append((load(f"jack/climb3_{i}.png"), f"rope{i}"))
     f.append((load("jack/jump_3.png"), "rise"))                           # 38-39 jump arc
