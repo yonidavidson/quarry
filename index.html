@@ -1394,6 +1394,50 @@
           }
         }
 
+        // futuristic tech elements (#70): control panels, holograms, energy conduits — pure ambience
+        GRID.forEach((row, r) => row.forEach((ch, c) => {
+          if (ch !== "=") return;
+          const above = r > 0 ? GRID[r - 1][c] : " ";
+          const below = r < GRID.length - 1 ? GRID[r + 1][c] : "=";
+          const x = c * TS + TS / 2;
+          // control panels: wall-mounted with blinking LEDs
+          if (above === " " && rand() < 0.04 && r > 4 && r < GROUND_R) {
+            const panel = add([rect(18, 12, { radius: 2 }), pos(x, r * TS - 2), anchor("bot"), color(30, 35, 45), outline(1, rgb(60, 70, 90)), z(2), offscreen({ hide: true, distance: 180 })]);
+            // blinking LEDs
+            for (let li = 0; li < 3; li++) {
+              const led = add([circle(1.5), pos(x - 5 + li * 5, r * TS - 8), anchor("center"), color(...choose([[0, 255, 120], [255, 80, 60], [60, 180, 255]])), z(3), offscreen({ hide: true, distance: 180 })]);
+              led.onUpdate(() => { led.opacity = rand() < 0.02 ? 0.1 : 0.8 + Math.sin(time() * (3 + li) + c) * 0.2; });
+            }
+          }
+          // holographic displays: flickering projections above floors
+          if (above === " " && below === "=" && rand() < 0.025 && r > 6) {
+            const holo = add([rect(14, 20, { radius: 1 }), pos(x, r * TS - 16), anchor("center"), color(80, 200, 255), opacity(0.3), z(2), offscreen({ hide: true, distance: 200 })]);
+            holo.onUpdate(() => {
+              holo.opacity = 0.15 + Math.sin(time() * 4 + c * 0.5) * 0.12;
+              holo.pos.y = r * TS - 16 + Math.sin(time() * 2 + c) * 2;
+            });
+            // scanline effect
+            const scan = add([rect(14, 1, { radius: 0 }), pos(x, r * TS - 26), anchor("center"), color(120, 240, 255), opacity(0.4), z(3), offscreen({ hide: true, distance: 200 })]);
+            scan.onUpdate(() => { scan.pos.y = r * TS - 26 + ((time() * 30 + c * 7) % 20); scan.opacity = 0.2 + Math.sin(time() * 8) * 0.15; });
+          }
+          // energy conduits: glowing pipes along ceilings
+          if (below === " " && r < GROUND_R - 1 && rand() < 0.03) {
+            const conduit = add([rect(rand(20, 50), 3, { radius: 1 }), pos(x, r * TS + TS - 2), anchor("top"), color(100, 220, 180), opacity(0.5), z(1), offscreen({ hide: true, distance: 180 })]);
+            conduit.onUpdate(() => { conduit.opacity = 0.35 + Math.sin(time() * 2.5 + c * 0.3) * 0.15; });
+          }
+          // reactor cores: pulsing glow in deeper corridors
+          if (r > FLOORS[2] && r < GROUND_R && above === " " && rand() < 0.015) {
+            const core = add([circle(6), pos(x, r * TS - 10), anchor("center"), color(255, 100, 60), opacity(0.4), z(2), offscreen({ hide: true, distance: 220 })]);
+            core.onUpdate(() => {
+              core.opacity = 0.25 + Math.sin(time() * 3 + c) * 0.15;
+              core.radius = 5 + Math.sin(time() * 2 + c * 0.7) * 1.5;
+            });
+            // outer glow ring
+            const ring = add([circle(12), pos(x, r * TS - 10), anchor("center"), color(255, 140, 80), opacity(0.15), z(1), offscreen({ hide: true, distance: 220 })]);
+            ring.onUpdate(() => { ring.opacity = 0.08 + Math.sin(time() * 2 + c) * 0.06; ring.radius = 11 + Math.sin(time() * 1.5) * 2; });
+          }
+        }));
+
         // --- doors ---
         const makeDoor = (c, row) => add([sprite("door"), pos(c * TS + TS / 2, row * TS), anchor("bot"), area({ scale: vec2(0.5, 0.9) }), z(1), "door", { partner: null }]);
         DOOR_PAIRS.forEach(([a, b]) => { const da = makeDoor(a[0], a[1]), db = makeDoor(b[0], b[1]); da.partner = db.pos.clone(); db.partner = da.pos.clone(); });
@@ -1591,7 +1635,7 @@
         player.onCollideUpdate("ladder", (l2) => { lastLadderTime = time(); lastClimbKind = l2.kind || "ladder"; lastClimbX = l2.pos.x; });
         player.onCollideUpdate("water", () => { lastWaterAt = time(); });
         player.onCollideUpdate("door", (d) => { nearDoor = d; lastDoorTime = time(); });
-        const wallActive = () => time() - lastWallTime < 0.06;
+        const wallActive = () => time() - lastWallTime < 0.12;
         const ladderActive = () => time() - lastLadderTime < 0.06 && time() > ladderCd;
 
         // --- HUD v3 (#63): the original's full-width bottom tray — portrait,
@@ -1978,7 +2022,7 @@
           nemesis = add([
             sprite(NCFG.sprite, { anim: "idle" }), pos(spawnPos), anchor("center"), scale(NCFG.sc),
             area({ scale: vec2(NCFG.areaX, NCFG.areaY) }), body({ jumpForce: NCFG.jumpForce }), opacity(1), z(6), "nemesis",
-            { hp: 3, iframes: 0, flash: 0, dir: choose([-1, 1]), state: "patrol", anim: "idle", atkCd: 0, climbing: false, senseAt: time() + 16, weapon: NCFG.mode === "ranged" ? "blaster" : "claws" },
+            { hp: 3, iframes: 0, flash: 0, dir: choose([-1, 1]), state: "patrol", anim: "idle", atkCd: 0, climbing: false, senseAt: time() + 3, lostAt: 0, lastPos: null, weapon: NCFG.mode === "ranged" ? "blaster" : "claws" },
           ]);
           nemesis.add([sprite("shadow"), pos(0, NCFG.shadowY), anchor("center"), z(-1), opacity(0.6), scale(1.8)]);
           if (NCFG.glow) {
@@ -1999,12 +2043,32 @@
 
           nemesis.onUpdate(() => {
             const n = nemesis; if (!n) return;
-            const toP = player.pos.sub(n.pos), dist = toP.len(), sameFloor = Math.abs(toP.y) < 110;
+            const toP = player.pos.sub(n.pos), dist = toP.len(), sameFloor = Math.abs(toP.y) < 140;
             // occasionally "senses" the player from anywhere — keeps pressure on
             const wasHunting = n.state === "hunt";
             if (time() > n.senseAt) { n.state = "hunt"; n.senseAt = time() + rand(14, 22); }
             if ((dist < 400 && sameFloor) || dist < 150) n.state = "hunt";
             else if (n.state === "hunt" && dist > 650) n.state = "patrol";
+            // lost state: stuck in same position for 3s → seek nearest ladder
+            if (n.state === "patrol" || n.state === "hunt") {
+              if (!n.lastPos || n.pos.dist(n.lastPos) > 8) { n.lastPos = n.pos.clone(); n.lostAt = time(); }
+              else if (n.state === "patrol" && time() - n.lostAt > 3) { n.state = "lost"; n.lostAt = time(); }
+            }
+            if (n.state === "lost") {
+              // seek nearest ladder to get to player's floor
+              const wantUp = toP.y < 0;
+              let best = null, bd = 1e9;
+              for (const L of LADDERS) {
+                const lx = L.c * TS + TS / 2, ly0 = L.r0 * TS, ly1 = (L.r1 + 1) * TS;
+                const usable = wantUp ? n.pos.y > ly0 && n.pos.y < ly1 + TS * 2 : n.pos.y < ly1;
+                const d = Math.abs(lx - n.pos.x);
+                if (usable && d < bd) { bd = d; best = { lx, wantUp }; }
+              }
+              if (best) {
+                vx = best.lx > n.pos.x + 8 ? 1 : best.lx < n.pos.x - 8 ? -1 : 0;
+                if (Math.abs(best.lx - n.pos.x) < 14) { n.climbing = true; n.gravityScale = 0; n.vel = vec2(0, best.wantUp ? -CLIMB : CLIMB); n.state = "hunt"; }
+              } else { n.state = "patrol"; n.dir *= -1; } // no ladder found, resume patrol
+            }
             if (n.state === "hunt" && !wasHunting && time() > (n.roarCd || 0)) { n.roarCd = time() + 8; SFX.roar(); shake(7); } // it saw you
 
             const spd = NCFG.speed * (n.state === "hunt" ? 0.92 : 0.55) * (time() < (n.slowUntil || 0) ? 0.45 : 1);
@@ -2017,11 +2081,16 @@
             else if (n.state === "patrol") {
               vx = n.dir;
               const aheadC = pc + n.dir;
-              if (solid(aheadC, pr) || (!solid(aheadC, pr + 1) && !solid(aheadC, pr + 2) && n.isGrounded())) n.dir *= -1;
+              // detect walls, floor edges, and chasms ahead
+              const wallAhead = solid(aheadC, pr);
+              const floorEdge = !solid(aheadC, pr + 1) && !solid(aheadC, pr + 2) && n.isGrounded();
+              const chasmAhead = !solid(aheadC, pr + 1) && !solid(aheadC + n.dir, pr + 1) && n.isGrounded();
+              if (wallAhead || floorEdge || chasmAhead) n.dir *= -1;
             } else {
               vx = toP.x > 14 ? 1 : toP.x < -14 ? -1 : 0; n.dir = vx || n.dir;
-              // player is on another floor: seek a ladder in that direction
-              if (!sameFloor) {
+              // player is on another floor OR stuck on same floor: seek a ladder
+              const stuck = sameFloor && n.lastPos && n.pos.dist(n.lastPos) < 4 && time() - n.lostAt > 2;
+              if (!sameFloor || stuck) {
                 const wantUp = toP.y < 0;
                 let best = null, bd = 1e9;
                 for (const L of LADDERS) {
@@ -2314,7 +2383,9 @@
             ((wallDir > 0 && dx > 0.1) || (wallDir < 0 && dx < -0.1));
           if (wantFlat && !flattened) { flattened = wallDir; dust(player.pos.add(wallDir * 8, 10)); SFX.step(false); }
           if (flattened) {
-            if (!wantFlat) flattened = 0;
+            // keep flattened while holding toward the wall (lock state — don't slide off)
+            const keepFlat = player.isGrounded() && ((flattened > 0 && dx > 0.1) || (flattened < 0 && dx < -0.1));
+            if (!keepFlat) flattened = 0;
             else { player.move(flattened * 26, 0); player.vel = vec2(0, player.vel.y); player.flipX = flattened > 0; } // cheek to the concrete
           }
 
@@ -2368,14 +2439,17 @@
           }
           if (wasCeil && !ceilStick) player.gravityScale = 1; // let go — the body drops
 
-          // wall-climb (alien), only when not on a ladder
+          // wall-climb (alien), only when not on a ladder — lock state for reliable clinging
+          const wasWallStick = wallStick;
           wallStick = 0;
-          if (!onLadderNow && CFG.wallClimb && !player.isGrounded() && wallActive()) {
+          if (!onLadderNow && CFG.wallClimb && !player.isGrounded()) {
             const into = (wallDir > 0 && dx > 0.1) || (wallDir < 0 && dx < -0.1);
-            if (into) {
-              wallStick = wallDir; player.flipX = wallDir < 0;
+            // keep clinging while holding toward the wall (lock state)
+            const keepCling = wasWallStick !== 0 && ((wasWallStick > 0 && dx > 0.1) || (wasWallStick < 0 && dx < -0.1));
+            if (into || keepCling) {
+              wallStick = into ? wallDir : wasWallStick; player.flipX = wallStick < 0;
               if (up) player.vel = vec2(player.vel.x, -150); else if (player.vel.y > 60) player.vel = vec2(player.vel.x, 60);
-              if (rand() < 0.35) add([circle(rand(2, 3)), pos(player.pos.x + wallDir * 12, player.pos.y + rand(-6, 10)), anchor("center"), color(150, 140, 120), opacity(0.6), lifespan(0.3, { fade: 0.3 }), z(7), { update() { this.move(0, 60); } }]);
+              if (rand() < 0.35) add([circle(rand(2, 3)), pos(player.pos.x + wallStick * 12, player.pos.y + rand(-6, 10)), anchor("center"), color(150, 140, 120), opacity(0.6), lifespan(0.3, { fade: 0.3 }), z(7), { update() { this.move(0, 60); } }]);
             }
           }
 
