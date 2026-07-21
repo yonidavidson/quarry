@@ -19,7 +19,7 @@ def stalker():
     for i in (0, 2, 4, 6):                  # 27-30 roar
         f.append((load(f"garathe/roar_{i}.png"), f"roar{i}"))
     for i in (0, 2, 4, 6):                  # 31-34 overhead grip
-        f.append((load(f"garathe/wall_{i}.png"), f"hang{i}"))
+        f.append((load(f"garathe/hang_{i}.png"), f"hang{i}"))
     for i in (0, 2, 4, 6):                  # 35-38 low prowl (35 = crouch)
         f.append((load(f"garathe/crawl_{i}.png"), f"crawl{i}"))
     for i in (0, 2, 4, 6):                  # 39-42 rear-view rope climb
