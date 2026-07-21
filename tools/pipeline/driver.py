@@ -31,6 +31,16 @@ def stalker():
     for action in ("slash", "spit", "spear"):                           # 47-70 attacks
         for i in range(8):
             f.append((load(f"garathe/{action}_{i}.png"), f"{action}{i}"))
+    for i in range(9):                                                   # 73-81 death
+        f.append((load(f"garathe/death_{i}.png"), f"death{i}"))
+    for i in range(7):                                                   # 82-88 landing roll
+        f.append((load(f"garathe/roll_{i}.png"), f"roll{i}"))
+    for i in range(7):                                                   # 89-95 super leap
+        f.append((load(f"garathe/leap2_{i}.png"), f"leap2{i}"))
+    for i in range(9):                                                   # 96-104 sonic shriek
+        f.append((load(f"garathe/shriek_{i}.png"), f"shriek{i}"))
+    for i in range(9):                                                   # 105-113 lash tongue
+        f.append((load(f"garathe/tongue_{i}.png"), f"tongue{i}"))
     return bake("stalker", f, feet_y=218)
 
 def jack():
@@ -64,6 +74,12 @@ def jack():
         f.append((load(f"jack/plant_{i}.png"), f"plant{i}"))
     for i in range(4):                       # 65-68 welder
         f.append((load(f"jack/welder_{i}.png"), f"welder{i}"))
+    for i in range(9):                       # 69-77 death
+        f.append((load(f"jack/death_{i}.png"), f"death{i}"))
+    for i in range(7):                       # 78-84 landing roll
+        f.append((load(f"jack/roll_{i}.png"), f"roll{i}"))
+    for i in range(7):                       # 85-91 rifle attack
+        f.append((load(f"jack/rifle_{i}.png"), f"rifle{i}"))
     return bake("jack", f)
 
 if __name__ == "__main__":
