@@ -11,10 +11,6 @@ import json, os, sys, base64
 from PIL import Image
 
 SCRATCH = os.environ.get("FRAMES_DIR") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "frames")
-CANVAS = 252
-CX = CY = CANVAS // 2
-
-
 def load(path):
     return Image.open(os.path.join(SCRATCH, path)).convert("RGBA")
 
@@ -24,7 +20,7 @@ def xform(im, rot=0, vflip=False, tx=0, ty=0):
     if vflip:
         im = im.transpose(Image.FLIP_TOP_BOTTOM)
     if rot:
-        im = im.rotate(rot, resample=Image.NEAREST, center=(CX, CY))
+        im = im.rotate(rot, resample=Image.NEAREST, center=(im.width // 2, im.height // 2))
     if tx or ty:
         shifted = Image.new("RGBA", im.size, (0, 0, 0, 0))
         shifted.paste(im, (tx, ty))
@@ -32,8 +28,10 @@ def xform(im, rot=0, vflip=False, tx=0, ty=0):
     return im
 
 
-def bake(name, frames, pad=6):
+def bake(name, frames, pad=6, feet_y=189):
     """frames: list of (image, tag). Uniform center-x crop, common box."""
+    canvas_w, canvas_h = frames[0][0].size
+    cx = canvas_w // 2
     # union bbox over all frames
     l = t = 10**9
     r = b = -(10**9)
@@ -44,9 +42,9 @@ def bake(name, frames, pad=6):
         l, t = min(l, bb[0]), min(t, bb[1])
         r, b = max(r, bb[2]), max(b, bb[3])
     # symmetric about center-x so flipX keeps the body in place
-    half = max(CX - l, r - CX) + pad
-    l, r = CX - half, CX + half
-    t, b = max(0, t - pad), min(CANVAS, b + pad)
+    half = max(cx - l, r - cx) + pad
+    l, r = cx - half, cx + half
+    t, b = max(0, t - pad), min(canvas_h, b + pad)
     w, h = r - l, b - t
     strip = Image.new("RGBA", (w * len(frames), h), (0, 0, 0, 0))
     for i, (im, _) in enumerate(frames):
@@ -56,8 +54,7 @@ def bake(name, frames, pad=6):
     info = {
         "name": name, "frameW": w, "frameH": h, "count": len(frames),
         "tags": [tag for _, tag in frames],
-        # feet line (y=189 in canvas) relative to frame center -> shadowY
-        "feetFromCenter": 189 - (t + h / 2),
+        "feetFromCenter": feet_y - (t + h / 2),
         "cropTop": t, "cropLeft": l,
         "bytes": os.path.getsize(out),
     }

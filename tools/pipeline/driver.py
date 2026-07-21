@@ -5,32 +5,33 @@ from bake import load, xform, bake
 
 def stalker():
     f = []
-    for i in range(5):                       # 0-4 idle
-        f.append((load(f"stalker/idle_{i}.png"), f"idle{i}"))
-    for i in range(6):                       # 5-10 run: v3 predatory sprint
-        f.append((load(f"stalker/sprint_{i}.png"), f"run{i}"))
-    f.append((load("stalker/lunge_3.png"), "jump"))                       # 11 lunge/jump
-    for i in range(4):                       # 12-15 wall hold: spread-limb grip rotated vertical (#65)
-        f.append((xform(load(f"stalker/wallhold_{i}.png"), rot=90, tx=12), f"cling{i}"))
-    f.append((xform(load("stalker/lunge_3.png"), rot=-35), "drop"))       # 16 nose-down plummet
-    for i in range(4):                       # 15-18 ceiling grip, claws overlapping the tiles (#62)
-        f.append((xform(load(f"stalker/ceilgrip_{i}.png"), ty=-12), f"ceil{i}"))
-    f.append((load("stalker/crawl_0.png"), "land"))                       # 19 low crouch
-    for i in range(4):                       # 20-23 ROAR
-        f.append((load(f"stalker/roar_{i}.png"), f"roar{i}"))
-    for i in range(4):                       # 24-27 ledge hang
-        f.append((load(f"stalker/hang_{i}.png"), f"hang{i}"))
-    f.append((load("stalker/bellycrawl2_2.png"), "crawl0"))               # 28-29 belly crawl (crouch = 28)
-    f.append((load("stalker/bellycrawl2_3.png"), "crawl1"))
-    f.append((load("stalker/lunge_2.png"), "rise"))                       # 30-31 jump arc phases (#62)
-    f.append((load("stalker/lunge_4.png"), "fall"))
-    for i in range(4):                       # slash: predatory diagonal swipe (#68)
-        f.append((load(f"stalker/slash_{i}.png"), f"slash{i}"))
-    for i in range(4):                       # spit: rear-back head-snap (#68)
-        f.append((load(f"stalker/spit_{i}.png"), f"spit{i}"))
-    for i in range(4):                       # spear: overhand hurl wind-up (#68)
-        f.append((load(f"stalker/spear_{i}.png"), f"spear{i}"))
-    return bake("stalker", f)
+    for i in range(8):                       # 0-7 idle
+        f.append((load(f"garathe/idle_{i}.png"), f"idle{i}"))
+    for i in range(8):                       # 8-15 sprint
+        f.append((load(f"garathe/sprint_{i}.png"), f"run{i}"))
+    f.append((load("garathe/jump_6.png"), "jump"))                        # 16 airborne stride
+    for i in (0, 2, 4, 6):                  # 17-20 wall-climb contact cycle
+        f.append((load(f"garathe/wall_{i}.png"), f"cling{i}"))
+    f.append((load("garathe/jump_7.png"), "drop"))                        # 21 descending stride
+    for i in (0, 2, 4, 6):                  # 22-25 ceiling traverse
+        f.append((xform(load(f"garathe/wall_{i}.png"), rot=90), f"ceil{i}"))
+    f.append((load("garathe/crawl_0.png"), "land"))                       # 26 landing crouch
+    for i in (0, 2, 4, 6):                  # 27-30 roar
+        f.append((load(f"garathe/roar_{i}.png"), f"roar{i}"))
+    for i in (0, 2, 4, 6):                  # 31-34 overhead grip
+        f.append((load(f"garathe/wall_{i}.png"), f"hang{i}"))
+    for i in (0, 2, 4, 6):                  # 35-38 low prowl (35 = crouch)
+        f.append((load(f"garathe/crawl_{i}.png"), f"crawl{i}"))
+    for i in (0, 2, 4, 6):                  # 39-42 rear-view rope climb
+        f.append((load(f"garathe/rope_{i}.png"), f"rope{i}"))
+    f.append((load("garathe/jump_3.png"), "rise"))                        # 43-46 air/mantle poses
+    f.append((load("garathe/jump_7.png"), "fall"))
+    f.append((load("garathe/jump_6.png"), "leap"))
+    f.append((load("garathe/crawl_1.png"), "mantle"))
+    for action in ("slash", "spit", "spear"):                           # 47-70 attacks
+        for i in range(8):
+            f.append((load(f"garathe/{action}_{i}.png"), f"{action}{i}"))
+    return bake("stalker", f, feet_y=218)
 
 def jack():
     f = []
@@ -39,29 +40,29 @@ def jack():
     for i in range(8):                       # 4-11 run
         f.append((load(f"jack/run_{i}.png"), f"run{i}"))
     f.append((load("jack/jump_4.png"), "jump"))                           # 12 mid-air
-    for i in range(5):                       # 13-17 ladder climb (back view)
-        f.append((load(f"jack/climb_{i}.png"), f"climb{i}"))
-    f.append((load("jack/jump_6.png"), "land"))                           # 18 landing crouch
-    f.append((load("jack/deadhangC_2.png"), "hang0"))                     # 19-20 TWO-hand dead-hang (#69)
-    f.append((load("jack/deadhangC_3.png"), "hang1"))
-    f.append((load("jack/crawl_2.png"), "crawl0"))                        # 25-26 crouch (25) + crawl pair
-    f.append((load("jack/crawl_3.png"), "crawl1"))
-    for i in range(8):                       # 27-34 Flashback rope climb: 8-frame hand-over-hand (#67)
-        f.append((load(f"jack/cableflowC_{i}.png"), f"rope{i}"))
-    f.append((load("jack/jump_3.png"), "rise"))                           # 35-36 jump arc
+    for i in range(8):                       # 13-20 posed ladder climb (back view)
+        f.append((load(f"jack/climb3_{i}.png"), f"climb{i}"))
+    f.append((load("jack/jump_6.png"), "land"))                           # 21 landing crouch
+    for i in range(4, 8):                    # 22-25 overhead ledge hang
+        f.append((load(f"jack/hang2_{i}.png"), f"hang{i}"))
+    for i in range(4, 8):                    # 26-29 low crawl (26 = crouch)
+        f.append((load(f"jack/crawl2_{i}.png"), f"crawl{i}"))
+    for i in range(8):                       # 30-37 posed rope climb
+        f.append((load(f"jack/climb3_{i}.png"), f"rope{i}"))
+    f.append((load("jack/jump_3.png"), "rise"))                           # 38-39 jump arc
     f.append((load("jack/jump_5.png"), "fall"))
-    f.append((load("jack/leap_3.png"), "leap"))                           # 37 parkour stretch
-    for i in range(8):                       # 38-45 interpolated mantle: hang -> crouch on the lip (#67)
+    f.append((load("jack/leap_3.png"), "leap"))                           # 40 parkour stretch
+    for i in range(8):                       # 41-48 interpolated mantle: hang -> crouch on the lip (#67)
         f.append((load(f"jack/mantleflow_{i}.png"), f"mantle{i}"))
-    for i in range(4):                       # aim cycle: two-hand blaster aim + recoil beat (#67)
+    for i in range(4):                       # 49-52 aim cycle
         f.append((load(f"jack/aim_{i}.png"), f"aim{i}"))
-    for i in range(4):                       # launcher: shoulder-brace + recoil stagger (#67)
+    for i in range(4):                       # 53-56 launcher
         f.append((load(f"jack/launcher_{i}.png"), f"launch{i}"))
-    for i in range(4):                       # disc: sidearm throw follow-through (#67)
+    for i in range(4):                       # 57-60 disc
         f.append((load(f"jack/disc_{i}.png"), f"disc{i}"))
-    for i in range(4):                       # plant: kneel + press the mine down (#67)
+    for i in range(4):                       # 61-64 plant
         f.append((load(f"jack/plant_{i}.png"), f"plant{i}"))
-    for i in range(4):                       # welder: braced two-hand hold (#67)
+    for i in range(4):                       # 65-68 welder
         f.append((load(f"jack/welder_{i}.png"), f"welder{i}"))
     return bake("jack", f)
 
