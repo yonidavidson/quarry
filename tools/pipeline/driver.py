@@ -50,15 +50,15 @@ def jack():
     for i in range(8):                       # 4-11 run
         f.append((load(f"jack/run_{i}.png"), f"run{i}"))
     f.append((load("jack/jump_4.png"), "jump"))                           # 12 mid-air
-    for i in range(8):                       # 13-20 posed ladder climb (back view)
-        f.append((load(f"jack/climb3_{i}.png"), f"climb{i}"))
+    for i in range(8):                       # 13-20 side ladder climb (#72)
+        f.append((load(f"jack/climb72_{i}.png"), f"climb{i}"))
     f.append((load("jack/jump_6.png"), "land"))                           # 21 landing crouch
-    for i in range(4):                       # 22-25 overhead hang (hang4, fit within 16384px texture limit)
-        f.append((load(f"jack/hang_{i}.png"), f"hang{i}"))
+    for i in range(4):                       # 22-25 dead-hang ledge dangle (#72)
+        f.append((load(f"jack/deadhang72_{i}.png"), f"hang{i}"))
     for i in range(4):                       # 26-29 prone crawl (crawl4, fit within texture limit)
         f.append((load(f"jack/crawl_{i}.png"), f"crawl{i}"))
-    for i in range(4):                       # 30-33 posed rope climb
-        f.append((load(f"jack/climb3_{i}.png"), f"rope{i}"))
+    for i in range(4):                       # 30-33 side rope climb (#72, distinct from ladder)
+        f.append((load(f"jack/ropeclean_{i}.png"), f"rope{i}"))
     f.append((load("jack/jump_3.png"), "rise"))                           # 38-39 jump arc
     f.append((load("jack/jump_5.png"), "fall"))
     f.append((load("jack/leap_3.png"), "leap"))                           # 40 parkour stretch
