@@ -59,9 +59,10 @@ build ~40s, HTML cached `max-age=600` so testers may need a hard refresh after a
 ```
 cd tools/pipeline && python3 driver.py [jack|stalker|both]   # writes ../frames/<name>_strip.png
 ```
-Then base64 the strip into `HUMAN_PNG`/`STALKER_PNG` (regex-replace the data URI), update the
-`loadSprite` anim indices to match driver.py comments, and retune `SIDES` dims from the bake output
-(`frameW/frameH/feetFromCenter→shadowY`). Current layouts are documented as comments in driver.py.
+Bake auto-packs into multiple rows when a single row would exceed WebGL `MAX_TEXTURE_SIZE`
+(16384). Use the printed `sliceX`/`sliceY` on `loadSprite`. Then base64 the strip into
+`HUMAN_PNG`/`STALKER_PNG`, keep anim indices matching driver.py order (row-major), and retune
+`SIDES` dims from the bake output (`frameW/frameH/feetFromCenter→shadowY`).
 
 ### World objects (PixelLab map objects)
 - `create_map_object` — min size 32px (generate small props at 2×, downscale LANCZOS); download from
@@ -70,8 +71,8 @@ Then base64 the strip into `HUMAN_PNG`/`STALKER_PNG` (regex-replace the data URI
 - Prompt lessons: "fills the canvas" still leaves margins (crop bbox + stretch at bake); vertical
   geometry needs "seen head-on, perfectly vertical"; sprite-sheet rows work for simple shapes
   (crows, explosion) but fail for many distinct small items (weapon icons → 17 identical pistols).
-- Deliberately still SVG: weapon icons, rope, cable, brackets, stains, and all pure light/atmosphere
-  gradients (glows, cones, fog, sky, shadows) — pixelating those reads worse.
+- Deliberately still SVG: cable, brackets, stains, and pure light/atmosphere gradients
+  (glows, cones, fog, sky, shadows) — pixelating those reads worse. Weapons + rope are PixelLab.
 
 ### Sounds (ElevenLabs)
 - `node tools/gen_sfx.mjs` regenerates + re-injects everything between the SND_DATA markers.
@@ -103,9 +104,9 @@ calling `netHost/netJoin/netHostAccept` directly.
 
 ## Backlog
 
-- #47 remaining SVG→PixelLab (weapon icons need per-icon generation)
-- #48 ambient life & weather ideas
-- #50 animation backlog (weapon attack poses, death anims, beast fluidity pass at 8f)
+- #47 remaining SVG→PixelLab: menu portraits, structural SVGs (walls/pipes/lamp/FX). Weapons + rope done.
+- #48 biome geometry polish + aurora animate_object (core ambient/day-night/vista2/biomes shipped)
+- #50 playtest polish on leap2/death/weapon poses (core anim backlog shipped via #63–#68)
 
 ## Gotchas that bit us
 

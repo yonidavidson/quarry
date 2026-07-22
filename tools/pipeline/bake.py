@@ -28,8 +28,13 @@ def xform(im, rot=0, vflip=False, tx=0, ty=0):
     return im
 
 
-def bake(name, frames, pad=6, feet_y=189):
-    """frames: list of (image, tag). Uniform center-x crop, common box."""
+def bake(name, frames, pad=6, feet_y=189, max_tex=16384):
+    """frames: list of (image, tag). Uniform center-x crop, common box.
+
+    Packs into multiple rows when a single row would exceed max_tex (WebGL
+    MAX_TEXTURE_SIZE is 16384 on many GPUs). KAPLAY indexes left-to-right,
+    top-to-bottom with sliceX/sliceY.
+    """
     canvas_w, canvas_h = frames[0][0].size
     cx = canvas_w // 2
     # union bbox over all frames
@@ -46,13 +51,18 @@ def bake(name, frames, pad=6, feet_y=189):
     l, r = cx - half, cx + half
     t, b = max(0, t - pad), min(canvas_h, b + pad)
     w, h = r - l, b - t
-    strip = Image.new("RGBA", (w * len(frames), h), (0, 0, 0, 0))
+    n = len(frames)
+    cols = max(1, min(n, max_tex // max(1, w)))
+    rows = (n + cols - 1) // cols
+    strip = Image.new("RGBA", (w * cols, h * rows), (0, 0, 0, 0))
     for i, (im, _) in enumerate(frames):
-        strip.paste(im.crop((l, t, r, b)), (i * w, 0))
+        col, row = i % cols, i // cols
+        strip.paste(im.crop((l, t, r, b)), (col * w, row * h))
     out = os.path.join(SCRATCH, f"{name}_strip.png")
     strip.quantize(colors=255, method=Image.FASTOCTREE, dither=Image.NONE).save(out, optimize=True)
     info = {
-        "name": name, "frameW": w, "frameH": h, "count": len(frames),
+        "name": name, "frameW": w, "frameH": h, "count": n,
+        "sliceX": cols, "sliceY": rows,
         "tags": [tag for _, tag in frames],
         "feetFromCenter": feet_y - (t + h / 2),
         "cropTop": t, "cropLeft": l,
