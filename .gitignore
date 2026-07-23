@@ -1,2 +1,5 @@
 __pycache__/
 *.pyc
+
+# agentcomm local bus state (registrations, inbox spool)
+.agentcomm/
