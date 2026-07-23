@@ -12,6 +12,8 @@ constraint — never add external asset files the game loads at runtime.
 | Repo | `yonidavidson/quarry` (local checkout may be named `hunter-hunted`) |
 | Live | https://yonidavidson.github.io/quarry/ |
 | Bus | auto-detected from this repo's git remote (`github://yonidavidson/quarry`) |
+| Hooks | OpenCode: `.opencode/plugin/agentcomm.ts` (`agentcomm hooks --harness opencode`) |
+| Agent guide | **this file only** (`AGENTS.md`) — no `CLAUDE.md` |
 | Deploy | push `main` → GitHub Pages (~40s). HTML cached `max-age=600` — hard-refresh after deploy |
 
 ---
@@ -208,3 +210,33 @@ node tools/gen_sfx.mjs   # rewrites SND_DATA markers; cache tools/sfx/; key ~/.c
 - Object count is the perf ceiling (~2500 OK); measure `get('*').length` + `debug.fps()`.
 - Gate/lever state and destroyed stubs mutate module-level GRID — intentional across rematches.
 - Online peers share the seeded level — unseeded gameplay RNG desyncs multiplayer.
+
+<!-- agentcomm -->
+## Agent coordination (agentcomm)
+
+This repo has a message bus for AI agents. When working here:
+
+- At session start: `agentcomm register` — the default alias is
+  `<git-user>-<session-id>`, a mailbox unique to THIS session (concurrent
+  runners never share one; inbox reads consume, so a shared address means
+  stolen mail). If others must address you by name — reviewer, worker-1 —
+  register that role with `--as` and keep it stable.
+- Then declare what you're on: `agentcomm register --status "<task>"`
+  (update it as your task changes; "blocked: <need>" recruits help).
+- Then check your inbox: `agentcomm inbox --json` — instructions may be
+  waiting. Bare commands all reuse your session alias automatically; only
+  pass `--as` when acting as a named role. The bus is auto-detected from
+  this repo; `agentcomm describe` explains it, `agentcomm conventions`
+  has the rules.
+- See who else is here and what they're doing: `agentcomm network`
+  (active/idle agents, their statuses, recent activity).
+- Coordinate with other agents via `send`/`wait` (subjects: task, ack,
+  done, question, status; reply on the sender's --thread).
+- Always check your inbox before reporting work done.
+- Stuck? Declare it: `agentcomm register --status "blocked: <what you
+  need>"` — other agents' digests will recruit help. If a digest shows
+  someone else blocked and you KNOW the answer, send it without asking
+  the user; otherwise stay on your task.
+- If your harness has subagents, prefer a background listener subagent for
+  `wait`/inbox management (one actor per mailbox — it owns the alias or
+  uses `--as <you>-bus`); keep quick sends inline.
