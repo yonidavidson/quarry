@@ -10,11 +10,11 @@ def stalker():
     for i in range(8):                       # 8-15 sprint
         f.append((load(f"garathe/sprint_{i}.png"), f"run{i}"))
     f.append((load("garathe/jump_6.png"), "jump"))                        # 16 airborne stride
-    for i in (0, 2, 4, 6):                  # 17-20 wall-climb contact cycle
-        f.append((load(f"garathe/wall_{i}.png"), f"cling{i}"))
+    for i in (0, 2, 4, 6):                  # 17-20 wall-cling (#69): wall69 rotated -90 at prep → wallr_
+        f.append((load(f"garathe/wallr_{i}.png"), f"cling{i}"))
     f.append((load("garathe/jump_7.png"), "drop"))                        # 21 descending stride
-    for i in (0, 2, 4, 6):                  # 22-25 ceiling traverse
-        f.append((xform(load(f"garathe/wall_{i}.png"), rot=90), f"ceil{i}"))
+    for i in (0, 2, 4, 6):                  # 22-25 ceiling traverse (#70): dedicated inverted ceil70, no bake rot
+        f.append((load(f"garathe/ceil70_{i}.png"), f"ceil{i}"))
     f.append((load("garathe/crawl_0.png"), "land"))                       # 26 landing crouch
     for i in (0, 2, 4, 6):                  # 27-30 roar
         f.append((load(f"garathe/roar_{i}.png"), f"roar{i}"))
@@ -22,8 +22,8 @@ def stalker():
         f.append((load(f"garathe/hang_{i}.png"), f"hang{i}"))
     for i in range(6):                       # 35-40 low prowl (crawl4, fit within texture limit)
         f.append((load(f"garathe/crawl_{i}.png"), f"crawl{i}"))
-    for i in (0, 2, 4, 6):                  # 39-42 rear-view rope climb
-        f.append((load(f"garathe/rope_{i}.png"), f"rope{i}"))
+    for i in (0, 2, 4, 6):                  # 41-44 side-view ladder/rope climb (#71)
+        f.append((load(f"garathe/sideclimb71_{i}.png"), f"rope{i}"))
     f.append((load("garathe/jump_3.png"), "rise"))                        # 43-46 air/mantle poses
     f.append((load("garathe/jump_7.png"), "fall"))
     f.append((load("garathe/jump_6.png"), "leap"))
