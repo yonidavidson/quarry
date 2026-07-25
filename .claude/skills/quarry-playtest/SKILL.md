@@ -34,10 +34,18 @@ loses focus — you opened a second tab, split, or window — stops ticking
 entirely. The symptom is confusing: `get('*').length` reads 0 and
 `debug.fps()` reads 0, which looks exactly like a crashed scene. Check
 `document.hidden` before believing it, and `cmux close-surface` / `cmux
-focus-pane --pane <n>` to bring the game back to the front. For the same
-reason, treat frame rates measured through a cmux surface as unreliable — the
-compositor throttles it well below what real hardware does. Measure perf in a
-normal browser window.
+focus-pane --pane <n>` to bring the game back to the front.
+
+Worse, a surface left hidden long enough is *discarded*, not just paused: the
+next `eval` wakes it into a fresh navigation, so you get `ReferenceError: Can't
+find variable: go` and `performance.now()` back near zero. Read that as "the
+harness reloaded the tab", not "my change broke the page" — the giveaway is a
+`performance.now()` under a second on a page you loaded minutes ago.
+
+Because focus keeps moving back to the terminal between commands, cmux is good
+for *looking* at the game and bad for *measuring* it. Anything timed — frame
+rate, acceleration, anything sampled across several commands — belongs in
+Playwright, which holds its own window.
 
 ### Movement needs held keys, not taps
 
@@ -99,7 +107,16 @@ from `eval` / `page.evaluate`:
 | `__quarry.weapon()` | current weapon |
 | `__quarry.ceil()` / `__quarry.lad()` | ceiling / ladder helpers |
 | `netHost` / `netJoin` / `netHostAccept` | WebRTC online (window globals) |
+| `__quarry.vx()` / `__quarry.grip()` | carried horizontal speed / which hold has the body |
 | `get('*').length`, `debug.fps()` | perf — object count is the ceiling, ~2500 is OK |
+
+The current animation is `player.curAnim()`, **not** `player.anim` — the latter is
+`undefined`, so a check like `p.anim === "cling"` silently reads false forever and
+every assertion built on it passes or fails for the wrong reason.
+
+Prefer these introspection hooks over inferring state from `pos`. A position delta
+can't tell momentum from a collision, and on a level full of walls that difference
+is most of what you're trying to measure.
 
 ## Reporting what you find
 
