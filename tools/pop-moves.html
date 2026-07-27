@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>QUARRY — PoP movement sandbox (#74)</title>
+<style>
+body{margin:0;background:#0a080a;overflow:hidden;display:flex;justify-content:center;align-items:center;height:100vh;font-family:monospace}
+#c{border:1px solid #1a181a;image-rendering:pixelated;background:#0c0a0e}
+</style>
+</head>
+<body>
+<canvas id="c" width="960" height="720"></canvas>
+<script>
+// =====================================================================
+// PoP MOVEMENT SANDBOX — vectorized skeletal figure, structured moves
+// Ticket #74: idle/run/jump/fall/grab/hang/shimmy/climbUp/climbDown/
+//             drop/crouch/crawl as an explicit state machine.
+// Render: world drawn in 320x240 space; PIXEL mode blits via a low-res
+// offscreen (nearest-neighbour) to test pixel-art fit. P toggles.
+// =====================================================================
+const main = document.getElementById("c").getContext("2d");
+const low = document.createElement("canvas"); low.width = 320; low.height = 240;
+const lowCtx = low.getContext("2d");
+const W = 320, H = 240, SC = 3;
+let pixelMode = true, showBones = false;
+
+// ── Level ─────────────────────────────────────────────────────────
+// slabs: top surface at y, thickness 6. gap in the ground = jump pit.
+const PLATS = [
+  { x: 0,   w: 150, y: 210 }, // ground left
+  { x: 178, w: 142, y: 210 }, // ground right
+  { x: 196, w: 54,  y: 174 }, // platA — crawl tunnel under it (clearance 36)
+  { x: 252, w: 68,  y: 138 }, // platB — needs ledge grab, long enough to shimmy
+  { x: 24,  w: 64,  y: 174 }, // ledgeL
+  { x: 88,  w: 56,  y: 134 }, // highL — grab from ledgeL
+];
+const SLAB_T = 6;
+
+// ── Character physics ─────────────────────────────────────────────
+const GRAV = 900, RUN_V = 70, JUMP_V = 245, AIR_CTL = 0.8, CRAWL_V = 16;
+const STAND_H = 44, CROUCH_H = 30, HIP_H = 20;
+const HANG_DROP = 46;      // feet below edge when hanging (hands on the edge)
+const HAND_UP = 47;        // hands above feet when reaching
+
+const P = {
+  x: 110, y: 210, vx: 0, vy: 0, facing: 1,
+  state: "idle", stateT: 0, grabCd: 0,
+  hangDir: 1, plat: null,            // platform grabbed / stood on
+  root: [0, 0],                       // procedural root offset during scripted moves
+  startX: 0, startY: 0, dirOut: 1,    // scripted move bookkeeping
+};
+
+const keys = {};
+addEventListener("keydown", e => { keys[e.key.toLowerCase()] = true; keys[e.code] = true;
+  if (e.key.toLowerCase() === "p") pixelMode = !pixelMode;
+  if (e.key.toLowerCase() === "b") showBones = !showBones;
+  if (e.key.toLowerCase() === "r") reset();
+  if ([" ","ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(e.key)) e.preventDefault();
+});
+addEventListener("keyup", e => { keys[e.key.toLowerCase()] = false; keys[e.code] = false; });
+const L = () => keys["arrowleft"] || keys["a"];
+const R = () => keys["arrowright"] || keys["d"];
+const U = () => keys["arrowup"] || keys["w"];
+const D = () => keys["arrowdown"] || keys["s"];
+const JUMP = () => keys[" "] || keys["Space"];
+const GRAB = () => keys["shift"] || keys["ShiftLeft"] || keys["ShiftRight"];
+function reset() { Object.assign(P, { x: 110, y: 210, vx: 0, vy: 0, facing: 1, state: "idle", stateT: 0, grabCd: 0, root: [0, 0] }); }
+
+function enter(s) { P.state = s; P.stateT = 0; }
+
+// platform top under x with y >= y0 (feet), nearest above
+function supportAt(x, y0) {
+  let best = null;
+  for (const p of PLATS) if (x >= p.x && x <= p.x + p.w && p.y >= y0 - 1 && (!best || p.y < best.y)) best = p;
+  return best;
+}
+function onEdge(p) { // distance to nearest corner of platform p
+  return Math.min(Math.abs(P.x - p.x), Math.abs(P.x - (p.x + p.w)));
+}
+function mustCrouch() { // slab overhead that a standing figure would clip
+  for (const p of PLATS)
+    if (P.x > p.x - 2 && P.x < p.x + p.w + 2 && P.y > p.y && P.y - STAND_H < p.y + SLAB_T)
+      return true;
+  return false;
+}
+
+// ── State machine ─────────────────────────────────────────────────
+function step(dt) {
+  P.stateT += dt; P.grabCd = Math.max(0, P.grabCd - dt);
+  const dir = (R() ? 1 : 0) - (L() ? 1 : 0);
+  switch (P.state) {
+    case "idle": case "run": {
+      if (dir) P.facing = dir;
+      P.vx = dir * RUN_V;
+      P.x += P.vx * dt;
+      const sup = supportAt(P.x, P.y);
+      if (!sup) { P.vy = 0; enter("fall"); break; }
+      P.y = sup.y; P.plat = sup;
+      if (JUMP()) { P.vy = -JUMP_V; enter("jump"); break; }
+      if (D() && onEdge(sup) < 8) { // PoP: turn around and climb down
+        const c = Math.abs(P.x - sup.x) < Math.abs(P.x - (sup.x + sup.w)) ? sup.x : sup.x + sup.w;
+        P.dirOut = Math.sign(c - P.x) || P.facing;
+        P.startX = P.x; P.startY = P.y; P.plat = sup; enter("climbdown"); break;
+      }
+      if (D() || mustCrouch()) { enter("crouch"); break; }
+      if (P.state !== "fall") enter(dir ? "run" : "idle");
+      break;
+    }
+    case "crouch": case "crawl": {
+      if (dir) P.facing = dir;
+      P.x += dir * CRAWL_V * dt;
+      const sup = supportAt(P.x, P.y);
+      if (!sup) { P.vy = 0; enter("fall"); break; }
+      P.y = sup.y;
+      if (!D() && !mustCrouch()) { enter("idle"); break; }
+      enter(dir ? "crawl" : "crouch");
+      break;
+    }
+    case "jump": case "fall": {
+      P.vy += GRAV * dt;
+      const prevY = P.y;
+      P.y += P.vy * dt;
+      // ceiling: head bonks slab bottoms while rising
+      if (P.vy < 0) {
+        const prevHead = prevY - STAND_H, newHead = P.y - STAND_H;
+        for (const p of PLATS) {
+          const bot = p.y + SLAB_T;
+          if (P.x > p.x && P.x < p.x + p.w && prevHead >= bot && newHead < bot) {
+            P.y = bot + STAND_H; P.vy = 0; break;
+          }
+        }
+      }
+      if (dir) P.facing = dir;
+      P.x += dir * RUN_V * dt; // momentum: keep full run speed in the air
+      // ledge grab: falling, grab held, hands reach a slab top
+      if (P.vy > 0 && GRAB() && P.grabCd <= 0) {
+        const hx = P.x + P.facing * 5, hy = P.y - HAND_UP;
+        for (const p of PLATS) {
+          if (hx > p.x && hx < p.x + p.w && Math.abs(hy - p.y) < 7 && P.y > p.y + 10) {
+            P.hangDir = P.facing; P.plat = p;
+            P.y = p.y + HANG_DROP;
+            P.vy = 0; enter("hang"); return;
+          }
+        }
+      }
+      // land
+      if (P.vy > 0) {
+        for (const p of PLATS) {
+          if (P.x >= p.x - 1 && P.x <= p.x + p.w + 1 && prevY <= p.y && P.y >= p.y) {
+            P.y = p.y; P.plat = p;
+            if (P.vy > 340) { P.vy = 0; enter("land"); } // >~1.4x char height drop = recovery
+            else { P.vy = 0; enter(dir ? "run" : "idle"); }
+            return;
+          }
+        }
+      }
+      if (P.state !== "hang" && P.vy > 0 && P.state === "jump") enter("fall");
+      if (P.y > H + 60) reset(); // fell in the pit
+      break;
+    }
+    case "hang": {
+      const p = P.plat;
+      P.y = p.y + HANG_DROP;
+      if (U()) { P.startX = P.x; P.startY = P.y; enter("climbup"); break; }
+      if (D()) { P.grabCd = 0.35; P.vy = 40; enter("fall"); break; }
+      if (dir) { // shimmy along the edge
+        P.x += dir * 14 * dt;
+        const hx = P.x + P.hangDir * 5;
+        if (hx < p.x + 3) P.x = p.x + 3 - P.hangDir * 5;
+        if (hx > p.x + p.w - 3) P.x = p.x + p.w - 3 - P.hangDir * 5;
+      }
+      break;
+    }
+    case "climbup": { // scripted: 0.8s from hang to standing on top
+      const T = 0.8, t = Math.min(P.stateT / T, 1);
+      const F = P.hangDir;
+      P.root = [F * 7 * ease(t), -HANG_DROP * ease(t)];
+      if (t >= 1) {
+        P.x = P.startX + F * 7; P.y = P.startY - HANG_DROP; P.root = [0, 0];
+        P.facing = F; enter("idle");
+      }
+      break;
+    }
+    case "climbdown": { // scripted: 0.75s from standing at edge to hang
+      const T = 0.75, t = Math.min(P.stateT / T, 1);
+      const Dv = P.dirOut;
+      P.root = [Dv * 4 * ease(t), HANG_DROP * ease(t)];
+      if (t >= 1) {
+        P.x = P.startX + Dv * 4; P.y = P.startY + HANG_DROP; P.root = [0, 0];
+        P.hangDir = -Dv; P.facing = -Dv; enter("hang");
+      }
+      break;
+    }
+    case "land": { if (P.stateT > 0.32) enter("idle"); break; }
+  }
+  P.x = Math.max(4, Math.min(W - 4, P.x));
+}
+const ease = t => t * t * (3 - 2 * t);
+
+// ── Skeletal figure ───────────────────────────────────────────────
+// Bone tree. angle: relative degrees, + toward facing. dir(θ)=(sinθ,-cosθ): θ=0 up.
+const BONES = {
+  torso:  { parent: null,     len: 14, w: 7,   col: "#4a8c3f" },
+  head:   { parent: "torso",  len: 8,  w: 8.5, col: "#d4a574", round: true },
+  armUpL: { parent: "torso",  len: 7,  w: 3,   col: "#3f7434", joint: [-3.5, -12] },
+  armFoL: { parent: "armUpL", len: 7,  w: 2.6, col: "#d4a574" },
+  armUpR: { parent: "torso",  len: 7,  w: 3,   col: "#4a8c3f", joint: [3.5, -12] },
+  armFoR: { parent: "armUpR", len: 7,  w: 2.6, col: "#d4a574" },
+  thighL: { parent: null,     len: 10, w: 4,   col: "#46280f", joint: [-2, 0] },
+  shinL:  { parent: "thighL", len: 10, w: 3.4, col: "#5c3a1e" },
+  thighR: { parent: null,     len: 10, w: 4,   col: "#5c3a1e", joint: [2, 0] },
+  shinR:  { parent: "thighR", len: 10, w: 3.4, col: "#6b4423" },
+};
+const REST = { torso: 0, head: 0, armUpL: 170, armFoL: 8, armUpR: 170, armFoR: 8,
+               thighL: 180, shinL: 0, thighR: 180, shinR: 0 };
+
+// keyframes: { t (0..1 phase), pose:{bone:relAngle} (partial), root:[dx,dy] (optional) }
+const ANIMS = {
+  idle: { dur: 2.4, loop: true, keys: [
+    { t: 0,   pose: { torso: 2, head: -3, armUpL: 168, armUpR: 172 } },
+    { t: 0.5, pose: { torso: 4, head: -2, armUpL: 165, armUpR: 175 } },
+    { t: 1,   pose: { torso: 2, head: -3, armUpL: 168, armUpR: 172 } },
+  ]},
+  run: { dur: 0.55, loop: true, keys: [
+    { t: 0,    pose: { torso: 10, head: -6, armUpL: 195, armFoL: 30, armUpR: 135, armFoR: 60, thighL: 140, shinL: -15, thighR: 218, shinR: -55 }, root: [0, 0] },
+    { t: 0.25, pose: { torso: 8,  head: -5, armUpL: 175, armFoL: 20, armUpR: 160, armFoR: 40, thighL: 170, shinL: -45, thighR: 185, shinR: -70 }, root: [0, -2] },
+    { t: 0.5,  pose: { torso: 10, head: -6, armUpL: 135, armFoL: 60, armUpR: 195, armFoR: 30, thighL: 218, shinL: -55, thighR: 140, shinR: -15 }, root: [0, 0] },
+    { t: 0.75, pose: { torso: 8,  head: -5, armUpL: 160, armFoL: 40, armUpR: 175, armFoR: 20, thighL: 185, shinL: -70, thighR: 170, shinR: -45 }, root: [0, -2] },
+    { t: 1,    pose: { torso: 10, head: -6, armUpL: 195, armFoL: 30, armUpR: 135, armFoR: 60, thighL: 140, shinL: -15, thighR: 218, shinR: -55 }, root: [0, 0] },
+  ]},
+  jump: { dur: 1, loop: false, keys: [
+    { t: 0, pose: { torso: 12, head: -8, armUpL: 40, armFoL: -15, armUpR: 50, armFoR: -15, thighL: 160, shinL: -35, thighR: 190, shinR: -60 } },
+    { t: 1, pose: { torso: 10, head: -6, armUpL: 55, armFoL: -10, armUpR: 65, armFoR: -10, thighL: 170, shinL: -25, thighR: 195, shinR: -45 } },
+  ]},
+  fall: { dur: 1, loop: false, keys: [ // GRAB held → arms overhead reach pose
+    { t: 0, pose: { torso: 5, head: 0, armUpL: 45, armFoL: 0, armUpR: 55, armFoR: 0, thighL: 175, shinL: -20, thighR: 195, shinR: -45 } },
+    { t: 1, pose: { torso: 5, head: 0, armUpL: 45, armFoL: 0, armUpR: 55, armFoR: 0, thighL: 175, shinL: -20, thighR: 195, shinR: -45 } },
+  ]},
+  reach: { dur: 1, loop: false, keys: [
+    { t: 0, pose: { torso: 0, head: -10, armUpL: 6, armFoL: 0, armUpR: -6, armFoR: 0, thighL: 185, shinL: -15, thighR: 170, shinR: -25 } },
+    { t: 1, pose: { torso: 0, head: -10, armUpL: 6, armFoL: 0, armUpR: -6, armFoR: 0, thighL: 185, shinL: -15, thighR: 170, shinR: -25 } },
+  ]},
+  hang: { dur: 2.2, loop: true, keys: [
+    { t: 0,   pose: { torso: 5, head: -12, armUpL: 4, armFoL: 0, armUpR: -4, armFoR: 0, thighL: 190, shinL: -10, thighR: 175, shinR: -20 } },
+    { t: 0.5, pose: { torso: 7, head: -12, armUpL: 4, armFoL: 0, armUpR: -4, armFoR: 0, thighL: 195, shinL: -15, thighR: 172, shinR: -15 } },
+    { t: 1,   pose: { torso: 5, head: -12, armUpL: 4, armFoL: 0, armUpR: -4, armFoR: 0, thighL: 190, shinL: -10, thighR: 175, shinR: -20 } },
+  ]},
+  climbup: { dur: 0.8, loop: false, keys: [
+    { t: 0,    pose: { torso: 5,  head: -12, armUpL: 4,  armFoL: 0,   armUpR: -4,  armFoR: 0,   thighL: 190, shinL: -10, thighR: 175, shinR: -20 } },
+    { t: 0.35, pose: { torso: 20, head: -15, armUpL: 20, armFoL: -100, armUpR: -20, armFoR: -100, thighL: 120, shinL: -80, thighR: 145, shinR: -90 } },
+    { t: 0.65, pose: { torso: 35, head: -10, armUpL: 60, armFoL: -30,  armUpR: 55,  armFoR: -30,  thighL: 100, shinL: -70, thighR: 150, shinR: -60 } },
+    { t: 1,    pose: { torso: 6,  head: -4,  armUpL: 95, armFoL: 10,   armUpR: 90,  armFoR: 10,   thighL: 175, shinL: -10, thighR: 185, shinR: -10 } },
+  ]},
+  climbdown: { dur: 0.75, loop: false, keys: [
+    { t: 0,    pose: { torso: 4,  head: -3,  armUpL: 168, armFoL: 8, armUpR: 172, armFoR: 8, thighL: 180, shinL: 0,   thighR: 180, shinR: 0 } },
+    { t: 0.35, pose: { torso: 28, head: -10, armUpL: 150, armFoL: 20, armUpR: 155, armFoR: 20, thighL: 110, shinL: -85, thighR: 120, shinR: -80 } },
+    { t: 0.65, pose: { torso: 12, head: -12, armUpL: 10,  armFoL: 0,  armUpR: -10, armFoR: 0,  thighL: 185, shinL: -20, thighR: 195, shinR: -15 } },
+    { t: 1,    pose: { torso: 5,  head: -12, armUpL: 4,   armFoL: 0,  armUpR: -4,  armFoR: 0,  thighL: 190, shinL: -10, thighR: 175, shinR: -20 } },
+  ]},
+  crouch: { dur: 1, loop: false, keys: [
+    { t: 0, pose: { torso: 30, head: -18, armUpL: 145, armFoL: 25, armUpR: 150, armFoR: 25, thighL: 110, shinL: -90, thighR: 118, shinR: -88 } },
+    { t: 1, pose: { torso: 30, head: -18, armUpL: 145, armFoL: 25, armUpR: 150, armFoR: 25, thighL: 110, shinL: -90, thighR: 118, shinR: -88 } },
+  ]},
+  crawl: { dur: 0.7, loop: true, keys: [
+    { t: 0,   pose: { torso: 32, head: -20, armUpL: 120, armFoL: 40, armUpR: 165, armFoR: 15, thighL: 100, shinL: -85, thighR: 125, shinR: -80 } },
+    { t: 0.5, pose: { torso: 32, head: -20, armUpL: 165, armFoL: 15, armUpR: 120, armFoR: 40, thighL: 125, shinL: -80, thighR: 100, shinR: -85 } },
+    { t: 1,   pose: { torso: 32, head: -20, armUpL: 120, armFoL: 40, armUpR: 165, armFoR: 15, thighL: 100, shinL: -85, thighR: 125, shinR: -80 } },
+  ]},
+  land: { dur: 1, loop: false, keys: [
+    { t: 0, pose: { torso: 35, head: -20, armUpL: 95, armFoL: 20, armUpR: 90, armFoR: 20, thighL: 105, shinL: -95, thighR: 115, shinR: -90 } },
+    { t: 1, pose: { torso: 35, head: -20, armUpL: 95, armFoL: 20, armUpR: 90, armFoR: 20, thighL: 105, shinL: -95, thighR: 115, shinR: -90 } },
+  ]},
+};
+
+function animName() {
+  if (P.state === "fall" && GRAB()) return "reach";
+  return P.state;
+}
+function samplePose() {
+  const a = ANIMS[animName()] || ANIMS.idle;
+  const ph = a.loop ? (P.stateT % a.dur) / a.dur : Math.min(P.stateT / a.dur, 1);
+  const ks = a.keys;
+  let k0 = ks[0], k1 = ks[ks.length - 1];
+  for (let i = 0; i < ks.length - 1; i++) if (ph >= ks[i].t && ph <= ks[i + 1].t) { k0 = ks[i]; k1 = ks[i + 1]; break; }
+  const span = Math.max(k1.t - k0.t, 1e-6);
+  const lt = Math.min(Math.max((ph - k0.t) / span, 0), 1);
+  const pose = {}, parts = new Set([...Object.keys(k0.pose), ...Object.keys(k1.pose)]);
+  for (const b of parts) {
+    const v0 = k0.pose[b] ?? REST[b] ?? 0, v1 = k1.pose[b] ?? REST[b] ?? 0;
+    pose[b] = v0 + (v1 - v0) * lt;
+  }
+  const r0 = k0.root || [0, 0], r1 = k1.root || [0, 0];
+  return { pose, root: [r0[0] + (r1[0] - r0[0]) * lt, r0[1] + (r1[1] - r0[1]) * lt] };
+}
+
+function drawFigure(g) {
+  const { pose, root } = samplePose();
+  const F = P.facing;
+  const hx = P.x + P.root[0] + root[0] * F;
+  const hy = P.y - HIP_H + P.root[1] + root[1];
+  const joints = {};
+  // forward kinematics: hip is root; torso & thighs attach to hip
+  function place(name, px, py, parentAbs) {
+    const b = BONES[name];
+    const rel = (pose[name] ?? REST[name]) * F;
+    const abs = parentAbs + rel;
+    const rad = abs * Math.PI / 180;
+    const ex = px + Math.sin(rad) * b.len, ey = py - Math.cos(rad) * b.len;
+    joints[name] = { px, py, ex, ey, abs };
+    return joints[name];
+  }
+  // hip-anchored
+  const torso = place("torso", hx, hy, 0);
+  place("head", torso.ex, torso.ey, torso.abs);
+  const tL = place("thighL", hx - 2 * F, hy, 0); place("shinL", tL.ex, tL.ey, tL.abs);
+  const tR = place("thighR", hx + 2 * F, hy, 0); place("shinR", tR.ex, tR.ey, tR.abs);
+  // shoulders at torso top
+  const shX = torso.ex, shY = torso.ey;
+  const aL = place("armUpL", shX - 1.5 * F, shY + 1, torso.abs); place("armFoL", aL.ex, aL.ey, aL.abs);
+  const aR = place("armUpR", shX + 1.5 * F, shY + 1, torso.abs); place("armFoR", aR.ex, aR.ey, aR.abs);
+
+  // shadow
+  const sup = supportAt(P.x, P.y + 1);
+  if (sup) {
+    g.fillStyle = "rgba(0,0,0,0.28)";
+    g.beginPath(); g.ellipse(P.x, sup.y + 2, 9, 2.2, 0, 0, Math.PI * 2); g.fill();
+  }
+  // draw back-to-front: L limbs, torso, R limbs, head
+  const seg = (j, b) => {
+    g.strokeStyle = b.col; g.lineWidth = b.w; g.lineCap = "round";
+    g.beginPath(); g.moveTo(j.px, j.py); g.lineTo(j.ex, j.ey); g.stroke();
+    if (showBones) { g.fillStyle = "#ff0"; g.fillRect(j.px - 0.7, j.py - 0.7, 1.4, 1.4); }
+  };
+  seg(joints.thighL, BONES.thighL); seg(joints.shinL, BONES.shinL);
+  seg(joints.armUpL, BONES.armUpL); seg(joints.armFoL, BONES.armFoL);
+  seg(joints.torso, BONES.torso);
+  // belt
+  g.fillStyle = "#8b6914"; g.fillRect(hx - 3.5, hy - 1.5, 7, 2);
+  seg(joints.thighR, BONES.thighR); seg(joints.shinR, BONES.shinR);
+  seg(joints.armUpR, BONES.armUpR); seg(joints.armFoR, BONES.armFoR);
+  // head: skin ball + hair cap + eye (shows facing)
+  const hd = joints.head;
+  const hcx = hd.px + Math.sin((hd.abs) * Math.PI / 180) * 4, hcy = hd.py - Math.cos((hd.abs) * Math.PI / 180) * 4;
+  g.fillStyle = "#d4a574"; g.beginPath(); g.arc(hcx, hcy, 4.2, 0, Math.PI * 2); g.fill();
+  g.fillStyle = "#2a1a0e"; g.beginPath(); g.arc(hcx - F * 0.8, hcy - 1.6, 3.9, Math.PI * 0.95, Math.PI * 2.05); g.fill();
+  g.fillStyle = "#111"; g.fillRect(hcx + F * 1.6 - 0.6, hcy - 1, 1.3, 1.3);
+}
+
+// ── World render ──────────────────────────────────────────────────
+function drawWorld(g) {
+  const grad = g.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, "#0a0812"); grad.addColorStop(0.4, "#141020"); grad.addColorStop(1, "#181625");
+  g.fillStyle = grad; g.fillRect(0, 0, W, H);
+  // wall panels + rivets
+  g.fillStyle = "#1e1c26";
+  for (let y = 60; y < H; y += 26) g.fillRect(0, y, W, 1);
+  g.fillStyle = "#282630";
+  for (let y = 60; y < H; y += 26) for (let x = 18; x < W; x += 44) g.fillRect(x, y + 11, 2, 2);
+  // lamp glow
+  const gl = g.createRadialGradient(160, 50, 4, 160, 50, 90);
+  gl.addColorStop(0, "rgba(255,230,180,0.07)"); gl.addColorStop(1, "rgba(255,230,180,0)");
+  g.fillStyle = gl; g.fillRect(60, 0, 220, 140);
+  g.fillStyle = "#8a7850"; g.fillRect(157, 46, 6, 6);
+  // slabs
+  for (const p of PLATS) {
+    g.fillStyle = "#28262e"; g.fillRect(p.x, p.y, p.w, SLAB_T);
+    g.fillStyle = "#3a3845"; g.fillRect(p.x, p.y, p.w, 1.5);
+    g.fillStyle = "#1a181e"; g.fillRect(p.x, p.y + SLAB_T - 1, p.w, 1);
+  }
+  // grab-able edge markers (subtle)
+  g.fillStyle = "rgba(255,230,150,0.25)";
+  for (const p of PLATS) if (p.y < 210) { g.fillRect(p.x, p.y - 1, p.w, 1); }
+}
+
+// ── HUD ───────────────────────────────────────────────────────────
+const STATES = ["idle", "run", "jump", "fall", "hang", "climbup", "climbdown", "crouch", "crawl", "land"];
+const SHORT = { climbup: "up", climbdown: "down" };
+const REACHABLE = {
+  idle: ["run", "jump", "crouch", "climbdown"], run: ["idle", "jump", "fall", "climbdown"],
+  jump: ["fall", "hang"], fall: ["hang", "idle", "run", "land"],
+  hang: ["climbup", "fall"], climbup: ["idle"], climbdown: ["hang"],
+  crouch: ["crawl", "idle"], crawl: ["crouch", "idle"], land: ["idle"],
+};
+function hint() {
+  switch (P.state) {
+    case "hang": return "UP climb up · LEFT/RIGHT shimmy · DOWN let go";
+    case "climbup": return "mantling...";
+    case "climbdown": return "climbing down...";
+    case "fall": case "jump": return GRAB() ? "reaching for ledge..." : "hold SHIFT to grab a ledge";
+    case "crouch": case "crawl": return mustCrouch() ? "low ceiling — keep DOWN to crawl" : "release DOWN to stand";
+    case "land": return "heavy landing!";
+    default:
+      if (P.plat && onEdge(P.plat) < 8 && P.y === P.plat.y) return "at edge: DOWN to climb down · SPACE jump";
+      return "ARROWS move · SPACE jump · SHIFT grab (air) · DOWN crouch/edge-drop";
+  }
+}
+function drawHUD(g) {
+  g.fillStyle = "rgba(6,5,8,0.82)"; g.fillRect(0, 0, W, 15); g.fillRect(0, H - 13, W, 13);
+  g.fillStyle = "#c9b98a"; g.font = "6px monospace";
+  g.fillText("QUARRY #74 — PoP MOVEMENT SANDBOX (vector rig)", 4, 6);
+  g.fillStyle = "#7fd48a"; g.fillText("state: " + P.state + (animName() !== P.state ? " (" + animName() + ")" : ""), 4, 13);
+  g.fillStyle = "#8f8a7a"; g.fillText(hint(), 4, H - 4);
+  g.fillStyle = "#5a5648"; g.fillText("[P]ixel " + (pixelMode ? "ON" : "off") + "  [B]ones " + (showBones ? "ON" : "off") + "  [R]eset", 210, 6);
+  // state diagram
+  const x0 = 218, y0 = 22, bw = 30, bh = 8;
+  g.font = "5px monospace";
+  STATES.forEach((s, i) => {
+    const x = x0 + (i % 3) * (bw + 3), y = y0 + Math.floor(i / 3) * (bh + 3);
+    const cur = s === P.state, ok = (REACHABLE[P.state] || []).includes(s);
+    g.fillStyle = cur ? "#2f6b3a" : "#14121a"; g.fillRect(x, y, bw, bh);
+    g.strokeStyle = cur ? "#7fd48a" : ok ? "#b89a4a" : "#2c2a34"; g.lineWidth = 0.8;
+    g.strokeRect(x + 0.5, y + 0.5, bw - 1, bh - 1);
+    g.fillStyle = cur ? "#d6f5dc" : ok ? "#c9b98a" : "#5a5660";
+    g.fillText(SHORT[s] || s, x + 2, y + 5.5);
+  });
+}
+
+// ── Frame ─────────────────────────────────────────────────────────
+function render() {
+  const g = pixelMode ? lowCtx : main;
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  if (!pixelMode) g.setTransform(SC, 0, 0, SC, 0, 0);
+  drawWorld(g); drawFigure(g); drawHUD(g);
+  if (pixelMode) {
+    main.setTransform(1, 0, 0, 1, 0, 0);
+    main.imageSmoothingEnabled = false;
+    main.clearRect(0, 0, 960, 720);
+    main.drawImage(low, 0, 0, 960, 720);
+  }
+}
+let last = performance.now();
+setInterval(() => {
+  const now = performance.now();
+  const dt = Math.min((now - last) / 1000, 0.04); last = now;
+  step(dt);
+  render();
+}, 16);
+</script>
+</body>
+</html>

@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>QUARRY — skinned rig POC (#74)</title>
+<style>
+body{margin:0;background:#0a080a;overflow:hidden;display:flex;justify-content:center;align-items:center;height:100vh;font-family:monospace}
+#c{border:1px solid #1a181a;image-rendering:pixelated;background:#0c0a0e}
+</style>
+</head>
+<body>
+<canvas id="c" width="960" height="720"></canvas>
+<script>
+// =====================================================================
+// SKINNED RIG POC — same FK rig + PoP state machine as pop-moves.html,
+// but bones render BITMAP SEGMENTS cut from the game's HUMAN_PNG idle
+// frame (frame 0, 252x223). Question answered: can the vector rig keep
+// the PixelLab look? Segments rotate about their joints; seams show.
+// =====================================================================
+const main = document.getElementById("c").getContext("2d");
+const low = document.createElement("canvas"); low.width = 320; low.height = 240;
+const lowCtx = low.getContext("2d");
+const W = 320, H = 240, SC = 3;
+let pixelMode = true, showBones = false;
+
+// ── Level (same as pop-moves) ───────────────────────────────────
+const PLATS = [
+  { x: 0,   w: 150, y: 210 },
+  { x: 178, w: 142, y: 210 },
+  { x: 196, w: 54,  y: 174 },
+  { x: 252, w: 68,  y: 138 },
+  { x: 24,  w: 64,  y: 174 },
+  { x: 88,  w: 56,  y: 134 },
+];
+const SLAB_T = 6;
+
+// ── Physics (skin proportions: HIP_H 13, reach 44) ──────────────
+const GRAV = 900, RUN_V = 70, JUMP_V = 245, CRAWL_V = 16;
+const STAND_H = 44, CROUCH_H = 30, HIP_H = 13;
+const HANG_DROP = 44;
+const HAND_UP = 44;
+
+const P = {
+  x: 110, y: 210, vx: 0, vy: 0, facing: 1,
+  state: "idle", stateT: 0, grabCd: 0,
+  hangDir: 1, plat: null, root: [0, 0], startX: 0, startY: 0, dirOut: 1,
+};
+
+const keys = {};
+addEventListener("keydown", e => { keys[e.key.toLowerCase()] = true; keys[e.code] = true;
+  if (e.key.toLowerCase() === "p") pixelMode = !pixelMode;
+  if (e.key.toLowerCase() === "b") showBones = !showBones;
+  if (e.key.toLowerCase() === "r") reset();
+  if ([" ","ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(e.key)) e.preventDefault();
+});
+addEventListener("keyup", e => { keys[e.key.toLowerCase()] = false; keys[e.code] = false; });
+const L = () => keys["arrowleft"] || keys["a"];
+const R = () => keys["arrowright"] || keys["d"];
+const U = () => keys["arrowup"] || keys["w"];
+const D = () => keys["arrowdown"] || keys["s"];
+const JUMP = () => keys[" "] || keys["Space"];
+const GRAB = () => keys["shift"] || keys["ShiftLeft"] || keys["ShiftRight"];
+function reset() { Object.assign(P, { x: 110, y: 210, vx: 0, vy: 0, facing: 1, state: "idle", stateT: 0, grabCd: 0, root: [0, 0] }); }
+function enter(s) { P.state = s; P.stateT = 0; }
+
+function supportAt(x, y0) {
+  let best = null;
+  for (const p of PLATS) if (x >= p.x && x <= p.x + p.w && p.y >= y0 - 1 && (!best || p.y < best.y)) best = p;
+  return best;
+}
+function onEdge(p) { return Math.min(Math.abs(P.x - p.x), Math.abs(P.x - (p.x + p.w))); }
+function mustCrouch() {
+  for (const p of PLATS)
+    if (P.x > p.x - 2 && P.x < p.x + p.w + 2 && P.y > p.y && P.y - STAND_H < p.y + SLAB_T)
+      return true;
+  return false;
+}
+
+// ── State machine (identical to pop-moves) ──────────────────────
+function step(dt) {
+  P.stateT += dt; P.grabCd = Math.max(0, P.grabCd - dt);
+  const dir = (R() ? 1 : 0) - (L() ? 1 : 0);
+  switch (P.state) {
+    case "idle": case "run": {
+      if (dir) P.facing = dir;
+      P.vx = dir * RUN_V;
+      P.x += P.vx * dt;
+      const sup = supportAt(P.x, P.y);
+      if (!sup) { P.vy = 0; enter("fall"); break; }
+      P.y = sup.y; P.plat = sup;
+      if (JUMP()) { P.vy = -JUMP_V; enter("jump"); break; }
+      if (D() && onEdge(sup) < 8) {
+        const c = Math.abs(P.x - sup.x) < Math.abs(P.x - (sup.x + sup.w)) ? sup.x : sup.x + sup.w;
+        P.dirOut = Math.sign(c - P.x) || P.facing;
+        P.startX = P.x; P.startY = P.y; P.plat = sup; enter("climbdown"); break;
+      }
+      if (D() || mustCrouch()) { enter("crouch"); break; }
+      if (P.state !== "fall") enter(dir ? "run" : "idle");
+      break;
+    }
+    case "crouch": case "crawl": {
+      if (dir) P.facing = dir;
+      P.x += dir * CRAWL_V * dt;
+      const sup = supportAt(P.x, P.y);
+      if (!sup) { P.vy = 0; enter("fall"); break; }
+      P.y = sup.y;
+      if (!D() && !mustCrouch()) { enter("idle"); break; }
+      enter(dir ? "crawl" : "crouch");
+      break;
+    }
+    case "jump": case "fall": {
+      P.vy += GRAV * dt;
+      const prevY = P.y;
+      P.y += P.vy * dt;
+      if (P.vy < 0) {
+        const prevHead = prevY - STAND_H, newHead = P.y - STAND_H;
+        for (const p of PLATS) {
+          const bot = p.y + SLAB_T;
+          if (P.x > p.x && P.x < p.x + p.w && prevHead >= bot && newHead < bot) {
+            P.y = bot + STAND_H; P.vy = 0; break;
+          }
+        }
+      }
+      if (dir) P.facing = dir;
+      P.x += dir * RUN_V * dt;
+      if (P.vy > 0 && GRAB() && P.grabCd <= 0) {
+        const hx = P.x + P.facing * 5, hy = P.y - HAND_UP;
+        for (const p of PLATS) {
+          if (hx > p.x && hx < p.x + p.w && Math.abs(hy - p.y) < 7 && P.y > p.y + 10) {
+            P.hangDir = P.facing; P.plat = p;
+            P.y = p.y + HANG_DROP;
+            P.vy = 0; enter("hang"); return;
+          }
+        }
+      }
+      if (P.vy > 0) {
+        for (const p of PLATS) {
+          if (P.x >= p.x - 1 && P.x <= p.x + p.w + 1 && prevY <= p.y && P.y >= p.y) {
+            P.y = p.y; P.plat = p;
+            if (P.vy > 340) { P.vy = 0; enter("land"); }
+            else { P.vy = 0; enter(dir ? "run" : "idle"); }
+            return;
+          }
+        }
+      }
+      if (P.state !== "hang" && P.vy > 0 && P.state === "jump") enter("fall");
+      if (P.y > H + 60) reset();
+      break;
+    }
+    case "hang": {
+      const p = P.plat;
+      P.y = p.y + HANG_DROP;
+      if (U()) { P.startX = P.x; P.startY = P.y; enter("climbup"); break; }
+      if (D()) { P.grabCd = 0.35; P.vy = 40; enter("fall"); break; }
+      if (dir) {
+        P.x += dir * 14 * dt;
+        const hx = P.x + P.hangDir * 5;
+        if (hx < p.x + 3) P.x = p.x + 3 - P.hangDir * 5;
+        if (hx > p.x + p.w - 3) P.x = p.x + p.w - 3 - P.hangDir * 5;
+      }
+      break;
+    }
+    case "climbup": {
+      const T = 0.8, t = Math.min(P.stateT / T, 1);
+      const F = P.hangDir;
+      P.root = [F * 7 * ease(t), -HANG_DROP * ease(t)];
+      if (t >= 1) {
+        P.x = P.startX + F * 7; P.y = P.startY - HANG_DROP; P.root = [0, 0];
+        P.facing = F; enter("idle");
+      }
+      break;
+    }
+    case "climbdown": {
+      const T = 0.75, t = Math.min(P.stateT / T, 1);
+      const Dv = P.dirOut;
+      P.root = [Dv * 4 * ease(t), HANG_DROP * ease(t)];
+      if (t >= 1) {
+        P.x = P.startX + Dv * 4; P.y = P.startY + HANG_DROP; P.root = [0, 0];
+        P.hangDir = -Dv; P.facing = -Dv; enter("hang");
+      }
+      break;
+    }
+    case "land": { if (P.stateT > 0.32) enter("idle"); break; }
+  }
+  P.x = Math.max(4, Math.min(W - 4, P.x));
+}
+const ease = t => t * t * (3 - 2 * t);
+
+// ── Animation keyframes (identical to pop-moves) ────────────────
+const REST = { torso: 0, head: 0, armUpL: 170, armFoL: 8, armUpR: 170, armFoR: 8,
+               thighL: 180, shinL: 0, thighR: 180, shinR: 0 };
+const ANIMS = {
+  idle: { dur: 2.4, loop: true, keys: [
+    { t: 0,   pose: { torso: 2, head: -3, armUpL: 168, armUpR: 172 } },
+    { t: 0.5, pose: { torso: 4, head: -2, armUpL: 165, armUpR: 175 } },
+    { t: 1,   pose: { torso: 2, head: -3, armUpL: 168, armUpR: 172 } },
+  ]},
+  run: { dur: 0.55, loop: true, keys: [
+    { t: 0,    pose: { torso: 10, head: -6, armUpL: 195, armFoL: 30, armUpR: 135, armFoR: 60, thighL: 140, shinL: -15, thighR: 218, shinR: -55 }, root: [0, 0] },
+    { t: 0.25, pose: { torso: 8,  head: -5, armUpL: 175, armFoL: 20, armUpR: 160, armFoR: 40, thighL: 170, shinL: -45, thighR: 185, shinR: -70 }, root: [0, -2] },
+    { t: 0.5,  pose: { torso: 10, head: -6, armUpL: 135, armFoL: 60, armUpR: 195, armFoR: 30, thighL: 218, shinL: -55, thighR: 140, shinR: -15 }, root: [0, 0] },
+    { t: 0.75, pose: { torso: 8,  head: -5, armUpL: 160, armFoL: 40, armUpR: 175, armFoR: 20, thighL: 185, shinL: -70, thighR: 170, shinR: -45 }, root: [0, -2] },
+    { t: 1,    pose: { torso: 10, head: -6, armUpL: 195, armFoL: 30, armUpR: 135, armFoR: 60, thighL: 140, shinL: -15, thighR: 218, shinR: -55 }, root: [0, 0] },
+  ]},
+  jump: { dur: 1, loop: false, keys: [
+    { t: 0, pose: { torso: 12, head: -8, armUpL: 40, armFoL: -15, armUpR: 50, armFoR: -15, thighL: 160, shinL: -35, thighR: 190, shinR: -60 } },
+    { t: 1, pose: { torso: 10, head: -6, armUpL: 55, armFoL: -10, armUpR: 65, armFoR: -10, thighL: 170, shinL: -25, thighR: 195, shinR: -45 } },
+  ]},
+  fall: { dur: 1, loop: false, keys: [
+    { t: 0, pose: { torso: 5, head: 0, armUpL: 45, armFoL: 0, armUpR: 55, armFoR: 0, thighL: 175, shinL: -20, thighR: 195, shinR: -45 } },
+    { t: 1, pose: { torso: 5, head: 0, armUpL: 45, armFoL: 0, armUpR: 55, armFoR: 0, thighL: 175, shinL: -20, thighR: 195, shinR: -45 } },
+  ]},
+  reach: { dur: 1, loop: false, keys: [
+    { t: 0, pose: { torso: 0, head: -10, armUpL: 6, armFoL: 0, armUpR: -6, armFoR: 0, thighL: 185, shinL: -15, thighR: 170, shinR: -25 } },
+    { t: 1, pose: { torso: 0, head: -10, armUpL: 6, armFoL: 0, armUpR: -6, armFoR: 0, thighL: 185, shinL: -15, thighR: 170, shinR: -25 } },
+  ]},
+  hang: { dur: 2.2, loop: true, keys: [
+    { t: 0,   pose: { torso: 5, head: -12, armUpL: 4, armFoL: 0, armUpR: -4, armFoR: 0, thighL: 190, shinL: -10, thighR: 175, shinR: -20 } },
+    { t: 0.5, pose: { torso: 7, head: -12, armUpL: 4, armFoL: 0, armUpR: -4, armFoR: 0, thighL: 195, shinL: -15, thighR: 172, shinR: -15 } },
+    { t: 1,   pose: { torso: 5, head: -12, armUpL: 4, armFoL: 0, armUpR: -4, armFoR: 0, thighL: 190, shinL: -10, thighR: 175, shinR: -20 } },
+  ]},
+  climbup: { dur: 0.8, loop: false, keys: [
+    { t: 0,    pose: { torso: 5,  head: -12, armUpL: 4,  armFoL: 0,   armUpR: -4,  armFoR: 0,   thighL: 190, shinL: -10, thighR: 175, shinR: -20 } },
+    { t: 0.35, pose: { torso: 20, head: -15, armUpL: 20, armFoL: -100, armUpR: -20, armFoR: -100, thighL: 120, shinL: -80, thighR: 145, shinR: -90 } },
+    { t: 0.65, pose: { torso: 35, head: -10, armUpL: 60, armFoL: -30,  armUpR: 55,  armFoR: -30,  thighL: 100, shinL: -70, thighR: 150, shinR: -60 } },
+    { t: 1,    pose: { torso: 6,  head: -4,  armUpL: 95, armFoL: 10,   armUpR: 90,  armFoR: 10,   thighL: 175, shinL: -10, thighR: 185, shinR: -10 } },
+  ]},
+  climbdown: { dur: 0.75, loop: false, keys: [
+    { t: 0,    pose: { torso: 4,  head: -3,  armUpL: 168, armFoL: 8, armUpR: 172, armFoR: 8, thighL: 180, shinL: 0,   thighR: 180, shinR: 0 } },
+    { t: 0.35, pose: { torso: 28, head: -10, armUpL: 150, armFoL: 20, armUpR: 155, armFoR: 20, thighL: 110, shinL: -85, thighR: 120, shinR: -80 } },
+    { t: 0.65, pose: { torso: 12, head: -12, armUpL: 10,  armFoL: 0,  armUpR: -10, armFoR: 0,  thighL: 185, shinL: -20, thighR: 195, shinR: -15 } },
+    { t: 1,    pose: { torso: 5,  head: -12, armUpL: 4,   armFoL: 0,  armUpR: -4,  armFoR: 0,  thighL: 190, shinL: -10, thighR: 175, shinR: -20 } },
+  ]},
+  crouch: { dur: 1, loop: false, keys: [
+    { t: 0, pose: { torso: 30, head: -18, armUpL: 145, armFoL: 25, armUpR: 150, armFoR: 25, thighL: 110, shinL: -90, thighR: 118, shinR: -88 } },
+    { t: 1, pose: { torso: 30, head: -18, armUpL: 145, armFoL: 25, armUpR: 150, armFoR: 25, thighL: 110, shinL: -90, thighR: 118, shinR: -88 } },
+  ]},
+  crawl: { dur: 0.7, loop: true, keys: [
+    { t: 0,   pose: { torso: 32, head: -20, armUpL: 120, armFoL: 40, armUpR: 165, armFoR: 15, thighL: 100, shinL: -85, thighR: 125, shinR: -80 } },
+    { t: 0.5, pose: { torso: 32, head: -20, armUpL: 165, armFoL: 15, armUpR: 120, armFoR: 40, thighL: 125, shinL: -80, thighR: 100, shinR: -85 } },
+    { t: 1,   pose: { torso: 32, head: -20, armUpL: 120, armFoL: 40, armUpR: 165, armFoR: 15, thighL: 100, shinL: -85, thighR: 125, shinR: -80 } },
+  ]},
+  land: { dur: 1, loop: false, keys: [
+    { t: 0, pose: { torso: 35, head: -20, armUpL: 95, armFoL: 20, armUpR: 90, armFoR: 20, thighL: 105, shinL: -95, thighR: 115, shinR: -90 } },
+    { t: 1, pose: { torso: 35, head: -20, armUpL: 95, armFoL: 20, armUpR: 90, armFoR: 20, thighL: 105, shinL: -95, thighR: 115, shinR: -90 } },
+  ]},
+};
+
+function animName() { if (P.state === "fall" && GRAB()) return "reach"; return P.state; }
+function samplePose() {
+  const a = ANIMS[animName()] || ANIMS.idle;
+  const ph = a.loop ? (P.stateT % a.dur) / a.dur : Math.min(P.stateT / a.dur, 1);
+  const ks = a.keys;
+  let k0 = ks[0], k1 = ks[ks.length - 1];
+  for (let i = 0; i < ks.length - 1; i++) if (ph >= ks[i].t && ph <= ks[i + 1].t) { k0 = ks[i]; k1 = ks[i + 1]; break; }
+  const span = Math.max(k1.t - k0.t, 1e-6);
+  const lt = Math.min(Math.max((ph - k0.t) / span, 0), 1);
+  const pose = {}, parts = new Set([...Object.keys(k0.pose), ...Object.keys(k1.pose)]);
+  for (const b of parts) {
+    const v0 = k0.pose[b] ?? REST[b] ?? 0, v1 = k1.pose[b] ?? REST[b] ?? 0;
+    pose[b] = v0 + (v1 - v0) * lt;
+  }
+  const r0 = k0.root || [0, 0], r1 = k1.root || [0, 0];
+  return { pose, root: [r0[0] + (r1[0] - r0[0]) * lt, r0[1] + (r1[1] - r0[1]) * lt] };
+}
+
+// ── Bitmap segments cut from HUMAN_PNG frame 0 ──────────────────
+// frame: 252x223, char bbox x112..147 y55..180, center (129.5,117.5)
+// cut: [sx, sy, w, h] in strip coords; pivot: joint point in cut coords
+// rest: absolute rest angle (0=up, 180=down); len: FK length in world px
+const K = 0.35; // world px per source px (126px char -> 44px)
+let sheet = null;
+const SEGS = {
+  torso:  { cut: [117, 82, 25, 60], pivot: [12.5, 57.5], rest: 0,   len: 19.6 },
+  head:   { cut: [118, 56, 23, 23], pivot: [11.5, 27.5], rest: 0,   len: 0 },
+  armUpL: { cut: [108, 86, 15, 22], pivot: [8.5, 3.5],   rest: 180, len: 5.3 },
+  armFoL: { cut: [108, 101, 15, 23], pivot: [6.5, 3.5],  rest: 180, len: 5.6 },
+  armUpR: { cut: [137, 86, 15, 22], pivot: [5.5, 3.5],   rest: 180, len: 5.3 },
+  armFoR: { cut: [137, 101, 15, 23], pivot: [7.5, 3.5],  rest: 180, len: 5.6 },
+  thighL: { cut: [118, 136, 13, 29], pivot: [6.5, 3.5],  rest: 180, len: 7.7 },
+  shinL:  { cut: [118, 158, 14, 23], pivot: [6.5, 3.5],  rest: 180, len: 5.6 },
+  thighR: { cut: [128, 136, 13, 29], pivot: [6.5, 3.5],  rest: 180, len: 7.7 },
+  shinR:  { cut: [128, 158, 14, 23], pivot: [6.5, 3.5],  rest: 180, len: 5.6 },
+};
+// arms attach at shoulder: source shL (116.5,89.5) vs torso pivot hip (129.5,139.5)
+const SH_DX = 13 * K, SH_DY = 50 * K; // shoulder offset from hip: ±4.5, -17.5
+
+fetch("/index.html").then(r => r.text()).then(html => {
+  const m = html.match(/const HUMAN_PNG = "([^"]+)"/);
+  if (m) { sheet = new Image(); sheet.src = m[1]; }
+}).catch(() => {});
+
+function drawFigure(g) {
+  const { pose, root } = samplePose();
+  const F = P.facing;
+  const hx = P.x + P.root[0] + root[0] * F;
+  const hy = P.y - HIP_H + P.root[1] + root[1];
+  const joints = {};
+  function place(name, px, py, parentAbs) {
+    const s = SEGS[name];
+    const rel = (pose[name] ?? REST[name]) * F;
+    const abs = parentAbs + rel;
+    const rad = abs * Math.PI / 180;
+    joints[name] = { px, py, ex: px + Math.sin(rad) * s.len, ey: py - Math.cos(rad) * s.len, abs };
+    return joints[name];
+  }
+  const torso = place("torso", hx, hy, 0);
+  place("head", torso.ex, torso.ey, torso.abs);
+  const tL = place("thighL", hx - 1.5 * F, hy, 0); place("shinL", tL.ex, tL.ey, tL.abs);
+  const tR = place("thighR", hx + 1.5 * F, hy, 0); place("shinR", tR.ex, tR.ey, tR.abs);
+  // shoulders on the torso axis, 17.5px above hip (source proportion)
+  const trad = torso.abs * Math.PI / 180;
+  const shx = hx + Math.sin(trad) * SH_DY, shy = hy - Math.cos(trad) * SH_DY;
+  const aL = place("armUpL", shx - SH_DX * F, shy, torso.abs); place("armFoL", aL.ex, aL.ey, aL.abs);
+  const aR = place("armUpR", shx + SH_DX * F, shy, torso.abs); place("armFoR", aR.ex, aR.ey, aR.abs);
+
+  const sup = supportAt(P.x, P.y + 1);
+  if (sup) {
+    g.fillStyle = "rgba(0,0,0,0.28)";
+    g.beginPath(); g.ellipse(P.x, sup.y + 2, 9, 2.2, 0, 0, Math.PI * 2); g.fill();
+  }
+  if (!sheet || !sheet.complete || !sheet.naturalWidth) {
+    g.fillStyle = "#888"; g.font = "6px monospace"; g.fillText("loading strip...", P.x - 14, P.y - 40);
+    return;
+  }
+  function seg(name) {
+    const s = SEGS[name], j = joints[name];
+    const rot = (j.abs - s.rest) * Math.PI / 180;
+    g.save();
+    g.translate(j.px, j.py);
+    g.rotate(rot);
+    g.drawImage(sheet, s.cut[0], s.cut[1], s.cut[2], s.cut[3],
+      -s.pivot[0] * K, -s.pivot[1] * K, s.cut[2] * K, s.cut[3] * K);
+    g.restore();
+    if (showBones) { g.fillStyle = "#ff0"; g.fillRect(j.px - 0.7, j.py - 0.7, 1.4, 1.4); }
+  }
+  g.imageSmoothingEnabled = !pixelMode;
+  seg("thighL"); seg("shinL"); seg("armUpL"); seg("armFoL");
+  seg("torso");
+  seg("thighR"); seg("shinR"); seg("armUpR"); seg("armFoR");
+  seg("head");
+  g.imageSmoothingEnabled = true;
+}
+
+// ── World + HUD (same as pop-moves) ─────────────────────────────
+function drawWorld(g) {
+  const grad = g.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, "#0a0812"); grad.addColorStop(0.4, "#141020"); grad.addColorStop(1, "#181625");
+  g.fillStyle = grad; g.fillRect(0, 0, W, H);
+  g.fillStyle = "#1e1c26";
+  for (let y = 60; y < H; y += 26) g.fillRect(0, y, W, 1);
+  g.fillStyle = "#282630";
+  for (let y = 60; y < H; y += 26) for (let x = 18; x < W; x += 44) g.fillRect(x, y + 11, 2, 2);
+  const gl = g.createRadialGradient(160, 50, 4, 160, 50, 90);
+  gl.addColorStop(0, "rgba(255,230,180,0.07)"); gl.addColorStop(1, "rgba(255,230,180,0)");
+  g.fillStyle = gl; g.fillRect(60, 0, 220, 140);
+  g.fillStyle = "#8a7850"; g.fillRect(157, 46, 6, 6);
+  for (const p of PLATS) {
+    g.fillStyle = "#28262e"; g.fillRect(p.x, p.y, p.w, SLAB_T);
+    g.fillStyle = "#3a3845"; g.fillRect(p.x, p.y, p.w, 1.5);
+    g.fillStyle = "#1a181e"; g.fillRect(p.x, p.y + SLAB_T - 1, p.w, 1);
+  }
+  g.fillStyle = "rgba(255,230,150,0.25)";
+  for (const p of PLATS) if (p.y < 210) { g.fillRect(p.x, p.y - 1, p.w, 1); }
+}
+const STATES = ["idle", "run", "jump", "fall", "hang", "climbup", "climbdown", "crouch", "crawl", "land"];
+const SHORT = { climbup: "up", climbdown: "down" };
+const REACHABLE = {
+  idle: ["run", "jump", "crouch", "climbdown"], run: ["idle", "jump", "fall", "climbdown"],
+  jump: ["fall", "hang"], fall: ["hang", "idle", "run", "land"],
+  hang: ["climbup", "fall"], climbup: ["idle"], climbdown: ["hang"],
+  crouch: ["crawl", "idle"], crawl: ["crouch", "idle"], land: ["idle"],
+};
+function hint() {
+  switch (P.state) {
+    case "hang": return "UP climb up · LEFT/RIGHT shimmy · DOWN let go";
+    case "climbup": return "mantling...";
+    case "climbdown": return "climbing down...";
+    case "fall": case "jump": return GRAB() ? "reaching for ledge..." : "hold SHIFT to grab a ledge";
+    case "crouch": case "crawl": return mustCrouch() ? "low ceiling — keep DOWN to crawl" : "release DOWN to stand";
+    case "land": return "heavy landing!";
+    default:
+      if (P.plat && onEdge(P.plat) < 8 && P.y === P.plat.y) return "at edge: DOWN to climb down · SPACE jump";
+      return "ARROWS move · SPACE jump · SHIFT grab (air) · DOWN crouch/edge-drop";
+  }
+}
+function drawHUD(g) {
+  g.fillStyle = "rgba(6,5,8,0.82)"; g.fillRect(0, 0, W, 15); g.fillRect(0, H - 13, W, 13);
+  g.fillStyle = "#c9b98a"; g.font = "6px monospace";
+  g.fillText("QUARRY #74 — SKINNED RIG (PixelLab segments on FK bones)", 4, 6);
+  g.fillStyle = "#7fd48a"; g.fillText("state: " + P.state + (animName() !== P.state ? " (" + animName() + ")" : ""), 4, 13);
+  g.fillStyle = "#8f8a7a"; g.fillText(hint(), 4, H - 4);
+  g.fillStyle = "#5a5648"; g.fillText("[P]ixel " + (pixelMode ? "ON" : "off") + "  [B]ones " + (showBones ? "ON" : "off") + "  [R]eset", 210, 6);
+  const x0 = 218, y0 = 22, bw = 30, bh = 8;
+  g.font = "5px monospace";
+  STATES.forEach((s, i) => {
+    const x = x0 + (i % 3) * (bw + 3), y = y0 + Math.floor(i / 3) * (bh + 3);
+    const cur = s === P.state, ok = (REACHABLE[P.state] || []).includes(s);
+    g.fillStyle = cur ? "#2f6b3a" : "#14121a"; g.fillRect(x, y, bw, bh);
+    g.strokeStyle = cur ? "#7fd48a" : ok ? "#b89a4a" : "#2c2a34"; g.lineWidth = 0.8;
+    g.strokeRect(x + 0.5, y + 0.5, bw - 1, bh - 1);
+    g.fillStyle = cur ? "#d6f5dc" : ok ? "#c9b98a" : "#5a5660";
+    g.fillText(SHORT[s] || s, x + 2, y + 5.5);
+  });
+}
+
+// ── Frame ───────────────────────────────────────────────────────
+function render() {
+  const g = pixelMode ? lowCtx : main;
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  if (!pixelMode) g.setTransform(SC, 0, 0, SC, 0, 0);
+  drawWorld(g); drawFigure(g); drawHUD(g);
+  if (pixelMode) {
+    main.setTransform(1, 0, 0, 1, 0, 0);
+    main.imageSmoothingEnabled = false;
+    main.clearRect(0, 0, 960, 720);
+    main.drawImage(low, 0, 0, 960, 720);
+  }
+}
+let last = performance.now();
+setInterval(() => {
+  const now = performance.now();
+  const dt = Math.min((now - last) / 1000, 0.04); last = now;
+  step(dt);
+  render();
+}, 16);
+</script>
+</body>
+</html>
