@@ -79,6 +79,14 @@ async function boot(): Promise<void> {
   const character = new CharacterController(physics.world, camera, {
     ...characterPresets["default"].options,
     ...fit,
+    // capsuleFromModel measures the MESH, and a humanoid's mesh is narrow — it
+    // hands back a 0.15m radius, a 15cm-wide person. A needle that thin against
+    // the hall's 140x90 floor slab is what blows the solver up; give it a body's
+    // width instead.
+    capsuleRadius: Math.max(fit.capsuleRadius, 0.32),
+    // CCD is for things that move fast enough to tunnel. A walking character is
+    // not that, and it is expensive on every contact.
+    ccd: false,
     position: { x: 0, y: 3, z: 0 },
     userData: { controller: { excludeVehicleRay: true } },
     // the hall is walled, but a physics escape should never strand the player
@@ -232,7 +240,21 @@ async function boot(): Promise<void> {
   const pivot = new THREE.Vector3();
   const sightRay = new THREE.Raycaster();
   let last = performance.now();
+  // A throw inside the animation callback stops three.js re-requesting the
+  // frame, so ONE bad frame ends the game permanently — which is exactly how a
+  // physics panic turned into "I can walk for two seconds and then it is stuck".
+  // Never let that class of bug be fatal again: log once, skip the frame, keep
+  // rendering.
+  let loopFaults = 0;
   renderer.setAnimationLoop(() => {
+    try {
+      frame();
+    } catch (err) {
+      if (loopFaults++ === 0) console.error("[quarry] frame fault — continuing", err);
+    }
+  });
+
+  function frame(): void {
     const now = performance.now();
     const delta = Math.min((now - last) / 1000, 0.1);
     last = now;
@@ -289,7 +311,7 @@ async function boot(): Promise<void> {
     governor.frame(delta * 1000);
 
     renderer.render(scene, camera);
-  });
+  }
 }
 
 void boot();

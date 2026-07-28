@@ -43,7 +43,7 @@ Now: ▶ 5. Screens polish + 6. HUD sprite swap
 7. 1v1 asymmetric online ([#83](https://github.com/yonidavidson/quarry/issues/83)) — ⬜ depends on #75
 8. World dressing — the ceiling the Stalker crosses ([#80](https://github.com/yonidavidson/quarry/issues/80)) — ⬜
 
-Open defects: [#76](https://github.com/yonidavidson/quarry/issues/76) physics panic ·
+Open defects:
 [#79](https://github.com/yonidavidson/quarry/issues/79) phone budgets ·
 [#81](https://github.com/yonidavidson/quarry/issues/81) Stalker attack anims ·
 [#82](https://github.com/yonidavidson/quarry/issues/82) camera clips on pounce ·
@@ -202,3 +202,18 @@ does not apply. Rows stay as the split to hand out the moment that changes.
   him. Treat it as the game's canonical frame — the menu still and the branded
   loader ([#77](https://github.com/yonidavidson/quarry/issues/77)) should anchor
   to it with `--edit` rather than starting fresh.
+- 2026-07-28 — **The freeze is fixed** ([#76](https://github.com/yonidavidson/quarry/issues/76)).
+  Root cause: `capsuleFromModel` measures the MESH, and a humanoid mesh is
+  narrow, so it returned a 0.15m capsule radius — a 15cm-wide person. That
+  needle against the hall's 140x90 floor slab, with CCD on, blew up Rapier's
+  solver; once the world panicked, `stepWithEvents` threw every frame, and since
+  `physics.step()` is the first call in the loop, everything after it stopped.
+  You could walk 1.2m and then nothing.
+  Fix: floor the radius at 0.32m and turn CCD off (a walking character cannot
+  tunnel). Measured after: a steady 2 m/s for 28m with zero errors.
+  Also added: the render loop is wrapped so a throw skips ONE frame instead of
+  permanently stopping three.js from re-requesting the next one. That is what
+  turned a recoverable panic into a dead game.
+  **Lesson for the smoke pass**: "no page errors + the HUD updates" is not
+  evidence the game is playable. Sample the player's POSITION over time, or hash
+  frames and look for repeats.
