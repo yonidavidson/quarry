@@ -127,6 +127,12 @@ async function boot(): Promise<void> {
   const side = await screens.chosen;
   const asStalker = side === "stalker";
   screens.set("playing");
+  const hintEl = document.querySelector<HTMLElement>("#hint");
+  if (hintEl) {
+    hintEl.textContent = asStalker
+      ? "WASD move · Shift run · Space grab wall · Left click CLAW · Esc pause"
+      : "WASD move · Shift run · Space jump · Left click FIRE · Esc pause";
+  }
 
   // ── the hunt ──
   initAudio(camera);
@@ -171,17 +177,22 @@ async function boot(): Promise<void> {
     });
   }
 
+  // Gated on the PHASE, never on pointer lock. Locking is a camera convenience;
+  // if it is refused, dropped or swallowed the player must still be able to
+  // fight, and the first click after entering must not vanish into acquiring it.
   addEventListener("pointerdown", () => {
-    if (hunt.outcome !== "playing" || !document.pointerLockElement) return;
+    if (hunt.outcome !== "playing" || screens.current !== "playing") return;
     if (asStalker) {
       // claws: short reach, heavy hit, no ammo
       const target = jack!;
+      hud.pulseCrosshair();
       if (target.alive && character.currPos.distanceTo(target.position) < 4.2) {
         target.takeHit(2);
         play(AUDIO.claw, 0.8);
         if (!target.alive) hunt.foeDown();
       }
     } else {
+      hud.pulseCrosshair();
       if (blaster.fire([stalker!.root], walls)) stalker!.takeHit(1);
       if (!stalker!.alive) hunt.foeDown();
     }
@@ -307,6 +318,7 @@ async function boot(): Promise<void> {
 
       const pressure = enemy.alive ? enemy.pressure(here) : 0;
       setMusicIntensity(pressure);
+      if (asStalker) hud.setInRange(enemy.alive && here.distanceTo(enemy.position) < 4.2);
       hud.update(hunt.hp, hunt.cells, hunt.extractionOpen, pressure,
                  stalker ? stalker.state : cling && cling.active ? "ceiling" : "prowl");
       if (hunt.outcome !== "playing") hud.showEnd(hunt.outcome === "won", hunt.cells);

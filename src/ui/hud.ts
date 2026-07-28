@@ -24,7 +24,10 @@ const CSS = `
 #hud .bar { width:150px; height:4px; background:#1a1d22; margin-top:6px; margin-left:auto; }
 #hud .bar i { display:block; height:100%; background:#ff7a3c; width:0%; transition:width .18s linear; }
 #hud .crosshair { position:absolute; left:50%; top:50%; width:3px; height:3px; margin:-1.5px 0 0 -1.5px;
-                  background:#dfe7f2; box-shadow:0 0 4px #000; opacity:.8; }
+                  background:#dfe7f2; box-shadow:0 0 4px #000; opacity:.8;
+                  transition:transform .06s ease-out, background .1s; }
+#hud .crosshair.fired { transform:scale(3.4); background:#ffd9a0; }
+#hud .crosshair.inrange { background:#ff6a3c; box-shadow:0 0 9px #ff6a3c; }
 #hud .end { position:absolute; inset:0; display:grid; place-content:center; text-align:center; gap:14px;
             background:#05070bdd; pointer-events:auto; }
 #hud .end h1 { margin:0; font-size:34px; letter-spacing:.22em; }
@@ -76,6 +79,19 @@ export class Hud {
     this.barEl = this.el.querySelector(".bar i") as HTMLElement;
     this.hurtEl = this.el.querySelector(".hurt") as HTMLElement;
     this.endEl = document.createElement("div");
+  }
+
+  /** A shot with no on-screen answer reads as a shot that did not happen. */
+  pulseCrosshair(): void {
+    const c = this.el.querySelector(".crosshair") as HTMLElement;
+    c.classList.add("fired");
+    setTimeout(() => c.classList.remove("fired"), 70);
+  }
+
+  /** The claw has 4.2m of reach and no tracer — the reticle is the only way to
+   *  know you are close enough to connect. */
+  setInRange(on: boolean): void {
+    (this.el.querySelector(".crosshair") as HTMLElement).classList.toggle("inrange", on);
   }
 
   flashHurt(): void {
