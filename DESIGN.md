@@ -32,15 +32,14 @@ Concept image: _pending — the UI plan gate has not run yet; the character conc
 
 ## Build plan & status
 
-Now: ▶ 2. Jack moves and shoots; the Stalker hunts
+Now: ▶ 5. HUD + menu from the concept chain
 
 1. Boot, identity, and a walkable floor — ✅ → previewed
-2. Jack moves and shoots; the Stalker hunts — ▶ main agent (serial: the AI is
-   tuned against movement feel, so it cannot precede it)
+2. Jack moves and shoots; the Stalker hunts — ✅ → previewed
 3. The complex — rooms, catwalks, vents, dark corners — ⬜ serial: main agent
    (inline; sub-agent delegation not authorized in this session — see Modules)
-4. The hunt loop: energy cells, extraction lift, win/lose, instant retry — ⬜
-5. HUD + menu from the concept chain — ⬜
+4. The hunt loop: energy cells, extraction lift, win/lose, instant retry — ✅ → previewed
+5. HUD + menu from the concept chain — ▶ main agent (concept image rendering)
 6. 1v1 asymmetric online — ⬜
 7. Publish floors: post stack, music, world dressing — ⬜
 
@@ -69,26 +68,27 @@ Style brief: wet concrete and rusted steel, hazard-stripe accents, stencilled
 industrial type, sodium-orange emergency light against near-black.
 References: _named at the UI plan gate_. Menu archetype: slow pan across the
 dark machine hall.
-HUD lane: _decided the moment the Stage-1 mockup lands (director §5) — expected
-sprites, given the stencilled-metal brief; confirmed at the concept gate._
+HUD lane: **sprites** — the brief is stencilled metal with hazard-stripe accents
+and etched frames; a CSS rebuild would not pass for it. The hand-written DOM HUD
+in `src/ui/hud.ts` is scaffolding until the sprite sheet lands.
 Menu video: yes.
 
 ## Assets — the generation plan AND the budget
 
 | Asset | Kind | Status | Wired? |
 |---|---|---|---|
-| Concept + HUD mockup | image | planned | n/a |
-| Jack — player character | character | concept 2 approved → rigging (cms4es65600852ensulr36qax) | — |
-| The Stalker — rigged hunter | creature | planned (biped) | — |
+| Concept + HUD mockup | image | generating (cms4fujmg00bm2ensvgzgdfqj) | n/a |
+| Jack — player character | character | landed (cms4fbaky009f2ens0f1kmmbi) | yes |
+| The Stalker — rigged hunter | creature | landed (cms4fiv3a008x2pqlshvq5jnp) | yes |
 | Complex floor — wet concrete | texture | landed | yes |
 | Steel catwalk / plate | texture | landed | yes |
 | Patrol drone | model | planned | — |
 | Energy cell pickup | model | planned | — |
-| Blaster shot | sfx | landed | — |
-| Claw strike | sfx | landed | — |
-| Boot on steel grating | sfx | landed | — |
-| Stalker roar | sfx | landed | — |
-| Industrial dread bed | music | landed | — |
+| Blaster shot | sfx | landed | yes |
+| Claw strike | sfx | landed | yes |
+| Boot on steel grating | sfx | landed | yes |
+| Stalker roar | sfx | landed | yes |
+| Industrial dread bed | music | landed | yes |
 | Menu still | image | enqueue on concept landing | — |
 | Menu video | video | waits: player's yes / next preview after still / style-only-left | — |
 | Logotype | image | enqueue on concept landing | — |
@@ -150,3 +150,11 @@ does not apply. Rows stay as the split to hand out the moment that changes.
   empties the directory); everything was restored from git and `genex init` was
   re-run, which created a SECOND project. The live one is `quarry-d291c2`; the
   original `quarry` project is a stray to delete from the dashboard.
+- 2026-07-28 — Milestone 2+4 previewed: Jack's hitscan blaster (cover blocks
+  shots), the Stalker's vertical hunt, energy cells, extraction, win/lose and
+  one-key retry. The Stalker is driven KINEMATICALLY, not by the physics
+  character controller — a dynamic capsule cannot hold a wall or hang from a
+  ceiling without fighting gravity every frame. Its collider is for bullets.
+- 2026-07-28 — Known preview warnings to clear before publish: models load
+  without `pickModel`/`loadModelWithFallback` (phones fetch the full GLB), and
+  the DPR cap needs the tier applied under the post stack.

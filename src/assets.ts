@@ -11,6 +11,11 @@ export const TEXTURES = {
   catwalk: `${GEN}/cms4emub4006i2pqltf31ogeu/texture-basecolor`,
 } as const;
 
+export const MODELS = {
+  /** The Stalker — rigged biped, with its own walk/run clips baked in. */
+  stalker: `${GEN}/cms4fiv3a008x2pqlshvq5jnp/character-rigged-a2-glb`,
+} as const;
+
 export const AUDIO = {
   /** ~90s looping bed: sub-bass drone, distant metal, dripping water. */
   music: `${GEN}/cms4emv98007g2ensjvsuohe2/audio-music`,

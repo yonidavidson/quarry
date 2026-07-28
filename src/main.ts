@@ -21,6 +21,11 @@ import { KeyboardInput } from "./controllers/character/keyboard-input.ts";
 import { loadPlayerCharacter } from "./controllers/character/player-character.ts";
 import { capsuleFromModel } from "./controllers/character/vrm/capsule-fit.ts";
 import { buildComplex, lightComplex, HALL } from "./world/complex.ts";
+import { Stalker } from "./hunter/stalker.ts";
+import { Blaster } from "./combat/blaster.ts";
+import { Hunt } from "./game/hunt.ts";
+import { Hud } from "./ui/hud.ts";
+import { initAudio, startMusic, setMusicIntensity } from "./audio.ts";
 
 const $ = <T extends Element>(sel: string): T => {
   const el = document.querySelector<T>(sel);
@@ -99,6 +104,35 @@ async function boot(): Promise<void> {
     character.update();
   });
 
+  // ── the hunt ──
+  initAudio(camera);
+  const hud = new Hud(5);
+  const hunt = new Hunt(scene);
+  const blaster = new Blaster(scene, camera);
+  const stalker = new Stalker(scene, {
+    pounceDamage: 2,
+    onHitPlayer: (d) => {
+      const before = hunt.hp;
+      hunt.damage(d);
+      if (hunt.hp < before) hud.flashHurt();
+    },
+  });
+
+  addEventListener("pointerdown", () => {
+    if (hunt.outcome !== "playing" || !document.pointerLockElement) return;
+    if (blaster.fire([stalker.root], walls)) stalker.takeHit(1);
+    if (!stalker.alive) hunt.stalkerDown();
+  });
+
+  // one key back in, always — a hunt you can't instantly retry stops being tense
+  const respawn = new THREE.Vector3(0, 3, 0);
+  addEventListener("keydown", (e) => {
+    if (e.code !== "KeyR" || hunt.outcome === "playing") return;
+    hud.hideEnd();
+    location.reload();
+  });
+  void respawn;
+
   // keep the shadow frustum on the player rather than on the world origin
   sun.target = character.root;
   scene.add(sun.target);
@@ -147,6 +181,7 @@ async function boot(): Promise<void> {
 
   // ── the loop. performance.now delta, never THREE.Clock.getDelta(). ──
   const pivot = new THREE.Vector3();
+  const sightRay = new THREE.Raycaster();
   let last = performance.now();
   renderer.setAnimationLoop(() => {
     const now = performance.now();
@@ -166,6 +201,28 @@ async function boot(): Promise<void> {
 
     anims.update(character, delta);
     player.update(delta);
+
+    // ── the hunt ──
+    const here = character.currPos;
+    if (hunt.outcome === "playing") {
+      // "visible" is line of sight, so breaking it actually loses the Stalker
+      const toPlayer = new THREE.Vector3(here.x - stalker.position.x, 0, here.z - stalker.position.z);
+      const dist = toPlayer.length();
+      sightRay.set(
+        stalker.position.clone().setY(1.6),
+        toPlayer.clone().normalize(),
+      );
+      sightRay.far = dist;
+      const blocked = dist > 0.2 && sightRay.intersectObjects(walls, false).length > 0;
+      stalker.update(delta, here, !blocked);
+      hunt.update(delta, here);
+      const pressure = stalker.alive ? stalker.pressure(here) : 0;
+      setMusicIntensity(pressure);
+      hud.update(hunt.hp, hunt.cells, hunt.extractionOpen, pressure, stalker.state);
+      if (hunt.outcome !== "playing") hud.showEnd(hunt.outcome === "won", hunt.cells);
+    }
+    blaster.update(delta);
+    startMusic();
     governor.frame(delta * 1000);
 
     renderer.render(scene, camera);
