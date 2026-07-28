@@ -236,3 +236,15 @@ does not apply. Rows stay as the split to hand out the moment that changes.
   Two tuning passes were needed: the first blew the bloom out into suns and
   graded the whole hall to lava, the second was too dark to see. Still warm-
   dominant and Jack's skin reads pale — not finished, just no longer boxes.
+- 2026-07-28 — The predator side is playable properly now:
+  charged leap ([#88](https://github.com/yonidavidson/quarry/issues/88)) — hold
+  Space to wind up, release to launch, and **grabbing is automatic on contact**
+  rather than a second apex-timed keypress; a full charge from standing reaches
+  the ceiling and hangs. Click from a hang dives (the AI's pounce, player-side).
+  Camera scaled to the body ([#90](https://github.com/yonidavidson/quarry/issues/90)) —
+  the follow distance was tuned for Jack at 1.8m and put the camera inside the
+  2.4m beast's chest.
+- 2026-07-28 — **Blocked on credits**: the beast's leap/land/claw animations
+  ([#81](https://github.com/yonidavidson/quarry/issues/81)) cost 26-93 credits
+  and the balance is 24; it refills to 100 on Aug 4. Everything else about the
+  predator works — those states currently borrow the walk clip.

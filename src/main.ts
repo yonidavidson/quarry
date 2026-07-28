@@ -111,12 +111,6 @@ async function boot(): Promise<void> {
   // Jack's blaster is mouse-aimed, so pointer-lock aim stays on (the default).
   const kb = new KeyboardInput();
   const aimCue = createAimCue();
-  const followCam = new FollowCamera(camera, {
-    domElement: renderer.domElement,
-    colliderMeshes: walls, // static environment only — never the player's own mesh
-    onAimChange: aimCue.onAimChange,
-  });
-
   // the controller's brain runs once per FIXED substep, before world.step()
   physics.onBeforeStep(() => {
     character.setMovement(kb.getCharacterMovement());
@@ -128,6 +122,19 @@ async function boot(): Promise<void> {
   const side = await screens.chosen;
   const asStalker = side === "stalker";
   screens.set("playing");
+  // #90 — the follow distance was tuned for Jack at 1.8m. The beast is 2.4m and
+  // far broader, so the same offset puts the camera inside its chest. Scale the
+  // orbit to the body instead of using one constant for both sides.
+  const bodyScale = asStalker ? 1.7 : 1;
+  const followCam = new FollowCamera(camera, {
+    domElement: renderer.domElement,
+    colliderMeshes: walls, // static environment only — never the player's own mesh
+    onAimChange: aimCue.onAimChange,
+    initialDistance: 4 * bodyScale,
+    minDistance: asStalker ? 3.4 : 0.02,
+    maxDistance: 12 * bodyScale,
+  });
+
   const hintEl = document.querySelector<HTMLElement>("#hint");
   if (hintEl) {
     hintEl.textContent = asStalker
@@ -177,8 +184,31 @@ async function boot(): Promise<void> {
   // Gated on the PHASE, never on pointer lock. Locking is a camera convenience;
   // if it is refused, dropped or swallowed the player must still be able to
   // fight, and the first click after entering must not vanish into acquiring it.
+  // The beast's signature move. Hold Space to wind up, release to launch — the
+  // longer the charge the higher and further it goes, and a full charge from a
+  // standing start should reach the ceiling. Grabbing is automatic on contact
+  // (see cling.update): asking for a second, apex-timed keypress is the
+  // fiddliest possible version of this.
+  let charge = 0;
+  const CHARGE_MAX = 0.75;
+  const launch = (): void => {
+    if (!asStalker || !cling || cling.active) return;
+    const t = Math.min(charge, CHARGE_MAX) / CHARGE_MAX;
+    charge = 0;
+    const up = 7.5 + t * 9.5;                       // ~2.9m uncharged, ~14m full
+    const fwd = 3 + t * 7;
+    const a = followCam.azimuthAngle;
+    character.body.setLinvel(
+      { x: -Math.sin(a) * fwd, y: up, z: -Math.cos(a) * fwd },
+      true,
+    );
+    play(AUDIO.step, 0.5, 0.7);
+  };
+
   addEventListener("pointerdown", () => {
     if (hunt.outcome !== "playing" || screens.current !== "playing") return;
+    // from a hang, a click is the dive — the AI's pounce, in the player's hands
+    if (asStalker && cling?.state === "ceiling") { cling.pounce(followCam.azimuthAngle); return; }
     if (asStalker) {
       // claws: short reach, heavy hit, no ammo
       const target = jack!;
@@ -195,6 +225,7 @@ async function boot(): Promise<void> {
     }
   });
 
+  addEventListener("keyup", (e) => { if (e.code === "Space") launch(); });
   addEventListener("keydown", (e) => {
     if (e.code === "KeyR" && hunt.outcome !== "playing") { hud.hideEnd(); location.reload(); return; }
     if (e.code === "Escape" && hunt.outcome === "playing") {
@@ -275,7 +306,8 @@ async function boot(): Promise<void> {
 
     physics.step(delta); // fixed substeps (which run the controller) + mesh sync
 
-    pivot.copy(character.currPos).addScaledVector(character.bodyYAxis, 0.5);
+    // look over the shoulder of whichever body it is, not through its waist
+    pivot.copy(character.currPos).addScaledVector(character.bodyYAxis, 0.5 * bodyScale);
     followCam.moveTo(pivot.x, pivot.y, pivot.z, true);
     followCam.setUp(character.upAxis);
     if (physics.stepsLastFrame > 0 && character.isOnPlatform) {
@@ -294,6 +326,7 @@ async function boot(): Promise<void> {
       // playing the beast: climbing takes the body off the controller
       if (cling) {
         const mv = kb.getCharacterMovement();
+        if (mv.jump && !cling.active) charge = Math.min(charge + delta, CHARGE_MAX);
         cling.update(delta, {
           forward: (mv.forward ? 1 : 0) - (mv.backward ? 1 : 0),
           right: (mv.rightward ? 1 : 0) - (mv.leftward ? 1 : 0),
@@ -318,7 +351,7 @@ async function boot(): Promise<void> {
       setMusicIntensity(pressure);
       if (asStalker) hud.setInRange(enemy.alive && here.distanceTo(enemy.position) < 4.2);
       hud.update(hunt.hp, hunt.cells, hunt.extractionOpen, pressure,
-                 stalker ? stalker.state : cling && cling.active ? "ceiling" : "prowl");
+                 stalker ? stalker.state : "prowl");
       if (hunt.outcome !== "playing") hud.showEnd(hunt.outcome === "won", hunt.cells);
     }
     blaster.update(delta);

@@ -90,13 +90,38 @@ export class Cling {
     this.character.enabled = true;
   }
 
+  /** Dive at the floor from a hang — the player-facing version of the AI's
+   *  pounce. Lets go and throws the body down and forward along the aim. */
+  pounce(yaw: number): void {
+    if (this.state !== "ceiling") return;
+    this.release();
+    const body = this.character.body;
+    body.setLinvel({ x: -Math.sin(yaw) * 11, y: -16, z: -Math.cos(yaw) * 11 }, true);
+  }
+
   /** Call once per render frame, before the camera. `yaw` is the camera heading. */
   update(dt: number, input: ClingInput, yaw: number): void {
     if (this.cooldown > 0) this.cooldown -= dt;
 
     if (this.state === "off") {
-      if (!input.grab || this.cooldown > 0) return;
-      const wall = this.findWall(this.character.currPos);
+      if (this.cooldown > 0) return;
+      const at = this.character.currPos;
+      // In the air, contact IS the grab — unless the player is steering away
+      // from the surface, which is how you choose to fall past it.
+      const airborne = !this.character.isOnGround;
+      const wanting = input.grab || (airborne && input.forward >= 0);
+      if (!wanting) return;
+      if (airborne && at.y >= CEIL_Y - 1.6) {   // came up under the ceiling
+        this.pos.copy(at); this.pos.y = CEIL_Y;
+        this.normal.set(0, 0, 1);
+        this.state = "ceiling";
+        this.character.enabled = false;
+        const body = this.character.body;
+        body.setBodyType(RAPIER.RigidBodyType.KinematicPositionBased, true);
+        body.setLinvel({ x: 0, y: 0, z: 0 }, true);
+        return;
+      }
+      const wall = this.findWall(at);
       if (wall) this.grab(wall);
       return;
     }

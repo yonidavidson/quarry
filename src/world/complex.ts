@@ -152,10 +152,10 @@ export function lightComplex(scene: THREE.Scene, shadowMapSize: number): THREE.D
   // the sodium lamps — geometry first, light second
   const housing = new THREE.MeshStandardMaterial({ color: 0x14161a, roughness: 0.9, metalness: 0.4 });
   const glass = new THREE.MeshStandardMaterial({
-    color: 0xffb060, emissive: 0xff8a2c, emissiveIntensity: 1.5, roughness: 0.35,
+    color: 0xffb060, emissive: 0xff8a2c, emissiveIntensity: 0.8, roughness: 0.35,
   });
   const shade = new THREE.ConeGeometry(1.25, 1.1, 12, 1, true);
-  const bulb = new THREE.SphereGeometry(0.42, 10, 8);
+  const bulb = new THREE.SphereGeometry(0.3, 10, 8);
 
   // A grid, not a scatter. Ten lamps across 140x90m left most of the hall in
   // black void with nothing to read; the space needs enough sources that the
