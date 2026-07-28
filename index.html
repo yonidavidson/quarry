@@ -231,6 +231,382 @@
    spins the sprite through 360° itself, so the pose only has to be tucked. */
 death: { from: 35, to: 40, speed: 9, loop: false }, roll: { from: 35, to: 40, speed: 16, loop: false }, leap2: 47, shriek: { from: 27, to: 30, speed: 11, loop: false }, tongue: { from: 49, to: 56, speed: 11, loop: false }, crouch: 0 } }));
 
+      // =====================================================================
+      // VECTOR RIG (#74) — skeletal characters, Prince-of-Persia movement.
+      // The baked strips stay as a fallback (?sprites=1). A forward-kinematics
+      // bone tree (hip→torso→neck→head, arms, legs) is posed by keyframed joint
+      // angles and lerped continuously, so every movement state is data,
+      // transitions are free, and hands/feet land on the geometry exactly.
+      // New in movement: walk (default) vs run (Shift), and ledge climb-down
+      // (DOWN at a lip — reverse-mantle into a hang).
+      //
+      // Scale and centre are DERIVED from each strip's frame-0 bbox, so the rig
+      // stands in the same pixels the sprite did — same floor line, same head
+      // height, hitboxes untouched:
+      //   Jack   36×126 bbox in a 252×223 frame, feet 68.5px below centre
+      //   Beast  84×179 bbox in a 214×247 frame, feet 91.5px below centre
+      // Rest height is 44 bone units (22 hip→feet, 22 hip→scalp), hence
+      // S = bboxH/44 and cy = feetBelowCentre − 22·S. Palettes are sampled off
+      // the same frames, so the rig reads as the same two characters.
+      // =====================================================================
+      const RIG_H = 44; // rest-pose height in bone units — the scale denominator
+      const RIGCFG = {
+        human: {
+          S: 126 / RIG_H, cx: 3.5, cy: 68.5 - 22 * (126 / RIG_H), hunch: 0,
+          w: { torso: 7, armUp: 2.8, armFo: 2.5, thigh: 4.2, shin: 3.4, head: 3.5, neck: 2.2, foot: 3.4 },
+          col: {
+            line: [10, 12, 12],
+            skin: [222, 158, 104], skinD: [150, 86, 52], skinL: [244, 184, 136],
+            up: [58, 74, 44], upD: [38, 48, 34], upL: [88, 106, 62],      // sleeveless olive tank
+            leg: [82, 96, 52], legD: [54, 64, 36], legL: [118, 128, 76],  // camo fatigues
+            boot: [30, 34, 36], bootD: [16, 18, 20],
+            hair: [74, 50, 28], belt: [96, 80, 42], eye: [22, 20, 20],
+          },
+        },
+        stalker: {
+          S: 179 / RIG_H, cx: 0, cy: 91.5 - 22 * (179 / RIG_H), hunch: 12,
+          w: { torso: 9.5, armUp: 4.4, armFo: 3.8, thigh: 5.8, shin: 4.6, head: 4.6, neck: 4.4, foot: 4.4 },
+          col: {
+            line: [9, 6, 6],
+            skin: [149, 88, 49], skinD: [96, 50, 31], skinL: [190, 124, 76],
+            up: [149, 88, 49], upD: [96, 50, 31], upL: [190, 124, 76],    // bare chest — the same hide as the arms
+            leg: [140, 82, 46], legD: [92, 48, 30], legL: [182, 118, 72],
+            boot: [52, 38, 28], bootD: [30, 22, 16],
+            hair: [58, 34, 24], belt: [78, 52, 32], eye: [236, 92, 58],
+            cloth: [74, 70, 68], clothD: [46, 44, 44],                    // grey loin wrap
+            horn: [206, 190, 158],
+          },
+          horns: true, loin: true,
+        },
+      };
+      // Bone tree. Angles are absolute FK: θ=0 up, +90 toward the facing, 180
+      // down. Keyframes hold PARENT-RELATIVE angles; the whole figure is solved
+      // facing right and mirrored once at draw time, so a pose is facing-free.
+      // `c` names a palette material, not a colour — the beast's legs are hide
+      // where Jack's are fatigues, and the same keyframes drive both. `p` records
+      // the tree; rigFK walks it explicitly so shoulders and hips can be offset.
+      const RIG_BONES = {
+        torso:  { p: null,     len: 14,  w: "torso", c: "up" },
+        neck:   { p: "torso",  len: 2.5, w: "neck",  c: "skin" },
+        head:   { p: "neck",   len: 0,   w: "head",  c: "skin" },
+        armUpL: { p: "torso",  len: 7,   w: "armUp", c: "skinD" },
+        armFoL: { p: "armUpL", len: 7,   w: "armFo", c: "skinD" },
+        armUpR: { p: "torso",  len: 7,   w: "armUp", c: "skin" },
+        armFoR: { p: "armUpR", len: 7,   w: "armFo", c: "skin" },
+        thighL: { p: null,     len: 10,  w: "thigh", c: "legD" },
+        shinL:  { p: "thighL", len: 10,  w: "shin",  c: "legD" },
+        thighR: { p: null,     len: 10,  w: "thigh", c: "leg" },
+        shinR:  { p: "thighR", len: 10,  w: "shin",  c: "leg" },
+      };
+      const RIG_REST = { torso: 0, neck: 0, head: 0, armUpL: 170, armFoL: 8, armUpR: 170, armFoR: 8,
+                         thighL: 180, shinL: 0, thighR: 180, shinR: 0 };
+      // keyframes: { t (phase 0..1), pose: {bone: relAngle}, root: [dx,dy] (optional) }
+      const RIG_ANIMS = {
+        // the idle stance splays the legs — feet stacked on the same line collapse
+        // into one column and read as a mannequin, whichever way you shade them
+        idle: { dur: 2.4, loop: true, keys: [
+          { t: 0,   pose: { torso: 2, head: -3, armUpL: 168, armUpR: 172, thighL: 186, shinL: -5, thighR: 174, shinR: 5 } },
+          { t: 0.5, pose: { torso: 4, head: -2, armUpL: 165, armUpR: 175, thighL: 185, shinL: -4, thighR: 175, shinR: 4 } },
+          { t: 1,   pose: { torso: 2, head: -3, armUpL: 168, armUpR: 172, thighL: 186, shinL: -5, thighR: 174, shinR: 5 } },
+        ]},
+        walk: { dur: 0.8, loop: true, keys: [ // careful steps — short stride, no bounce (#74)
+          { t: 0,    pose: { torso: 6, head: -4, armUpL: 180, armFoL: 15, armUpR: 155, armFoR: 25, thighL: 158, shinL: -8, thighR: 200, shinR: -25 }, root: [0, 0] },
+          { t: 0.5,  pose: { torso: 6, head: -4, armUpL: 155, armFoL: 25, armUpR: 180, armFoR: 15, thighL: 200, shinL: -25, thighR: 158, shinR: -8 }, root: [0, 0] },
+          { t: 1,    pose: { torso: 6, head: -4, armUpL: 180, armFoL: 15, armUpR: 155, armFoR: 25, thighL: 158, shinL: -8, thighR: 200, shinR: -25 }, root: [0, 0] },
+        ]},
+        run: { dur: 0.55, loop: true, keys: [
+          { t: 0,    pose: { torso: 17, head: -9, armUpL: 195, armFoL: 30, armUpR: 135, armFoR: 60, thighL: 140, shinL: -15, thighR: 218, shinR: -55 }, root: [0, 0] },
+          { t: 0.25, pose: { torso: 15, head: -8, armUpL: 175, armFoL: 20, armUpR: 160, armFoR: 40, thighL: 170, shinL: -45, thighR: 185, shinR: -70 }, root: [0, -2] },
+          { t: 0.5,  pose: { torso: 17, head: -9, armUpL: 135, armFoL: 60, armUpR: 195, armFoR: 30, thighL: 218, shinL: -55, thighR: 140, shinR: -15 }, root: [0, 0] },
+          { t: 0.75, pose: { torso: 15, head: -8, armUpL: 160, armFoL: 40, armUpR: 175, armFoR: 20, thighL: 185, shinL: -70, thighR: 170, shinR: -45 }, root: [0, -2] },
+          { t: 1,    pose: { torso: 17, head: -9, armUpL: 195, armFoL: 30, armUpR: 135, armFoR: 60, thighL: 140, shinL: -15, thighR: 218, shinR: -55 }, root: [0, 0] },
+        ]},
+        jump: { dur: 1, loop: false, keys: [
+          { t: 0, pose: { torso: 12, head: -8, armUpL: 40, armFoL: -15, armUpR: 50, armFoR: -15, thighL: 160, shinL: -35, thighR: 190, shinR: -60 } },
+          { t: 1, pose: { torso: 10, head: -6, armUpL: 55, armFoL: -10, armUpR: 65, armFoR: -10, thighL: 170, shinL: -25, thighR: 195, shinR: -45 } },
+        ]},
+        rise: { dur: 1, loop: false, keys: [
+          { t: 0, pose: { torso: 8, head: -8, armUpL: 30, armFoL: -20, armUpR: 40, armFoR: -20, thighL: 170, shinL: -30, thighR: 185, shinR: -55 } },
+          { t: 1, pose: { torso: 8, head: -8, armUpL: 30, armFoL: -20, armUpR: 40, armFoR: -20, thighL: 170, shinL: -30, thighR: 185, shinR: -55 } },
+        ]},
+        fall: { dur: 1, loop: false, keys: [
+          { t: 0, pose: { torso: 5, head: 0, armUpL: 45, armFoL: 0, armUpR: 55, armFoR: 0, thighL: 175, shinL: -20, thighR: 195, shinR: -45 } },
+          { t: 1, pose: { torso: 5, head: 0, armUpL: 45, armFoL: 0, armUpR: 55, armFoR: 0, thighL: 175, shinL: -20, thighR: 195, shinR: -45 } },
+        ]},
+        leap: { dur: 1, loop: false, keys: [ // horizontal stretch — PoP running leap (#65)
+          { t: 0, pose: { torso: 20, head: -10, armUpL: 15, armFoL: 0, armUpR: 60, armFoR: 0, thighL: 145, shinL: -15, thighR: 225, shinR: -30 } },
+          { t: 1, pose: { torso: 20, head: -10, armUpL: 15, armFoL: 0, armUpR: 60, armFoR: 0, thighL: 145, shinL: -15, thighR: 225, shinR: -30 } },
+        ]},
+        leap2: { dur: 1, loop: false, keys: [ // beast super-leap (#50)
+          { t: 0, pose: { torso: 25, head: -12, armUpL: 10, armFoL: 0, armUpR: 70, armFoR: 0, thighL: 135, shinL: -20, thighR: 230, shinR: -25 } },
+          { t: 1, pose: { torso: 25, head: -12, armUpL: 10, armFoL: 0, armUpR: 70, armFoR: 0, thighL: 135, shinL: -20, thighR: 230, shinR: -25 } },
+        ]},
+        drop: { dur: 1, loop: false, keys: [ // beast tucked drop
+          { t: 0, pose: { torso: 18, head: -14, armUpL: 130, armFoL: -40, armUpR: 140, armFoR: -40, thighL: 135, shinL: -70, thighR: 150, shinR: -75 } },
+          { t: 1, pose: { torso: 18, head: -14, armUpL: 130, armFoL: -40, armUpR: 140, armFoR: -40, thighL: 135, shinL: -70, thighR: 150, shinR: -75 } },
+        ]},
+        // NOTE on crouched poses: the hip is the root and never moves on its own,
+        // so folding the legs alone lifts the FEET instead of lowering the body —
+        // the figure ends up sitting in mid-air. Every pose that keeps contact with
+        // the floor drops the hip with `root` and bends the knee the way a knee
+        // bends (shin angle greater than the thigh's, never less), so the boots
+        // stay on the ground line the standing pose defines.
+        land: { dur: 1, loop: false, keys: [
+          { t: 0, pose: { torso: 35, head: -20, armUpL: 95, armFoL: 20, armUpR: 90, armFoR: 20, thighL: 106, shinL: 106, thighR: 114, shinR: 98 }, root: [-4.1, 8.1] },
+          { t: 1, pose: { torso: 35, head: -20, armUpL: 95, armFoL: 20, armUpR: 90, armFoR: 20, thighL: 106, shinL: 106, thighR: 114, shinR: 98 }, root: [-4.1, 8.1] },
+        ]},
+        roll: { dur: 1, loop: false, keys: [ // tucked — the game spins the body itself (#63)
+          { t: 0, pose: { torso: 40, head: -25, armUpL: 120, armFoL: -60, armUpR: 130, armFoR: -60, thighL: 120, shinL: -100, thighR: 130, shinR: -100 } },
+          { t: 1, pose: { torso: 40, head: -25, armUpL: 120, armFoL: -60, armUpR: 130, armFoR: -60, thighL: 120, shinL: -100, thighR: 130, shinR: -100 } },
+        ]},
+        climb: { dur: 1.1, loop: true, keys: [ // ladder, back to camera (#72)
+          { t: 0,   pose: { torso: 5, head: -15, armUpL: 8, armFoL: 0, armUpR: 175, armFoR: -10, thighL: 160, shinL: -45, thighR: 195, shinR: -10 } },
+          { t: 0.5, pose: { torso: 5, head: -15, armUpL: 175, armFoL: -10, armUpR: 8, armFoR: 0, thighL: 195, shinL: -10, thighR: 160, shinR: -45 } },
+          { t: 1,   pose: { torso: 5, head: -15, armUpL: 8, armFoL: 0, armUpR: 175, armFoR: -10, thighL: 160, shinL: -45, thighR: 195, shinR: -10 } },
+        ]},
+        rope: { dur: 1.1, loop: true, keys: [ // vine grip (#65)
+          { t: 0,   pose: { torso: 5, head: -12, armUpL: 20, armFoL: -25, armUpR: 165, armFoR: -30, thighL: 165, shinL: -40, thighR: 190, shinR: -25 } },
+          { t: 0.5, pose: { torso: 5, head: -12, armUpL: 165, armFoL: -30, armUpR: 20, armFoR: -25, thighL: 190, shinL: -25, thighR: 165, shinR: -40 } },
+          { t: 1,   pose: { torso: 5, head: -12, armUpL: 20, armFoL: -25, armUpR: 165, armFoR: -30, thighL: 165, shinL: -40, thighR: 190, shinR: -25 } },
+        ]},
+        hang: { dur: 2.2, loop: true, keys: [ // two-hand ledge dangle (#60)
+          { t: 0,   pose: { torso: 5, head: -12, armUpL: 4, armFoL: 0, armUpR: -4, armFoR: 0, thighL: 190, shinL: -10, thighR: 175, shinR: -20 } },
+          { t: 0.5, pose: { torso: 7, head: -12, armUpL: 4, armFoL: 0, armUpR: -4, armFoR: 0, thighL: 195, shinL: -15, thighR: 172, shinR: -15 } },
+          { t: 1,   pose: { torso: 5, head: -12, armUpL: 4, armFoL: 0, armUpR: -4, armFoR: 0, thighL: 190, shinL: -10, thighR: 175, shinR: -20 } },
+        ]},
+        mantle: { dur: 0.3, loop: false, keys: [ // pull up over the lip (#65)
+          { t: 0,   pose: { torso: 5,  head: -12, armUpL: 4,  armFoL: 0,   armUpR: -4,  armFoR: 0,   thighL: 190, shinL: -10, thighR: 175, shinR: -20 } },
+          { t: 0.5, pose: { torso: 25, head: -15, armUpL: 25, armFoL: -95, armUpR: -25, armFoR: -95, thighL: 115, shinL: -85, thighR: 150, shinR: -80 } },
+          { t: 1,   pose: { torso: 10, head: -5,  armUpL: 80, armFoL: 10,  armUpR: 85,  armFoR: 10,  thighL: 170, shinL: -10, thighR: 180, shinR: -10 } },
+        ]},
+        cdown: { dur: 0.3, loop: false, keys: [ // (#74) reverse-mantle: turn and lower to a hang
+          { t: 0,   pose: { torso: 4,  head: -3,  armUpL: 168, armFoL: 8, armUpR: 172, armFoR: 8, thighL: 180, shinL: 0,   thighR: 180, shinR: 0 } },
+          { t: 0.5, pose: { torso: 25, head: -10, armUpL: 60, armFoL: -60, armUpR: 65, armFoR: -60, thighL: 115, shinL: -85, thighR: 125, shinR: -80 } },
+          { t: 1,   pose: { torso: 5,  head: -12, armUpL: 4,  armFoL: 0,  armUpR: -4,  armFoR: 0,  thighL: 190, shinL: -10, thighR: 175, shinR: -20 } },
+        ]},
+        crouch: { dur: 1, loop: false, keys: [
+          { t: 0, pose: { torso: 30, head: -18, armUpL: 145, armFoL: 25, armUpR: 150, armFoR: 25, thighL: 114, shinL: 99, thighR: 122, shinR: 91 }, root: [-3.4, 6.9] },
+          { t: 1, pose: { torso: 30, head: -18, armUpL: 145, armFoL: 25, armUpR: 150, armFoR: 25, thighL: 114, shinL: 99, thighR: 122, shinR: 91 }, root: [-3.4, 6.9] },
+        ]},
+        // crawl runs lower than the crouch — it exists to fit the one-row gaps
+        crawl: { dur: 0.7, loop: true, keys: [
+          { t: 0,   pose: { torso: 55, head: -34, armUpL: 120, armFoL: 40, armUpR: 165, armFoR: 15, thighL: 100, shinL: 112, thighR: 128, shinR: 86 }, root: [-3.4, 7.7] },
+          { t: 0.5, pose: { torso: 55, head: -34, armUpL: 165, armFoL: 15, armUpR: 120, armFoR: 40, thighL: 128, shinL: 86, thighR: 100, shinR: 112 }, root: [-3.4, 7.7] },
+          { t: 1,   pose: { torso: 55, head: -34, armUpL: 120, armFoL: 40, armUpR: 165, armFoR: 15, thighL: 100, shinL: 112, thighR: 128, shinR: 86 }, root: [-3.4, 7.7] },
+        ]},
+        cling: { dur: 1.6, loop: true, keys: [ // wall-pressed, claws in (#69)
+          { t: 0,   pose: { torso: 0, head: -5, armUpL: 55, armFoL: -30, armUpR: 125, armFoR: -30, thighL: 150, shinL: -40, thighR: 210, shinR: -40 } },
+          { t: 0.5, pose: { torso: 2, head: -5, armUpL: 55, armFoL: -30, armUpR: 125, armFoR: -30, thighL: 150, shinL: -40, thighR: 210, shinR: -40 } },
+          { t: 1,   pose: { torso: 0, head: -5, armUpL: 55, armFoL: -30, armUpR: 125, armFoR: -30, thighL: 150, shinL: -40, thighR: 210, shinR: -40 } },
+        ]},
+        ceil: { dur: 1.0, loop: true, keys: [ // upside-down crawl (#70) — torso inverted
+          { t: 0,   pose: { torso: 165, head: -10, armUpL: 175, armFoL: -20, armUpR: 185, armFoR: -20, thighL: 150, shinL: -20, thighR: 210, shinR: -20 } },
+          { t: 0.5, pose: { torso: 165, head: -10, armUpL: 185, armFoL: -20, armUpR: 175, armFoR: -20, thighL: 210, shinL: -20, thighR: 150, shinR: -20 } },
+          { t: 1,   pose: { torso: 165, head: -10, armUpL: 175, armFoL: -20, armUpR: 185, armFoR: -20, thighL: 150, shinL: -20, thighR: 210, shinR: -20 } },
+        ]},
+        roar: { dur: 1, loop: false, keys: [ // reared up, mandibles wide (#60)
+          { t: 0, pose: { torso: -12, head: -20, armUpL: 20, armFoL: -30, armUpR: 160, armFoR: -30, thighL: 170, shinL: -20, thighR: 190, shinR: -20 } },
+          { t: 1, pose: { torso: -12, head: -20, armUpL: 20, armFoL: -30, armUpR: 160, armFoR: -30, thighL: 170, shinL: -20, thighR: 190, shinR: -20 } },
+        ]},
+        shriek: { dur: 1, loop: false, keys: [
+          { t: 0, pose: { torso: -18, head: -25, armUpL: 10, armFoL: -20, armUpR: 170, armFoR: -20, thighL: 170, shinL: -20, thighR: 190, shinR: -20 } },
+          { t: 1, pose: { torso: -18, head: -25, armUpL: 10, armFoL: -20, armUpR: 170, armFoR: -20, thighL: 170, shinL: -20, thighR: 190, shinR: -20 } },
+        ]},
+        aim: { dur: 1, loop: false, keys: [ // ranged pose, both hands forward (#67)
+          { t: 0, pose: { torso: 5, head: 0, armUpL: 75, armFoL: 10, armUpR: 80, armFoR: 10, thighL: 175, shinL: -10, thighR: 190, shinR: -10 } },
+          { t: 1, pose: { torso: 5, head: 0, armUpL: 75, armFoL: 10, armUpR: 80, armFoR: 10, thighL: 175, shinL: -10, thighR: 190, shinR: -10 } },
+        ]},
+        launch: { dur: 1, loop: false, keys: [ // grenade launcher, arms up-forward
+          { t: 0, pose: { torso: 8, head: -5, armUpL: 55, armFoL: 5, armUpR: 60, armFoR: 5, thighL: 170, shinL: -15, thighR: 195, shinR: -15 } },
+          { t: 1, pose: { torso: 8, head: -5, armUpL: 55, armFoL: 5, armUpR: 60, armFoR: 5, thighL: 170, shinL: -15, thighR: 195, shinR: -15 } },
+        ]},
+        disc: { dur: 1, loop: false, keys: [ // disc throw across the body
+          { t: 0, pose: { torso: 12, head: -5, armUpL: 150, armFoL: 30, armUpR: 45, armFoR: 10, thighL: 170, shinL: -15, thighR: 195, shinR: -15 } },
+          { t: 1, pose: { torso: 12, head: -5, armUpL: 150, armFoL: 30, armUpR: 45, armFoR: 10, thighL: 170, shinL: -15, thighR: 195, shinR: -15 } },
+        ]},
+        plant: { dur: 1, loop: false, keys: [ // bomb plant: squat, near hand to the floor
+          { t: 0, pose: { torso: 42, head: -22, armUpL: 145, armFoL: 20, armUpR: 178, armFoR: 4, thighL: 114, shinL: 99, thighR: 122, shinR: 91 }, root: [-3.4, 6.9] },
+          { t: 1, pose: { torso: 42, head: -22, armUpL: 145, armFoL: 20, armUpR: 178, armFoR: 4, thighL: 114, shinL: 99, thighR: 122, shinR: 91 }, root: [-3.4, 6.9] },
+        ]},
+        welder: { dur: 1, loop: false, keys: [ // two hands forward-down, braced half-crouch
+          { t: 0, pose: { torso: 25, head: -10, armUpL: 120, armFoL: 10, armUpR: 125, armFoR: 10, thighL: 148, shinL: 34, thighR: 156, shinR: 26 }, root: [-4.3, 1.2] },
+          { t: 1, pose: { torso: 25, head: -10, armUpL: 120, armFoL: 10, armUpR: 125, armFoR: 10, thighL: 148, shinL: 34, thighR: 156, shinR: 26 }, root: [-4.3, 1.2] },
+        ]},
+        rifle: { dur: 1, loop: false, keys: [ // rifle stance (#67)
+          { t: 0, pose: { torso: 8, head: 0, armUpL: 70, armFoL: 5, armUpR: 85, armFoR: 5, thighL: 170, shinL: -15, thighR: 195, shinR: -15 } },
+          { t: 1, pose: { torso: 8, head: 0, armUpL: 70, armFoL: 5, armUpR: 85, armFoR: 5, thighL: 170, shinL: -15, thighR: 195, shinR: -15 } },
+        ]},
+        slash: { dur: 0.32, loop: false, keys: [ // claw lunge (#68) — front foot planted, back leg trailing
+          { t: 0,   pose: { torso: 15, head: -5, armUpL: 140, armFoL: 20, armUpR: 30, armFoR: -70, thighL: 155, shinL: 22, thighR: 205, shinR: -18 }, root: [0, 0.9] },
+          { t: 0.6, pose: { torso: 25, head: -5, armUpL: 150, armFoL: 10, armUpR: 100, armFoR: -10, thighL: 148, shinL: 30, thighR: 212, shinR: -24 }, root: [0, 1.4] },
+          { t: 1,   pose: { torso: 10, head: -5, armUpL: 160, armFoL: 10, armUpR: 120, armFoR: -10, thighL: 160, shinL: 18, thighR: 198, shinR: -14 }, root: [0, 0.6] },
+        ]},
+        spit: { dur: 0.42, loop: false, keys: [ // head darts forward (#50)
+          { t: 0,   pose: { torso: 15, head: 10, armUpL: 130, armFoL: 10, armUpR: 140, armFoR: 10, thighL: 165, shinL: -20, thighR: 195, shinR: -20 } },
+          { t: 0.5, pose: { torso: 30, head: 25, armUpL: 145, armFoL: 10, armUpR: 155, armFoR: 10, thighL: 160, shinL: -20, thighR: 200, shinR: -20 } },
+          { t: 1,   pose: { torso: 15, head: 10, armUpL: 130, armFoL: 10, armUpR: 140, armFoR: 10, thighL: 165, shinL: -20, thighR: 195, shinR: -20 } },
+        ]},
+        spear: { dur: 0.38, loop: false, keys: [ // one arm extended, lean in (#50)
+          { t: 0,   pose: { torso: 10, head: -5, armUpL: 150, armFoL: 20, armUpR: 40, armFoR: -30, thighL: 175, shinL: -15, thighR: 190, shinR: -15 } },
+          { t: 0.5, pose: { torso: 25, head: -5, armUpL: 160, armFoL: 10, armUpR: 85, armFoR: 0, thighL: 165, shinL: -15, thighR: 205, shinR: -15 } },
+          { t: 1,   pose: { torso: 10, head: -5, armUpL: 150, armFoL: 20, armUpR: 40, armFoR: -30, thighL: 175, shinL: -15, thighR: 190, shinR: -15 } },
+        ]},
+        tongue: { dur: 0.42, loop: false, keys: [ // tongue lash, braced
+          { t: 0,   pose: { torso: 20, head: 15, armUpL: 135, armFoL: 10, armUpR: 145, armFoR: 10, thighL: 155, shinL: -25, thighR: 205, shinR: -25 } },
+          { t: 0.5, pose: { torso: 30, head: 25, armUpL: 150, armFoL: 10, armUpR: 160, armFoR: 10, thighL: 150, shinL: -25, thighR: 210, shinR: -25 } },
+          { t: 1,   pose: { torso: 20, head: 15, armUpL: 135, armFoL: 10, armUpR: 145, armFoR: 10, thighL: 155, shinL: -25, thighR: 205, shinR: -25 } },
+        ]},
+        death: { dur: 0.6, loop: false, keys: [ // crumple backward
+          { t: 0, pose: { torso: 10, head: -5, armUpL: 160, armFoL: 10, armUpR: 170, armFoR: 10, thighL: 175, shinL: -10, thighR: 185, shinR: -10 } },
+          { t: 1, pose: { torso: 80, head: -30, armUpL: 120, armFoL: 30, armUpR: 200, armFoR: 10, thighL: 150, shinL: -20, thighR: 220, shinR: -10 } },
+        ]},
+      };
+      function rigPose(anim, t) {
+        const a = RIG_ANIMS[anim] || RIG_ANIMS.idle;
+        const ph = a.loop ? (t % a.dur) / a.dur : Math.min(t / a.dur, 1);
+        const ks = a.keys;
+        let k0 = ks[0], k1 = ks[ks.length - 1];
+        for (let i = 0; i < ks.length - 1; i++) if (ph >= ks[i].t && ph <= ks[i + 1].t) { k0 = ks[i]; k1 = ks[i + 1]; break; }
+        const span = Math.max(k1.t - k0.t, 1e-6);
+        const lt = Math.min(Math.max((ph - k0.t) / span, 0), 1);
+        const pose = {}, parts = new Set([...Object.keys(k0.pose), ...Object.keys(k1.pose)]);
+        for (const b of parts) {
+          const v0 = k0.pose[b] ?? RIG_REST[b] ?? 0, v1 = k1.pose[b] ?? RIG_REST[b] ?? 0;
+          pose[b] = v0 + (v1 - v0) * lt;
+        }
+        const r0 = k0.root || [0, 0], r1 = k1.root || [0, 0];
+        return { pose, root: [r0[0] + (r1[0] - r0[0]) * lt, r0[1] + (r1[1] - r0[1]) * lt] };
+      }
+      // Forward kinematics, solved facing RIGHT in frame-local px (the draw
+      // mirrors x once for facing, so no pose has to know which way it points).
+      // The hip is the root at (0, 2) bone units; returns every joint plus the
+      // fist anchor a held weapon rides.
+      function rigFK(RC, anim, t) {
+        const { pose, root } = rigPose(anim, t);
+        const S = RC.S, hipX = root[0] * S + RC.cx, hipY = (2 + root[1]) * S + RC.cy;
+        const J = {};
+        function place(name, px, py, parentAbs) {
+          const b = RIG_BONES[name];
+          const abs = parentAbs + (pose[name] ?? RIG_REST[name] ?? 0) + (name === "torso" ? RC.hunch : 0);
+          const rad = abs * Math.PI / 180;
+          J[name] = { px, py, ex: px + Math.sin(rad) * b.len * S, ey: py - Math.cos(rad) * b.len * S, abs };
+          return J[name];
+        }
+        const torso = place("torso", hipX, hipY, 0);
+        const neck = place("neck", torso.ex, torso.ey, torso.abs);
+        place("head", neck.ex, neck.ey, neck.abs);
+        const shX = torso.ex, shY = torso.ey;
+        const aL = place("armUpL", shX - 3 * S, shY + 1 * S, torso.abs); place("armFoL", aL.ex, aL.ey, aL.abs);
+        const aR = place("armUpR", shX + 3 * S, shY + 1 * S, torso.abs); place("armFoR", aR.ex, aR.ey, aR.abs);
+        const tL = place("thighL", hipX - 2 * S, hipY, 0); place("shinL", tL.ex, tL.ey, tL.abs);
+        const tR = place("thighR", hipX + 2 * S, hipY, 0); place("shinR", tR.ex, tR.ey, tR.abs);
+        const fo = J.armFoR, fr = fo.abs * Math.PI / 180, reach = RC.w.armFo * 0.6 * S;
+        return {
+          J, hip: { x: hipX, y: hipY },
+          // the fist, half a forearm-width past the wrist — where a gun actually sits
+          hand: { x: fo.ex + Math.sin(fr) * reach, y: fo.ey - Math.cos(fr) * reach, abs: fo.abs },
+        };
+      }
+      // Renderer. Every limb is a round-capped capsule, and each depth layer lays
+      // its dark outline down before filling over it — so the outline survives
+      // only where that layer meets what is behind it, and the figure keeps a
+      // clean pixel-art silhouette instead of a web of internal seams. Back
+      // limbs take the shaded half of the palette, which is what sells depth at
+      // this size. F: facing (+1 right, −1 left). op: entity opacity (hit flash).
+      function rigDraw(RC, anim, t, F, op) {
+        const { J, hand } = rigFK(RC, anim, t);
+        const S = RC.S, C = RC.col, OL = Math.max(1, 0.75 * S), o = op == null ? 1 : op;
+        const P = (x, y) => vec2(F * x, y);
+        const cap = (x1, y1, x2, y2, w, col) => drawLine({ p1: P(x1, y1), p2: P(x2, y2), width: w, color: rgb(...col), cap: "round", opacity: o });
+        const ball = (x, y, r, col) => drawCircle({ pos: P(x, y), radius: r, color: rgb(...col), opacity: o });
+        // a depth layer: [x1,y1,x2,y2,width,fill,highlight?]
+        const layer = (parts) => {
+          for (const p of parts) cap(p[0], p[1], p[2], p[3], p[4] + OL * 2, C.line);
+          for (const p of parts) cap(p[0], p[1], p[2], p[3], p[4], p[5]);
+          for (const p of parts) if (p[6]) cap(p[0], p[1] - p[4] * 0.24, p[2], p[3] - p[4] * 0.24, p[4] * 0.32, p[6]); // top-lit rim
+        };
+        const limb = (n, hl) => { const b = RIG_BONES[n], j = J[n]; return [j.px, j.py, j.ex, j.ey, RC.w[b.w] * S, C[b.c], hl]; };
+        // A foot is not a bone — it is the shin's ankle plus a boot laid mostly
+        // flat, tipping only a third as far as the shin does. Feet that rigidly
+        // follow the shin point at the sky on a high knee lift.
+        const foot = (n, col, hl) => {
+          const j = J[n], a = (90 + clamp((j.abs - 180) * 0.35, -45, 50)) * Math.PI / 180;
+          return [j.ex, j.ey, j.ex + Math.sin(a) * RC.w.foot * S, j.ey - Math.cos(a) * RC.w.foot * S, RC.w.shin * 1.15 * S, col, hl];
+        };
+        const fist = (n, col) => { const j = J[n], r = RC.w.armFo * 0.62 * S; return [j.ex, j.ey, j.ex, j.ey, r * 2, col, null]; };
+        // torso taper: a narrow waist capsule under a broader chest capsule
+        const tq = J.torso, tdx = tq.ex - tq.px, tdy = tq.ey - tq.py;
+        const mx = tq.px + tdx * 0.42, my = tq.py + tdy * 0.42;
+        // belt / loin wrap: a short capsule across the hip, perpendicular to the torso
+        const tr = tq.abs * Math.PI / 180, pxx = Math.cos(tr), pyy = Math.sin(tr), bw = RC.w.torso * 0.46 * S;
+
+        layer([limb("thighL"), limb("shinL"), foot("shinL", C.bootD)]);          // far leg
+        layer([limb("armUpL"), limb("armFoL"), fist("armFoL", C.skinD)]);        // far arm
+        layer([                                                                  // body
+          [tq.px, tq.py, mx, my, RC.w.torso * 0.82 * S, C.up, C.upL],
+          [mx, my, tq.ex, tq.ey, RC.w.torso * 1.2 * S, C.up, C.upL],
+          limb("neck"),
+        ]);
+        layer([limb("thighR", C.legL), limb("shinR", C.legL), foot("shinR", C.boot, C.bootD)]); // near leg
+        // waist goes on last of the lower half — a belt sits over the trousers and
+        // the beast's wrap hangs over both thighs, not tucked behind the near one
+        if (RC.loin) layer([[tq.px - pxx * bw * 1.25, tq.py - pyy * bw * 1.25, tq.px + pxx * bw * 1.25, tq.py + pyy * bw * 1.25, RC.w.torso * 0.66 * S, C.cloth, C.clothD]]);
+        else cap(tq.px - pxx * bw, tq.py - pyy * bw, tq.px + pxx * bw, tq.py + pyy * bw, 1.5 * S, C.belt);
+        layer([limb("armUpR", C.skinL), limb("armFoR", C.skinL), fist("armFoR", C.skin)]);      // near arm
+        // head: skull ball, hair/mane on the top-back, brow and eye on the facing
+        // side; the beast adds a muzzle and a pair of horns swept back over it
+        const hd = J.head, hr = hd.abs * Math.PI / 180;
+        const hx = hd.px + Math.sin(hr) * 4 * S, hy = hd.py - Math.cos(hr) * 4 * S, HR = RC.w.head * S;
+        if (RC.horns) { // muzzle first — the skull overlaps its root
+          cap(hx + 0.4 * S, hy + 0.8 * S, hx + 4.4 * S, hy + 2.2 * S, RC.w.head * 0.74 * S + OL * 2, C.line);
+          cap(hx + 0.4 * S, hy + 0.8 * S, hx + 4.4 * S, hy + 2.2 * S, RC.w.head * 0.74 * S, C.skinD);
+        }
+        ball(hx, hy, HR + OL, C.line);
+        ball(hx, hy, HR, C.skin);
+        ball(hx - 1.1 * S, hy - 1.7 * S, HR * 0.82, C.hair);
+        cap(hx + 0.3 * S, hy - 0.9 * S, hx + 2.1 * S, hy - 0.6 * S, 0.8 * S, C.hair); // brow
+        ball(hx + 1.7 * S, hy + 0.15 * S, 0.55 * S, C.eye);
+        if (RC.horns) {
+          // bull horns: a thick base off the side of the skull sweeping up, then a
+          // thin tip. Drawn as two capsules each so they taper — a single even
+          // stroke at this length reads as an antenna, not a horn.
+          for (const h of [[-0.9, -2.3, -2.8, -4.7, -3.6, -6.5], [2.0, -2.5, 3.2, -4.9, 3.1, -6.9]]) {
+            const [x0, y0, x1, y1, x2, y2] = h;
+            for (const [a, b, c2, d, w] of [[x0, y0, x1, y1, 2.3], [x1, y1, x2, y2, 1.2]]) {
+              cap(hx + a * S, hy + b * S, hx + c2 * S, hy + d * S, w * S + OL * 2, C.line);
+              cap(hx + a * S, hy + b * S, hx + c2 * S, hy + d * S, w * S, C.horn);
+            }
+          }
+          cap(hx + 2.7 * S, hy + 1.7 * S, hx + 3.7 * S, hy + 0.3 * S, 0.7 * S, C.horn); // tusk
+        }
+        return hand;
+      }
+      // KAPLAY component: drop-in replacement for the sprite comp. Same surface
+      // the game touches: play(), curAnim(), animSpeed, flipX (+ rigHand for mkHeld).
+      function rigComp(sideKey) {
+        const RC = RIGCFG[sideKey];
+        return {
+          id: "rig",
+          rigAnim: "idle",
+          rigT: 0,
+          animSpeed: 1,
+          flipX: false,
+          rigHand: null, // [x, y] frame-local px, already mirrored for facing — mkHeld only scales it
+          rigHandSc: SIDES[sideKey].sc,
+          width: SIDES[sideKey].frameW,   // report the strip's frame so area() hitboxes stay identical
+          height: SIDES[sideKey].frameH,
+          renderArea() { return new Rect(vec2(0, 0), this.width, this.height); },
+          play(n) { if (this.rigAnim !== n) { this.rigAnim = n; this.rigT = 0; } },
+          curAnim() { return this.rigAnim; },
+          update() { this.rigT += dt() * (this.animSpeed || 1); },
+          draw() {
+            const F = this.flipX ? -1 : 1;
+            const h = rigDraw(RC, this.rigAnim, this.rigT, F, this.opacity);
+            this.rigHand = h ? [F * h.x, h.y] : null;
+          },
+        };
+      }
+
       // ===== OUTSIDE WORLD (#50): PixelLab dusk vista, crows, window views =====
       const VISTA_PNG = "data:image/png;base64,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";
       loadSprite("vista", VISTA_PNG);
@@ -756,6 +1132,9 @@ death: { from: 35, to: 40, speed: 9, loop: false }, roll: { from: 35, to: 40, sp
           blurb: ["Claw lunge (J/X) + Leap (K/Y)", "Faster • wall-climb • dbl jump", "Tough — 6 HP", "Run him down."] },
       };
 
+      // (#74) vector rig is the default renderer; baked strips remain via ?sprites=1
+      const RIG_ON = new URLSearchParams(location.search).get("sprites") !== "1";
+
       // =====================================================================
       // LEVEL — big multi-floor complex. Floors: r2(top) r5 r8 r11 r14(ground).
       // Ladders connect them; doors teleport across the map.
@@ -1099,7 +1478,7 @@ death: { from: 35, to: 40, speed: 9, loop: false }, roll: { from: 35, to: 40, sp
         // you skid it off, and once you're airborne the arc is committed. Air accel is
         // a fraction of ground accel, so a standing hop and a full-run leap are
         // different jumps — which is the whole reason those games read as weighty.
-        let vx = 0, prevHandY = 0, wallGripAt = 0;
+        let vx = 0, prevHandY = 0, wallGripAt = 0, prevDown = false;
         // Tuned against the game's real ~25fps: a 100ms ramp is two frames and reads as
         // instant, so the windows are set nearer 150ms where the weight actually shows.
         const ACC_G = 1600, FRIC_G = 2000; // ground: ~0.16s to top speed, ~0.13s to stop
@@ -1115,7 +1494,7 @@ death: { from: 35, to: 40, speed: 9, loop: false }, roll: { from: 35, to: 40, sp
         let lastCeilTime = -1, ceilStick = false, ceilCd = 0; // ceiling crawl (#30)
         let hanging = false, grabCd = 0, hangCell = null; // ledge grab (#40)
         const HIT_H = CFG.frameH * CFG.sc * CFG.areaY, HIT_W = CFG.frameW * CFG.areaX * CFG.sc;
-        let lastLadderTime = -1, ladderCd = 0, onLadderNow = false, lastClimbKind = "ladder", lastClimbX = 0, roarUntil = 0, mantleUntil = 0;
+        let lastLadderTime = -1, ladderCd = 0, onLadderNow = false, lastClimbKind = "ladder", lastClimbX = 0, roarUntil = 0, mantleUntil = 0, cdownUntil = 0;
         let nearDoor = null, lastDoorTime = -1, doorCd = 0;
         const steamVents = [];
 
@@ -1750,11 +2129,15 @@ death: { from: 35, to: 40, speed: 9, loop: false }, roll: { from: 35, to: 40, sp
         }
 
         // --- player ---
-        const player = add([sprite(CFG.sprite, { anim: "idle" }), pos(spawn), anchor("center"), area({ scale: vec2(CFG.areaX, CFG.areaY) }), body({ jumpForce: CFG.jumpForce }), opacity(1), scale(CFG.sc), rotate(0), z(6), "player"]);
+        const player = add([...(RIG_ON ? [rigComp(sideKey)] : [sprite(CFG.sprite, { anim: "idle" })]), pos(spawn), anchor("center"), area({ scale: vec2(CFG.areaX, CFG.areaY) }), body({ jumpForce: CFG.jumpForce }), opacity(1), scale(CFG.sc), rotate(0), z(6), "player"]);
         player.add([sprite("shadow"), pos(0, CFG.shadowY), anchor("center"), z(-1), opacity(0.6), scale(1.6)]);
         // anim state machine: lunge/jump > run > idle
         let curAnim = "idle", lungeUntil = 0, landUntil = 0, aimUntil = 0, poseUntil = 0, poseAnim = "aim";
-        const setAnim = (n) => { if (curAnim !== n) { curAnim = n; player.play(n); } };
+        // (#74) the strips have no walk/cdown frames — fall back to the nearest baked
+        // pose. Anim names also travel over the wire, and the peer may be running the
+        // other renderer, so every play() goes through this, not just the local one.
+        const animFor = (n) => (RIG_ON ? n : n === "walk" ? "run" : n === "cdown" ? "mantle" : n);
+        const setAnim = (n) => { if (curAnim !== n) { curAnim = n; player.play(animFor(n)); } };
         // held weapon in hands (#33): follows the character, flips with facing
         const mkHeld = (getObj, getW, getF, getHolstered) => {
           const h2 = add([sprite("wpn-" + getW()), pos(-9999, 0), anchor("center"), z(7), scale(1.1), opacity(0.95), { last: getW() }]);
@@ -1766,7 +2149,9 @@ death: { from: 35, to: 40, speed: 9, loop: false }, roll: { from: 35, to: 40, sp
             const w2 = getW();
             if (w2 !== h2.last) { h2.last = w2; h2.use(sprite("wpn-" + w2)); }
             const f2 = getF();
-            h2.flipX = f2 < 0; h2.pos = o.pos.add(f2 * 15, 3);
+            h2.flipX = f2 < 0;
+            if (o.rigHand) h2.pos = o.pos.add(o.rigHand[0] * (o.rigHandSc || 0.75), o.rigHand[1] * (o.rigHandSc || 0.75)); // (#74) ride the actual fist — rigHand is already mirrored
+            else h2.pos = o.pos.add(f2 * 15, 3);
           });
           return h2;
         };
@@ -1838,7 +2223,7 @@ death: { from: 35, to: 40, speed: 9, loop: false }, roll: { from: 35, to: 40, sp
         add([sprite("cell"), pos(width() - 116, HY + 12), fixed(), z(200), scale(0.7)]);
         const energyTxt = add([text("0000", { size: 17 }), pos(width() - 88, HY + 14), fixed(), z(200), color(70, 240, 74)]);
         const ctrl = CFG.bomb ? "Bomb: K/Y   " : "Leap: K/Y   Roar: L   ";
-        addTicker("Move ←→/AD    Jump: Space    Attack: J/X    " + ctrl + "Climb: ↑↓    Use/Take: E    Pause: Esc    Mute: N", true);
+        addTicker("←→/AD move · Shift run · Space jump · fall onto a lip to grab · ↑ climb-up · ↓ climb-down at lip · " + ctrl + "E use · Esc pause · N mute", true);
         // mission briefing (#63): the terms of the hunt, GO! — straight from the original
         {
           const bx = width() / 2, els = [
@@ -2212,7 +2597,7 @@ death: { from: 35, to: 40, speed: 9, loop: false }, roll: { from: 35, to: 40, sp
           while (groundR < GRID.length - 1 && !(GRID[groundR + 1] && GRID[groundR + 1][spawnC] === "=")) groundR++;
           const spawnPos = vec2(spawnC * TS + TS / 2, groundR * TS);
           nemesis = add([
-            sprite(NCFG.sprite, { anim: "idle" }), pos(spawnPos), anchor("center"), scale(NCFG.sc),
+            ...(RIG_ON ? [rigComp(NKEY)] : [sprite(NCFG.sprite, { anim: "idle" })]), pos(spawnPos), anchor("center"), scale(NCFG.sc),
             area({ scale: vec2(NCFG.areaX, NCFG.areaY) }), body({ jumpForce: NCFG.jumpForce }), opacity(1), z(6), "nemesis",
             { hp: 3, iframes: 0, flash: 0, dir: choose([-1, 1]), state: "patrol", anim: "idle", atkCd: 0, climbing: false, senseAt: time() + 3, lostAt: 0, lastPos: null, weapon: NCFG.mode === "ranged" ? "blaster" : "claws" },
           ]);
@@ -2331,7 +2716,9 @@ death: { from: 35, to: 40, speed: 9, loop: false }, roll: { from: 35, to: 40, sp
             } else if (vx !== 0) n.move(vx * spd * 0.4, 0);
             n.flipX = n.dir < 0;
             // anims + hit flash — if we're moving horizontally, always show run even mid-air
-            const want = n.crouched ? "crawl" : n.climbing ? "climb" : Math.abs(vx) > 0 ? "run" : !n.isGrounded() ? "jump" : "idle";
+            // (#74) the hunter prowls on patrol and runs once it has you — the rig
+            // has both gaits, and the difference is legible from across the level
+            const want = n.crouched ? "crawl" : n.climbing ? "climb" : Math.abs(vx) > 0 ? (RIG_ON && n.state === "patrol" ? "walk" : "run") : !n.isGrounded() ? "jump" : "idle";
             if (n.anim !== want) { n.anim = want; n.play(want); }
             n.opacity = time() < n.flash ? 0.5 : 1;
             if (n.pos.y > LEVEL_H + 200) { n.pos = NEM_SPAWNS[0].clone(); n.vel = vec2(0, 0); n.climbing = false; n.gravityScale = 1; }
@@ -2342,7 +2729,7 @@ death: { from: 35, to: 40, speed: 9, loop: false }, roll: { from: 35, to: 40, sp
         // ============= ONLINE 2P (issue #11): remote player sync =============
         let remote = null, rTarget = null, rHp = SIDES[NKEY].maxHp;
         if (NET.connected) {
-          remote = add([sprite(NCFG.sprite, { anim: "idle" }), pos(-9999, -9999), anchor("center"), scale(NCFG.sc), area({ scale: vec2(NCFG.areaX, NCFG.areaY) }), z(6), "remote", { anim: "idle" }]);
+          remote = add([...(RIG_ON ? [rigComp(NKEY)] : [sprite(NCFG.sprite, { anim: "idle" })]), pos(-9999, -9999), anchor("center"), scale(NCFG.sc), area({ scale: vec2(NCFG.areaX, NCFG.areaY) }), z(6), "remote", { anim: "idle" }]);
           remote.add([sprite("shadow"), pos(0, NCFG.shadowY), anchor("center"), z(-1), opacity(0.6), scale(1.8)]);
           if (NCFG.glow) {
             const g = remote.add([sprite("redglow"), pos(NCFG.glow[0], NCFG.glow[1]), anchor("center"), scale(0.55), opacity(0.4), z(1)]);
@@ -2479,7 +2866,7 @@ death: { from: 35, to: 40, speed: 9, loop: false }, roll: { from: 35, to: 40, sp
           }
 
           NET.onMsg = (m) => {
-            if (m.t === "s") { rTarget = vec2(m.x, m.y); remote.flipX = m.f < 0; rHp = m.hp; if (m.w) remoteWeapon = m.w; if (remote.anim !== m.a) { remote.anim = m.a; remote.play(m.a); } }
+            if (m.t === "s") { rTarget = vec2(m.x, m.y); remote.flipX = m.f < 0; rHp = m.hp; if (m.w) remoteWeapon = m.w; if (remote.anim !== m.a) { remote.anim = m.a; remote.play(animFor(m.a)); } }
             else if (m.t === "atk") remoteAttack(m);
             else if (m.t === "crate") spawnCrate(m.w, vec2(m.x, m.y));
             else if (m.t === "lever") { const lv = get("lever").find((o) => o.LV.g === m.g && o.LV.r === m.r); if (lv && lv.LV.closed !== m.closed) lv.LV.toggle(true); }
@@ -2521,6 +2908,8 @@ death: { from: 35, to: 40, speed: 9, loop: false }, roll: { from: 35, to: 40, sp
           dx = clamp(dx, -1, 1);
           const up = isKeyDown("up") || isKeyDown("w") || (stick && stick.y < -0.4);
           const down = isKeyDown("down") || isKeyDown("s") || (stick && stick.y > 0.4);
+          const runHeld = isKeyDown("shift") || (stick && Math.abs(stick.x) > 0.85); // (#74) walk by default, run on Shift / full-tilt stick
+          const downEdge = down && !prevDown; // (#74) letting go of a ledge is a press, not a hold — see the hang block
           // machine gun: hold to fire
           if (WEAPONS[weapon].auto && (isKeyDown("j") || isKeyDown("x") || isGamepadButtonDown("west") || isGamepadButtonDown("east"))) attack();
           // flares recharge slowly (#31)
@@ -2535,7 +2924,7 @@ death: { from: 35, to: 40, speed: 9, loop: false }, roll: { from: 35, to: 40, sp
             // a ladder gives the legs something to push off, so it accelerates like ground —
             // stepping off a rung sideways has to stay possible
             const grounded = player.isGrounded() || onLadderNow;
-            const topSpd = CFG.speed * (wading ? 0.55 : crouching ? 0.42 : 1);
+            const topSpd = CFG.speed * (wading ? 0.55 : crouching ? 0.42 : runHeld ? 1 : 0.55); // (#74) Shift = run; default gait is a careful PoP walk
             if (Math.abs(dx) > 0.05) {
               // turn skid (#63): reversing at a run plants a foot — pose, scrape, dust
               if (Math.sign(dx) !== lastRunDir && lastRunDir !== 0 && grounded && time() - lastTurnAt > 0.4) {
@@ -2599,6 +2988,29 @@ death: { from: 35, to: 40, speed: 9, loop: false }, roll: { from: 35, to: 40, sp
           // apex hang: floatier at the top of the jump arc
           if (!onLadderNow) player.gravityScale = !player.isGrounded() && Math.abs(player.vel.y) < 70 ? 0.72 : 1;
 
+          const solidCell = (c2, r2) => GRID[r2] && GRID[r2][c2] === "=";
+          // ledge climb-down (#74): DOWN at a lip lowers you to a hang — the PoP
+          // reverse-mantle. The lip is the floor cell under you whose neighbour in
+          // your facing is void. This has to be decided BEFORE the crouch below,
+          // because crouch also answers to Down and would eat the input: at a lip
+          // Down means "over the edge", everywhere else it means "duck".
+          if (down && player.isGrounded() && !onLadderNow && !hanging && !ceilStick && !rolling && !flattened && time() > grabCd && time() > cdownUntil) {
+            const rF = Math.floor((player.pos.y + HIT_H / 2 + 4) / TS);
+            const cC = Math.floor(player.pos.x / TS);
+            const cA = Math.floor((player.pos.x + facing * (HIT_W / 2 + 6)) / TS);
+            if (cA !== cC && solidCell(cC, rF) && !solidCell(cA, rF) && !solidCell(cA, rF - 1) && !solidCell(cA, rF - 2)) {
+              facing = -facing; player.flipX = facing < 0; // back to the void, cheek to the wall
+              hanging = true; hangCell = { c: cC, r: rF };
+              grabAt = time(); swayAmp = 2; cdownUntil = time() + 0.3;
+              player.gravityScale = 0; player.vel = vec2(0, 0);
+              const sx = player.pos.x;
+              const tgt = vec2(cC * TS + (facing > 0 ? -1 : 1) * (TS / 2 + HIT_W / 2 - 3) + TS / 2, rF * TS + HIT_H / 2 + 14);
+              tween(player.pos.y, tgt.y, 0.2, (v) => (player.pos = vec2(sx, v)), easings.easeInQuad);
+              wait(0.2, () => tween(player.pos.x, tgt.x, 0.1, (v) => (player.pos = vec2(v, tgt.y)), easings.easeOutQuad));
+              noise({ dur: 0.09, vol: 0.04, type: "bandpass", f0: 700, f1: 380 }); // palms find the lip
+            }
+          }
+
           // crouch (#57): hold Down to duck and crawl — low enough to fit the 1-row
           // spaces under mezzanines. Sticky while there's no headroom to stand.
           const headroom = () => { const c2 = Math.floor(player.pos.x / TS), r2 = Math.floor((player.pos.y + HIT_H / 2 - HIT_H + 6) / TS); return !(GRID[r2] && GRID[r2][c2] === "="); };
@@ -2623,7 +3035,6 @@ death: { from: 35, to: 40, speed: 9, loop: false }, roll: { from: 35, to: 40, sp
           }
 
           // ledge grab (#40): fall past a lip with your hands close — catch it, hang, climb up
-          const solidCell = (c2, r2) => GRID[r2] && GRID[r2][c2] === "=";
           let shimmying = false;
           if (hanging) {
             player.gravityScale = 0; player.vel = vec2(0, 0);
@@ -2646,7 +3057,11 @@ death: { from: 35, to: 40, speed: 9, loop: false }, roll: { from: 35, to: 40, sp
               wait(0.16, () => tween(player.pos.x, tgt.x, 0.12, (v) => (player.pos = vec2(v, tgt.y)), easings.easeOutQuad));
               wait(0.29, () => { player.gravityScale = 1; landUntil = time() + 0.12; dust(player.pos.add(0, HIT_H / 2)); });
               SFX.jump();
-            } else if (down) { hanging = false; grabCd = time() + 0.4; player.gravityScale = 1; }
+            // (#74) letting go is an explicit press. Holding DOWN is how you climb
+            // down onto the lip in the first place, and it is how you keep steering a
+            // fall into a grab — on a level check either one drops you again the
+            // instant you arrive, which read as the ledge refusing to hold you.
+            } else if (downEdge && time() > cdownUntil) { hanging = false; grabCd = time() + 0.4; player.gravityScale = 1; }
           } else if (!player.isGrounded() && !onLadderNow && !ceilStick && player.vel.y > 40 && time() > grabCd) {
             // (#74) sweep the fall, don't sample it. A single probe per frame misses lips
             // entirely once you're dropping fast — which is why long falls felt like they
@@ -2711,6 +3126,7 @@ death: { from: 35, to: 40, speed: 9, loop: false }, roll: { from: 35, to: 40, sp
           // animation state (beast gets cling/crawl on walls + ceiling + tucked drop)
           if (time() < roarUntil) setAnim("roar"); // reared up, mandibles wide (#60)
           else if (time() < mantleUntil) setAnim("mantle"); // pulling up over the lip (#65)
+          else if (time() < cdownUntil) setAnim(RIG_ON ? "cdown" : "mantle"); // (#74) lowering over the lip, reverse-mantle
           else if (rolling) setAnim("roll"); // tucked into the tumble (#63)
           else if (flattened) setAnim("climb"); // back to the wall, pressed flat (#65)
           else if (time() < poseUntil) setAnim(poseAnim); // (#67) weapon-specific body first
@@ -2724,7 +3140,7 @@ death: { from: 35, to: 40, speed: 9, loop: false }, roll: { from: 35, to: 40, sp
           else if (onLadderNow) setAnim(CFG.wallClimb || lastClimbKind === "rope" ? "rope" : "climb"); // (#65) vine grip on ropes; Jack keeps the back-view ladder climb
           else if (player.isGrounded() && time() < landUntil) setAnim("land");
           else if (crouching) setAnim(moving ? "crawl" : "crouch"); // real crawl cycle (#60)
-          else if (moving) setAnim("run");
+          else if (moving) setAnim(runHeld ? "run" : "walk"); // (#74) careful walk by default; Shift runs
           else setAnim("idle");
           // motion-matched playback (#62): climbing/crawling anims only move when YOU move —
           // a frozen grip while stationary reads as holding on, not treadmilling
@@ -2733,7 +3149,7 @@ death: { from: 35, to: 40, speed: 9, loop: false }, roll: { from: 35, to: 40, sp
             : ceilStick || curAnim === "crawl" ? (Math.abs(dx) > 0.05 ? 1 : 0)
             // (#74) the legs run at the speed the body is actually travelling — a skid winds
             // the cycle down instead of cutting it, which is most of what sells the weight
-            : curAnim === "run" ? clamp(Math.abs(vx) / CFG.speed, 0.35, 1.35) * (wading ? 0.72 : 1)
+            : (curAnim === "run" || curAnim === "walk") ? clamp(Math.abs(vx) / (curAnim === "walk" ? CFG.speed * 0.55 : CFG.speed), 0.35, 1.35) * (wading ? 0.72 : 1)
             : 1;
           // subtle body language (#62): lean into the run, and pitch forward through the jump arc —
           // launch upright, commit nose-first into the fall like a diver, so big leaps READ as big
@@ -2755,6 +3171,7 @@ death: { from: 35, to: 40, speed: 9, loop: false }, roll: { from: 35, to: 40, sp
             add([circle(rand(1.5, 2.5)), pos(player.pos.add(rand(-8, 8), rand(0, 14))), anchor("center"), color(90, 20, 30), opacity(0.7), lifespan(0.5, { fade: 0.4 }), z(5), { update() { this.move(0, 90); } }]);
 
           prevHandY = player.pos.y - HIT_H / 2 + 6; // (#74) where the hands were, for next frame's swept ledge check
+          prevDown = down;
           const target = camTarget();
           if (!camReady) { setCamPos(target); camReady = true; } else setCamPos(getCamPos().lerp(target, Math.min(1, dt() * 8)));
           if (player.pos.y > LEVEL_H + 200) hurt(true);

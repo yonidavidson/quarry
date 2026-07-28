@@ -28,15 +28,19 @@ Press **O** on the menu. A 3-step wizard walks you through it: pick your name an
 
 | Action | Keyboard | Gamepad |
 |--------|----------|---------|
-| Move / climb | ←→↑↓ / WASD | stick / d-pad |
+| Walk / climb | ←→↑↓ / WASD | stick / d-pad |
+| Run | hold Shift while moving | full-tilt stick |
 | Jump | Space | A |
 | Crouch / crawl | hold ↓ / S | stick down |
+| Climb down a ledge | ↓ at the edge | stick down |
 | Attack | J / X | B / X |
 | Bomb (Jack) / Super leap (Beast) | K / C | Y |
 | Use door / take weapon | E | d-pad up |
 | Pause / Mute / Restart | Esc / N / Shift+R | — |
 
 Wall-climb (Beast): hold into a wall + Up. Coyote time, jump buffering, and variable jump height are all in — the controls are forgiving on purpose.
+
+**The Prince-of-Persia ledge set.** Walking is the default gait and Shift is a run, so you can edge up to a drop instead of sprinting off it. Fall past a lip with your hands near it and you catch it; from a hang, ↑ mantles up and over, ←→ shimmies along, and a fresh press of ↓ lets go. Standing at an edge, ↓ turns you around and lowers you into that same hang — a way down that isn't a fall.
 
 ## Live ticker — see who's hunting, worldwide
 
@@ -45,7 +49,8 @@ The bottom bar shows live events from **every player everywhere** — who entere
 ## Built with
 
 - [KAPLAY](https://kaplayjs.com) (successor to Kaboom.js) from CDN
-- World art: inline SVG (hand-authored, baked to bitmap at load). Character art: pixel-art sprite strips generated with [PixelLab](https://pixellab.ai) — an 80s action-hero commando and a Predator-style beast — embedded as base64 PNG
+- World art: inline SVG (hand-authored, baked to bitmap at load)
+- Characters: a **vector skeleton** — a bone tree posed by keyframed joint angles and interpolated continuously, so moves are data rather than baked frames and transitions come free. Both hunters share one pose table; palettes and proportions are sampled from the original [PixelLab](https://pixellab.ai) strips, which are still embedded and still render on `?sprites=1`
 - Audio: sound effects and room tones generated with [ElevenLabs](https://elevenlabs.io) (embedded base64, zone-crossfaded ambience), layered over Web Audio synthesis — noise + tones through a generated impulse-response reverb — which remains the complete fallback if clips fail to decode
 - One self-contained `index.html`. That's the whole game.
 

@@ -12,7 +12,8 @@ that owns the system you're changing.
 |---|---|
 | `SOUND ENGINE` | Web Audio synthesis fallback for every cue |
 | `AI SOUND LAYER (#49)` | ElevenLabs clips in `SND_DATA` (`/*SND_DATA_START*/…/*SND_DATA_END*/`) |
-| `JACK v5` / `BEAST v5` | sprite strips `HUMAN_PNG` / `STALKER_PNG` + `loadSprite` anim tables |
+| `JACK v5` / `BEAST v5` | sprite strips `HUMAN_PNG` / `STALKER_PNG` + `loadSprite` anim tables — the `?sprites=1` fallback |
+| `VECTOR RIG (#74)` | the default renderer: `RIGCFG` palettes/scale, `RIG_BONES`, `RIG_ANIMS` keyframes, `rigPose`/`rigFK`/`rigDraw`, `rigComp` |
 | `OUTSIDE WORLD (#50)` | dusk vista parallax, crows, window views, clouds |
 | `LEVEL GENERATOR` | seeded generation (`sRand`, seed `20260714`) |
 | `SIDES` | per-character config (frame size, scale, hitbox areas, shadow) |
@@ -21,6 +22,23 @@ that owns the system you're changing.
 | `spawnNemesis` | the AI hunter — uses `LADDERS`, can crouch-crawl gaps |
 | `ONLINE 2P` | manual-signal WebRTC; msgs `{t:"atk"\|"crate"\|"lever"\|"pod"\|"rematch"\|"left"}` |
 | `scene("boot")` | audio-unlock gate |
+
+## The rig is the default renderer
+
+`RIG_ON` (true unless `?sprites=1`) swaps `sprite(...)` for `rigComp(sideKey)` on
+the player, the nemesis and the online remote. `rigComp` deliberately mimics the
+sprite comp's surface — `play()`, `curAnim()`, `animSpeed`, `flipX`, `width`/
+`height`, `renderArea()` — so the game code around it is renderer-agnostic. Two
+rules when you touch it:
+
+- **Every `play()` goes through `animFor()`.** The rig has `walk` and `cdown`; the
+  strips don't. Anim names also cross the wire in online 2P, where the peer may be
+  running the other renderer.
+- **Poses that touch the floor need a `root` drop.** The hip is the root and does
+  not move on its own, so folding the legs lifts the feet instead of lowering the
+  body. Knees bend one way only: shin absolute angle ≥ thigh's. Foot height is
+  `-(cos(thighAbs) + cos(shinAbs)) * 10 + root[1]`, and standing is 20 — audit a
+  new pose against that number before trusting how it looks in one screenshot.
 
 ## Two couplings that break silently
 

@@ -60,9 +60,10 @@ Or play live: https://yonidavidson.github.io/quarry/
 
 | Action | Keyboard | Gamepad |
 |--------|----------|---------|
-| Move / climb | ←→↑↓ / WASD | stick / d-pad |
+| Walk / climb | ←→↑↓ / WASD | stick / d-pad |
+| Run | hold Shift | full-tilt stick |
 | Jump | Space | A |
-| Crouch / crawl | hold ↓ / S | stick down |
+| Crouch / crawl / climb down a ledge | hold ↓ / S | stick down |
 | Attack | J / X | B / X |
 | Bomb (Jack) / Super leap (Beast) | K / C | Y |
 | Use door / take weapon | E | d-pad up |
