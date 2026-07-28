@@ -158,3 +158,11 @@ does not apply. Rows stay as the split to hand out the moment that changes.
 - 2026-07-28 — Known preview warnings to clear before publish: models load
   without `pickModel`/`loadModelWithFallback` (phones fetch the full GLB), and
   the DPR cap needs the tier applied under the post stack.
+- 2026-07-28 — **Published** (categories: games). The game is public and
+  guest-playable; every `genex preview` from here goes live to everyone
+  immediately. Shipped knowingly ahead of the usual publish floors — the HUD and
+  menus are still hand-written scaffolding and there is no loader or title
+  screen. The player was told and said go.
+- 2026-07-28 — Links: the README and skills point at the permanent GitHub Pages
+  URL, which redirects via `docs/index.html` to the world page. That file is the
+  only place to edit when the game moves.

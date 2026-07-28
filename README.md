@@ -3,7 +3,11 @@
 A 3D hunt-or-be-hunted game in the browser, inspired by the asymmetric design of
 the 1996 classic *Hunter Hunted* — original theme, art, and code.
 
-**[▶ Open QUARRY](https://genex.games/draft/quarry-d291c2)**
+**[▶ Open QUARRY](https://yonidavidson.github.io/quarry/)**
+
+Public and playable — no install, no account. That link is permanent and always
+forwards to wherever the game currently lives, so it keeps working when the game
+moves. It plays as a guest straight away; signing in only adds saved progress.
 
 > **Early build.** One floor, one hunt loop, one weapon. It is a long way from
 > finished — see [Where it's up to](#where-its-up-to). The plan and its status

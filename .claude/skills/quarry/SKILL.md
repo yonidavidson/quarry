@@ -11,7 +11,7 @@ blaster, and the Stalker hunts you from the walls and ceiling.
 | | |
 |---|---|
 | Repo | `yonidavidson/quarry` (local checkout may be named `hunter-hunted`) |
-| Play | https://genex.games/draft/quarry-d291c2 — the game's page on Genex |
+| Play | https://genex.games/world/quarry-d291c2 — the game's page on Genex |
 | Platform | [Genex](https://genex.games) — identity, hosting, publishing, multiplayer |
 | Stack | three.js + Rapier + Vite + TypeScript |
 | Contract | **`DESIGN.md`** — the plan, its status, and the asset budget |
@@ -41,18 +41,22 @@ have no local equivalent. Label evidence from it accordingly.
 
 1. Edit → `npm run build` (the template type-checks; a build error is a real
    error) → drive it locally and screenshot. See **quarry-playtest**.
-2. `npx genex preview` — builds and pushes to the hosted draft. Hand the player
-   the **page** link (`https://genex.games/draft/<slug>`), never the bare
-   `*.genex.technology` origin, never localhost, never a file path.
+2. `npx genex preview` — builds and pushes. Hand the player the **page** link,
+   never the bare `*.genex.technology` origin, never localhost, never a file
+   path. **This game is published**, so every preview goes live to everyone
+   instantly — never describe it as a private draft. `preview`'s summary line
+   states the current status; read it rather than assuming.
 3. `npx genex wait --all` at every preview — a generation can fail server-side
    while its URL is already wired in, and looking is the only way to find out.
 4. Update `DESIGN.md`: a milestone is done only once it reached a preview.
 5. Commit and push `main`.
-6. `npx genex publish` lists it publicly — only when the player says so.
+6. `npx genex publish` re-lists it; already done, so `preview` is the normal
+   update path from here.
 
-GitHub Pages still serves the repo's `docs/` folder, which is a redirect to the
-Genex page so old links don't dead-end. The repo root is Vite source now; a
-static host cannot run it.
+GitHub Pages serves the repo's `docs/` folder — a redirect to the Genex world
+page, and the single place that knows where the game lives. The README and every
+shared link point at the Pages URL, so moving the game means editing one file.
+The repo root is Vite source now; a static host cannot run it.
 
 ## The hard rules
 
