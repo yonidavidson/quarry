@@ -32,13 +32,13 @@ Concept image: _pending — the UI plan gate has not run yet; the character conc
 
 ## Build plan & status
 
-Now: ▶ 3. Play as the Stalker — the asymmetric half
+Now: ▶ 5. Screens polish + 6. HUD sprite swap
 
 1. Boot, identity, and a walkable floor — ✅ → previewed
 2. Jack moves and shoots; the Stalker hunts — ✅ → previewed
-3. Play as the Stalker — the asymmetric half — ▶ main agent ([#75](https://github.com/yonidavidson/quarry/issues/75))
+3. Play as the Stalker — the asymmetric half — ✅ → previewed ([#75](https://github.com/yonidavidson/quarry/issues/75))
 4. The hunt loop: energy cells, extraction lift, win/lose, instant retry — ✅ → previewed
-5. Screens: loader, title, side select, pause ([#77](https://github.com/yonidavidson/quarry/issues/77)) — ⬜ blocks #75's side select
+5. Screens: loader, title, side select, pause ([#77](https://github.com/yonidavidson/quarry/issues/77)) — ◐ machine + side select done; menu video, branded loader and settings still open
 6. HUD sprite swap from the landed concept ([#78](https://github.com/yonidavidson/quarry/issues/78)) — ⬜
 7. 1v1 asymmetric online ([#83](https://github.com/yonidavidson/quarry/issues/83)) — ⬜ depends on #75
 8. World dressing — the ceiling the Stalker crosses ([#80](https://github.com/yonidavidson/quarry/issues/80)) — ⬜
@@ -178,3 +178,15 @@ does not apply. Rows stay as the split to hand out the moment that changes.
 - 2026-07-28 — The UI concept landed and settles the HUD lane as **sprites**:
   etched-metal frames, hazard striping, a segmented orange threat meter. CSS
   could not pass for it.
+- 2026-07-28 — Both sides playable ([#75](https://github.com/yonidavidson/quarry/issues/75)).
+  Player wall-climb/ceiling-crawl works by taking the body OFF the character
+  controller — disable it, switch the rigid body to kinematic, drive position,
+  and snap interpolation on release. The controller is a dynamic capsule and was
+  never going to hold a wall.
+  Two bugs found and fixed while building it: the cling never re-probed the wall,
+  so you could climb off the top of a 6m block into open air; and AI Jack was a
+  hitscan that never missed, which killed the beast before it could reach a wall
+  and deleted the vertical game entirely. He now has range-based accuracy and
+  takes a beat to notice you.
+  The second playable body is swapped in locally — the platform's loader always
+  resolves the game's ONE generated character (Jack).

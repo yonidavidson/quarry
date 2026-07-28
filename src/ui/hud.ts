@@ -34,6 +34,7 @@ const CSS = `
 `;
 
 export class Hud {
+  private needCells: number;
   private el: HTMLDivElement;
   private pips: HTMLElement[] = [];
   private cellsEl: HTMLElement;
@@ -42,7 +43,8 @@ export class Hud {
   private endEl: HTMLElement;
   private hurtEl: HTMLElement;
 
-  constructor(maxHp: number) {
+  constructor(maxHp: number, needCells = NEED_CELLS) {
+    this.needCells = needCells;
     const style = document.createElement("style");
     style.textContent = CSS;
     document.head.appendChild(style);
@@ -52,7 +54,7 @@ export class Hud {
     this.el.innerHTML = `
       <div class="tl">
         <div class="pips"></div>
-        <div class="cells">cells 0 / ${NEED_CELLS}</div>
+        <div class="cells">&nbsp;</div>
       </div>
       <div class="tr">
         <div class="danger">no contact</div>
@@ -83,9 +85,11 @@ export class Hud {
 
   update(hp: number, cells: number, extractionOpen: boolean, pressure: number, state: StalkerState): void {
     this.pips.forEach((p, i) => p.classList.toggle("on", i < hp));
-    this.cellsEl.textContent = extractionOpen
-      ? `cells ${cells} / ${NEED_CELLS} — extraction open`
-      : `cells ${cells} / ${NEED_CELLS}`;
+    this.cellsEl.textContent = this.needCells === 0
+      ? "hunt him down"
+      : extractionOpen
+        ? `cells ${cells} / ${this.needCells} — extraction open`
+        : `cells ${cells} / ${this.needCells}`;
 
     const above = state === "ceiling" || state === "pounce";
     this.dangerEl.className = "danger" + (above ? " above" : pressure > 0.55 ? " hot" : "");

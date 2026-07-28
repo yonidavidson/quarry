@@ -25,7 +25,12 @@ import { Stalker } from "./hunter/stalker.ts";
 import { Blaster } from "./combat/blaster.ts";
 import { Hunt } from "./game/hunt.ts";
 import { Hud } from "./ui/hud.ts";
-import { initAudio, startMusic, setMusicIntensity } from "./audio.ts";
+import { initAudio, startMusic, setMusicIntensity, play } from "./audio.ts";
+import { Screens } from "./game/phase.ts";
+import { Cling } from "./player/cling.ts";
+import { JackAI } from "./hunter/jack.ts";
+import { AUDIO, MODELS } from "./assets.ts";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
 const $ = <T extends Element>(sel: string): T => {
   const el = document.querySelector<T>(sel);
@@ -35,6 +40,7 @@ const $ = <T extends Element>(sel: string): T => {
 
 async function boot(): Promise<void> {
   const canvas = $<HTMLCanvasElement>("#game");
+  const screens = new Screens();          // shows the loader immediately
 
   // ── device tier owns the renderer's budget from the first frame ──
   const tier = detectTier();
@@ -104,34 +110,77 @@ async function boot(): Promise<void> {
     character.update();
   });
 
+  // Everything heavy is loaded — offer the choice, then build the match around it.
+  screens.set("menu");
+  const side = await screens.chosen;
+  const asStalker = side === "stalker";
+  screens.set("playing");
+
   // ── the hunt ──
   initAudio(camera);
-  const hud = new Hud(5);
-  const hunt = new Hunt(scene);
+  const hud = new Hud(asStalker ? 6 : 5, asStalker ? 0 : 5);
+  const hunt = new Hunt(scene, { maxHp: asStalker ? 6 : 5, needCells: asStalker ? 0 : 5 });
   const blaster = new Blaster(scene, camera);
-  const stalker = new Stalker(scene, {
-    pounceDamage: 2,
-    onHitPlayer: (d) => {
-      const before = hunt.hp;
-      hunt.damage(d);
-      if (hunt.hp < before) hud.flashHurt();
-    },
-  });
+  const hurt = (d: number) => {
+    const before = hunt.hp;
+    hunt.damage(d);
+    if (hunt.hp < before) hud.flashHurt();
+  };
+
+  // You are one of these; the AI wears the other.
+  const stalker = asStalker ? null : new Stalker(scene, { pounceDamage: 2, onHitPlayer: hurt });
+  const jack = asStalker ? new JackAI(scene, { damage: 1, onHitPlayer: hurt }) : null;
+  const foe = () => (asStalker ? jack! : stalker!);
+
+  // Playing the beast: wall-climb and ceiling-crawl take the body off the
+  // physics controller — see src/player/cling.ts.
+  const cling = asStalker ? new Cling(physics, character, walls) : null;
+
+  // ...and you wear the beast, not Jack. The platform's character loader always
+  // resolves the game's ONE generated character (Jack), so the second playable
+  // body is swapped in here rather than fought for upstream.
+  let beastMixer: THREE.AnimationMixer | null = null;
+  if (asStalker) {
+    player.scene.visible = false;
+    new GLTFLoader().load(MODELS.stalker, (gltf) => {
+      const body = gltf.scene;
+      body.traverse((o) => { if ((o as THREE.Mesh).isMesh) o.castShadow = true; });
+      const box = new THREE.Box3().setFromObject(body);
+      const h = box.max.y - box.min.y || 1.8;
+      const sc = 2.4 / h;
+      body.scale.setScalar(sc);
+      body.position.y = fit.modelOffsetY - box.min.y * sc;
+      character.root.add(body);
+      if (gltf.animations.length) {
+        beastMixer = new THREE.AnimationMixer(body);
+        const walk = gltf.animations.find((c) => /walk/i.test(c.name)) ?? gltf.animations[0];
+        beastMixer.clipAction(walk).play();
+      }
+    });
+  }
 
   addEventListener("pointerdown", () => {
     if (hunt.outcome !== "playing" || !document.pointerLockElement) return;
-    if (blaster.fire([stalker.root], walls)) stalker.takeHit(1);
-    if (!stalker.alive) hunt.stalkerDown();
+    if (asStalker) {
+      // claws: short reach, heavy hit, no ammo
+      const target = jack!;
+      if (target.alive && character.currPos.distanceTo(target.position) < 4.2) {
+        target.takeHit(2);
+        play(AUDIO.claw, 0.8);
+        if (!target.alive) hunt.foeDown();
+      }
+    } else {
+      if (blaster.fire([stalker!.root], walls)) stalker!.takeHit(1);
+      if (!stalker!.alive) hunt.foeDown();
+    }
   });
 
-  // one key back in, always — a hunt you can't instantly retry stops being tense
-  const respawn = new THREE.Vector3(0, 3, 0);
   addEventListener("keydown", (e) => {
-    if (e.code !== "KeyR" || hunt.outcome === "playing") return;
-    hud.hideEnd();
-    location.reload();
+    if (e.code === "KeyR" && hunt.outcome !== "playing") { hud.hideEnd(); location.reload(); return; }
+    if (e.code === "Escape" && hunt.outcome === "playing") {
+      screens.set(screens.current === "paused" ? "playing" : "paused");
+    }
   });
-  void respawn;
 
   // keep the shadow frustum on the player rather than on the world origin
   sun.target = character.root;
@@ -201,24 +250,38 @@ async function boot(): Promise<void> {
 
     anims.update(character, delta);
     player.update(delta);
+    beastMixer?.update(delta);
 
     // ── the hunt ──
     const here = character.currPos;
-    if (hunt.outcome === "playing") {
-      // "visible" is line of sight, so breaking it actually loses the Stalker
-      const toPlayer = new THREE.Vector3(here.x - stalker.position.x, 0, here.z - stalker.position.z);
-      const dist = toPlayer.length();
-      sightRay.set(
-        stalker.position.clone().setY(1.6),
-        toPlayer.clone().normalize(),
-      );
-      sightRay.far = dist;
+    if (hunt.outcome === "playing" && screens.current === "playing") {
+      // playing the beast: climbing takes the body off the controller
+      if (cling) {
+        const mv = kb.getCharacterMovement();
+        cling.update(delta, {
+          forward: (mv.forward ? 1 : 0) - (mv.backward ? 1 : 0),
+          right: (mv.rightward ? 1 : 0) - (mv.leftward ? 1 : 0),
+          grab: !!mv.jump,
+          drop: !!mv.crouch,
+        }, followCam.azimuthAngle);
+      }
+
+      const enemy = foe();
+      // "visible" is line of sight, so breaking it actually loses your hunter
+      const flat = new THREE.Vector3(here.x - enemy.position.x, 0, here.z - enemy.position.z);
+      const dist = flat.length();
+      sightRay.set(enemy.position.clone().setY(1.6), flat.clone().normalize());
+      sightRay.far = Math.max(dist, 0.01);
       const blocked = dist > 0.2 && sightRay.intersectObjects(walls, false).length > 0;
-      stalker.update(delta, here, !blocked);
+
+      if (stalker) stalker.update(delta, here, !blocked);
+      if (jack) jack.update(delta, here, !blocked);
       hunt.update(delta, here);
-      const pressure = stalker.alive ? stalker.pressure(here) : 0;
+
+      const pressure = enemy.alive ? enemy.pressure(here) : 0;
       setMusicIntensity(pressure);
-      hud.update(hunt.hp, hunt.cells, hunt.extractionOpen, pressure, stalker.state);
+      hud.update(hunt.hp, hunt.cells, hunt.extractionOpen, pressure,
+                 stalker ? stalker.state : cling && cling.active ? "ceiling" : "prowl");
       if (hunt.outcome !== "playing") hud.showEnd(hunt.outcome === "won", hunt.cells);
     }
     blaster.update(delta);

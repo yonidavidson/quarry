@@ -14,6 +14,9 @@ export const TEXTURES = {
 export const MODELS = {
   /** The Stalker — rigged biped, with its own walk/run clips baked in. */
   stalker: `${GEN}/cms4fiv3a008x2pqlshvq5jnp/character-rigged-a2-glb`,
+  /** Jack, for when the AI wears him — the player's own body comes from the
+   *  character manifest instead (public/assets/meshy-character.json). */
+  jack: `${GEN}/cms4fbaky009f2ens0f1kmmbi/rigged-character.glb`,
 } as const;
 
 export const AUDIO = {

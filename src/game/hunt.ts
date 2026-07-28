@@ -16,9 +16,16 @@ const CELL_SPOTS: Array<[number, number, number]> = [
   [34, 1, -34], [-24, 1, -34], [46, 7, 26], [4, 1, -6],
 ];
 
+export interface HuntOpts {
+  maxHp: number;
+  /** Cells needed to open extraction. 0 = the beast, which wins by killing. */
+  needCells: number;
+}
+
 export class Hunt {
-  hp = 5;
-  maxHp = 5;
+  hp: number;
+  maxHp: number;
+  needCells: number;
   cells = 0;
   outcome: Outcome = "playing";
   extractionOpen = false;
@@ -28,8 +35,11 @@ export class Hunt {
 
   private scene: THREE.Scene;
 
-  constructor(scene: THREE.Scene) {
+  constructor(scene: THREE.Scene, opts: HuntOpts = { maxHp: 5, needCells: NEED_CELLS }) {
     this.scene = scene;
+    this.hp = opts.maxHp;
+    this.maxHp = opts.maxHp;
+    this.needCells = opts.needCells;
     const geo = new THREE.BoxGeometry(0.5, 0.9, 0.5);
     for (const [x, y, z] of CELL_SPOTS) {
       const mat = new THREE.MeshStandardMaterial({
@@ -86,7 +96,7 @@ export class Hunt {
       }
     }
 
-    this.extractionOpen = this.cells >= NEED_CELLS;
+    this.extractionOpen = this.needCells > 0 && this.cells >= this.needCells;
     const padMat = this.pad.material as THREE.MeshStandardMaterial;
     padMat.emissive.setHex(this.extractionOpen ? 0x2ad06a : 0x14202e);
     padMat.emissiveIntensity = this.extractionOpen ? 2.4 : 1;
@@ -94,6 +104,6 @@ export class Hunt {
     if (this.extractionOpen && player.distanceTo(EXTRACTION) < 5.5) this.outcome = "won";
   }
 
-  /** True when the Stalker is dead — the other way to win. */
-  stalkerDown(): void { if (this.outcome === "playing") this.outcome = "won"; }
+  /** The other hunter is dead — the win both sides share. */
+  foeDown(): void { if (this.outcome === "playing") this.outcome = "won"; }
 }
