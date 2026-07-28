@@ -14,6 +14,9 @@ import RAPIER from "@dimforge/rapier3d-compat";
 import type { CharacterController } from "../controllers/character/character-controller.ts";
 import type { PhysicsWorld } from "../controllers/shared/physics-world.ts";
 import { HALL } from "../world/complex.ts";
+import { AUDIO } from "../assets.ts";
+import { play } from "../audio.ts";
+import { sparkBurst } from "../fx/hits.ts";
 
 export type ClingState = "off" | "wall" | "ceiling";
 
@@ -38,11 +41,46 @@ export class Cling {
   private character: CharacterController;
   private solids: THREE.Object3D[];
 
-  constructor(physics: PhysicsWorld, character: CharacterController, solids: THREE.Object3D[]) {
+  // ── the moment of contact ──
+  // A grab that simply changes state reads as teleporting onto the wall. What
+  // sells it is that the body ARRIVES: the hands lead, the momentum is arrested
+  // visibly, and the body swings under the grip before it settles. The 2D game
+  // did exactly this — the catch swung harder the faster you flew in, then
+  // damped out (quarry-2d-final: grabAt / swayAmp) — and it is the single
+  // cheapest thing that makes a ledge feel grabbed rather than snapped to.
+  private swing = 0;          // amplitude, from the speed you arrived at
+  private swingT = 0;         // seconds since contact
+  private catching = 0;       // brief input lockout so contact reads as an event
+  private armL: THREE.Object3D | null = null;
+  private armR: THREE.Object3D | null = null;
+  private scene: THREE.Scene | null = null;
+
+  constructor(physics: PhysicsWorld, character: CharacterController, solids: THREE.Object3D[], scene?: THREE.Scene) {
     this.physics = physics;
     this.character = character;
     this.solids = solids;
+    this.scene = scene ?? null;
     this.ray.far = REACH;
+  }
+
+  /** Hand the body over once it loads, so the arms can reach for the surface. */
+  setBody(root: THREE.Object3D): void {
+    root.traverse((o) => {
+      const n = o.name.toLowerCase();
+      if (!/upperarm|shoulder|arm/.test(n)) return;
+      if (!this.armL && /l(eft)?($|[^a-z])/.test(n)) this.armL = o;
+      if (!this.armR && /r(ight)?($|[^a-z])/.test(n)) this.armR = o;
+    });
+  }
+
+  /** Additive arm pose — call AFTER the animation mixer writes its bones, or the
+   *  clip overwrites the reach every frame. The arms lift toward whatever the
+   *  body is holding, and lead it on the way in. */
+  poseArms(): void {
+    if (this.state === "off" || this.catching > 0.35) return;
+    const lift = this.state === "ceiling" ? -1.15 : -0.95;
+    if (this.armL) this.armL.rotation.x += lift;
+    if (this.armR) this.armR.rotation.x += lift;
   }
 
   get active(): boolean { return this.state !== "off"; }
@@ -72,10 +110,24 @@ export class Cling {
     this.state = "wall";
     this.normal.copy(normal);
     this.pos.copy(this.character.currPos);
+    this.contact(this.character.body.linvel());
     this.character.enabled = false;
     const body = this.character.body;
     body.setBodyType(RAPIER.RigidBodyType.KinematicPositionBased, true);
     body.setLinvel({ x: 0, y: 0, z: 0 }, true);
+  }
+
+  /** Everything that makes the grab an EVENT rather than a state change. */
+  private contact(v: { x: number; y: number; z: number }): void {
+    const speed = Math.hypot(v.x, v.y, v.z);
+    // arrive fast, swing hard — the amplitude is the evidence of your momentum
+    this.swing = THREE.MathUtils.clamp(speed / 9, 0.06, 0.42);
+    this.swingT = 0;
+    this.catching = 0.5;
+    play(AUDIO.step, 0.5, 0.55);                       // palms finding the surface
+    if (this.scene) {
+      sparkBurst(this.scene, this.pos.clone().add(new THREE.Vector3(0, 1.4, 0)), 0xbba98a, 9);
+    }
   }
 
   release(): void {
@@ -115,6 +167,7 @@ export class Cling {
         this.pos.copy(at); this.pos.y = CEIL_Y;
         this.normal.set(0, 0, 1);
         this.state = "ceiling";
+        this.contact(this.character.body.linvel());
         this.character.enabled = false;
         const body = this.character.body;
         body.setBodyType(RAPIER.RigidBodyType.KinematicPositionBased, true);
@@ -125,6 +178,11 @@ export class Cling {
       if (wall) this.grab(wall);
       return;
     }
+
+    if (this.catching > 0) this.catching -= dt;
+    this.swingT += dt;
+    // the catch owns the body for a beat — you do not start climbing mid-impact
+    if (this.catching > 0.34) { this.applyPose(yaw); return; }
 
     if (input.drop) { this.release(); return; }
 
@@ -156,13 +214,19 @@ export class Cling {
     this.pos.x = THREE.MathUtils.clamp(this.pos.x, -lim.x, lim.x);
     this.pos.z = THREE.MathUtils.clamp(this.pos.z, -lim.z, lim.z);
 
+    this.applyPose(yaw);
+  }
+
+  /** Position + the damped pendulum the contact set going. */
+  private applyPose(yaw: number): void {
     this.character.body.setNextKinematicTranslation({ x: this.pos.x, y: this.pos.y, z: this.pos.z });
     this.character.root.position.copy(this.pos);
     // hanging reads as hanging: inverted on the ceiling, face-in on a wall
+    const swing = Math.sin(this.swingT * 7.5) * this.swing * Math.exp(-this.swingT * 2.6);
     this.character.root.rotation.set(
-      this.state === "ceiling" ? Math.PI : 0,
+      (this.state === "ceiling" ? Math.PI : 0) + swing * 0.6,
       this.state === "ceiling" ? yaw : Math.atan2(-this.normal.x, -this.normal.z),
-      0,
+      swing,
     );
   }
 }

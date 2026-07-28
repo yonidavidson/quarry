@@ -265,7 +265,7 @@ async function boot(): Promise<void> {
 
   // Playing the beast: wall-climb and ceiling-crawl take the body off the
   // physics controller — see src/player/cling.ts.
-  const cling = asStalker ? new Cling(physics, character, walls) : null;
+  const cling = asStalker ? new Cling(physics, character, walls, scene) : null;
 
   // ...and you wear the beast, not Jack. The platform's character loader always
   // resolves the game's ONE generated character (Jack), so the second playable
@@ -283,6 +283,7 @@ async function boot(): Promise<void> {
       body.position.y = fit.modelOffsetY - box.min.y * sc;
       character.root.add(body);
       if (gltf.animations.length) beastAnim = new BodyAnim(body, gltf.animations);
+      cling?.setBody(body);        // so the arms can reach for the surface
     });
   }
 
@@ -465,6 +466,8 @@ async function boot(): Promise<void> {
     }
     // clinging to a wall or ceiling is holding on, not travelling
     beastAnim?.update(delta, character.currPos, { frozen: !!cling?.active });
+    // the reach layers ON TOP of the clip — before the mixer, the clip wins
+    cling?.poseArms();
 
     // ── the hunt ──
     const here = character.currPos;
