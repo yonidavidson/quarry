@@ -1,0 +1,9 @@
+:root { color-scheme: dark; }
+html, body { margin: 0; height: 100%; background: #080a14; overflow: hidden; }
+canvas#game { display: block; width: 100vw; height: 100dvh; }
+#hint {
+  position: fixed; left: 50%; bottom: 3dvh; transform: translateX(-50%);
+  font: 500 13px/1.4 ui-monospace, "SF Mono", Menlo, monospace;
+  letter-spacing: .08em; color: #8b929c; text-transform: uppercase;
+  pointer-events: none; text-shadow: 0 1px 3px #000;
+}
