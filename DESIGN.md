@@ -32,16 +32,22 @@ Concept image: _pending — the UI plan gate has not run yet; the character conc
 
 ## Build plan & status
 
-Now: ▶ 5. HUD + menu from the concept chain
+Now: ▶ 3. Play as the Stalker — the asymmetric half
 
 1. Boot, identity, and a walkable floor — ✅ → previewed
 2. Jack moves and shoots; the Stalker hunts — ✅ → previewed
-3. The complex — rooms, catwalks, vents, dark corners — ⬜ serial: main agent
-   (inline; sub-agent delegation not authorized in this session — see Modules)
+3. Play as the Stalker — the asymmetric half — ▶ main agent ([#75](https://github.com/yonidavidson/quarry/issues/75))
 4. The hunt loop: energy cells, extraction lift, win/lose, instant retry — ✅ → previewed
-5. HUD + menu from the concept chain — ▶ main agent (concept image rendering)
-6. 1v1 asymmetric online — ⬜
-7. Publish floors: post stack, music, world dressing — ⬜
+5. Screens: loader, title, side select, pause ([#77](https://github.com/yonidavidson/quarry/issues/77)) — ⬜ blocks #75's side select
+6. HUD sprite swap from the landed concept ([#78](https://github.com/yonidavidson/quarry/issues/78)) — ⬜
+7. 1v1 asymmetric online ([#83](https://github.com/yonidavidson/quarry/issues/83)) — ⬜ depends on #75
+8. World dressing — the ceiling the Stalker crosses ([#80](https://github.com/yonidavidson/quarry/issues/80)) — ⬜
+
+Open defects: [#76](https://github.com/yonidavidson/quarry/issues/76) physics panic ·
+[#79](https://github.com/yonidavidson/quarry/issues/79) phone budgets ·
+[#81](https://github.com/yonidavidson/quarry/issues/81) Stalker attack anims ·
+[#82](https://github.com/yonidavidson/quarry/issues/82) camera clips on pounce ·
+[#84](https://github.com/yonidavidson/quarry/issues/84) stray dashboard project
 
 A milestone is done only once its work reached a `genex preview` (`→ previewed`).
 After any break, resume from `Now:`.
@@ -77,7 +83,7 @@ Menu video: yes.
 
 | Asset | Kind | Status | Wired? |
 |---|---|---|---|
-| Concept + HUD mockup | image | generating (cms4fujmg00bm2ensvgzgdfqj) | n/a |
+| Concept + HUD mockup | image | landed (cms4fujmg00bm2ensvgzgdfqj) — confirms the sprites lane | n/a |
 | Jack — player character | character | landed (cms4fbaky009f2ens0f1kmmbi) | yes |
 | The Stalker — rigged hunter | creature | landed (cms4fiv3a008x2pqlshvq5jnp) | yes |
 | Complex floor — wet concrete | texture | landed | yes |
@@ -166,3 +172,9 @@ does not apply. Rows stay as the split to hand out the moment that changes.
 - 2026-07-28 — Links: the README and skills point at the permanent GitHub Pages
   URL, which redirects via `docs/index.html` to the world page. That file is the
   only place to edit when the game moves.
+- 2026-07-28 — Everything observed is now filed: #75–#84. The build plan above
+  points at them; the issues carry the plans. #47 (the 2D PixelLab pipeline) is
+  closed as obsolete — that art belongs to `quarry-2d-final`.
+- 2026-07-28 — The UI concept landed and settles the HUD lane as **sprites**:
+  etched-metal frames, hazard striping, a segmented orange threat meter. CSS
+  could not pass for it.
