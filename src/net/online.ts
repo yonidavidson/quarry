@@ -135,6 +135,49 @@ export class Online {
     this.mySide = map?.[room.id] ?? null;
   }
 
+  /**
+   * Tell a player they were hit. The VICTIM applies its own damage — that is the
+   * shooter-recipe rule, and it is what makes the numbers agree: each client is
+   * authoritative over its own health, so two clients can never disagree about
+   * how much you have left. `send` never echoes to the sender, so the shooter
+   * does not damage itself.
+   */
+  hit(targetId: string, damage: number): void {
+    this.session?.send("hit", { to: targetId, dmg: damage, seq: ++this.seq });
+  }
+
+  private seq = 0;
+  private seen = new Set<string>();
+
+  /** Wire the incoming-damage handler once the session exists. */
+  onHit(apply: (damage: number) => void): void {
+    const room = this.session;
+    if (!room || this.hitWired === room) return;
+    this.hitWired = room;
+    room.on("hit", (payload: unknown) => {
+      const m = payload as { to?: string; dmg?: number; seq?: number } | undefined;
+      if (!m || m.to !== room.id || typeof m.dmg !== "number") return;
+      // dedupe: a resend must not double-count
+      const key = `${m.seq}`;
+      if (this.seen.has(key)) return;
+      this.seen.add(key);
+      apply(m.dmg);
+    });
+  }
+  private hitWired: Session<NetState> | null = null;
+
+  /** True once any remote has published itself dead — the other way to win. */
+  foeIsDown(): boolean {
+    return this.remotes().some((r) => (r.raw.hp as number) <= 0);
+  }
+
+  /** Live opponents still connected — a 1v1 with nobody in it is not a match. */
+  get opponents(): number {
+    const room = this.session;
+    if (!room) return 0;
+    return Math.max(0, room.activePlayers.size - 1);
+  }
+
   /** Every remote in the room, already smoothed — draw these directly. */
   remotes(): Array<{ id: string; side: Side | null; state: NetState; raw: NetState }> {
     const room = this.session;

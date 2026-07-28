@@ -322,20 +322,34 @@ async function boot(): Promise<void> {
     if (hunt.outcome !== "playing" || screens.current !== "playing") return;
     // from a hang, a click is the dive — the AI's pounce, in the player's hands
     if (asStalker && cling?.state === "ceiling") { cling.pounce(followCam.azimuthAngle); return; }
+    hud.pulseCrosshair();
+    // Online the opponent is a person, not an AI — the AI handles are null, and
+    // dereferencing them here is what made attacking throw and do nothing at all.
+    const targets = online
+      ? [...remoteBodies.entries()]
+      : asStalker
+        ? (jack ? [["ai", jack.root] as const] : [])
+        : (stalker ? [["ai", stalker.root] as const] : []);
+
     if (asStalker) {
       // claws: short reach, heavy hit, no ammo
-      const target = jack!;
-      hud.pulseCrosshair();
-      if (target.alive && character.currPos.distanceTo(target.position) < 4.2) {
-        target.takeHit(2);
+      for (const [id, body] of targets) {
+        const at = body instanceof THREE.Object3D ? body.position : body;
+        if (character.currPos.distanceTo(at) > 4.2) continue;
         play(AUDIO.claw, 0.8);
-        if (!target.alive) hunt.foeDown();
+        if (id === "ai") { jack!.takeHit(2); if (!jack!.alive) hunt.foeDown(); }
+        else online!.hit(id, 2);          // the VICTIM applies it — see net/online.ts
+        break;
       }
     } else {
-      hud.pulseCrosshair();
       const from = handBone ? (handBone as THREE.Object3D).getWorldPosition(handPos) : undefined;
-      if (blaster.fire([stalker!.root], walls, from)) stalker!.takeHit(1);
-      if (!stalker!.alive) hunt.foeDown();
+      const meshes = targets.map(([, b]) => b as THREE.Object3D);
+      const struck = blaster.fireAt(meshes, walls, from);
+      if (struck) {
+        const entry = targets.find(([, b]) => struck === b || (b as THREE.Object3D).getObjectById(struck.id));
+        if (entry?.[0] === "ai") { stalker!.takeHit(1); if (!stalker!.alive) hunt.foeDown(); }
+        else if (entry) online!.hit(entry[0], 1);
+      }
     }
   });
 
@@ -488,6 +502,14 @@ async function boot(): Promise<void> {
           cling?.active ? 1 : character.isOnGround ? 0 : 2,
         );
         online.reconcileSides();
+        online.onHit((d) => hurt(d));
+        // you win when the other seat publishes itself dead
+        if (online.foeIsDown()) hunt.foeDown();
+        // ...and a 1v1 with nobody in it is not a match. Without this the last
+        // player left stands in a live room alone, forever.
+        if (online.opponents === 0 && hunt.outcome === "playing") {
+          hunt.abandon();
+        }
         for (const r of online.remotes()) {
           const body = remoteBody(r.id, r.side);
           if (!body) continue;
@@ -506,7 +528,7 @@ async function boot(): Promise<void> {
       if (asStalker && enemy) hud.setInRange(enemy.alive && here.distanceTo(enemy.position) < 4.2);
       hud.update(hunt.hp, hunt.cells, hunt.extractionOpen, pressure,
                  stalker ? stalker.state : "prowl");
-      if (hunt.outcome !== "playing") hud.showEnd(hunt.outcome === "won", hunt.cells, hunt.winReason, asStalker);
+      if (hunt.outcome !== "playing") hud.showEnd(hunt.outcome === "won", hunt.cells, hunt.winReason, asStalker, hunt.outcome === "abandoned");
     }
     blaster.update(delta);
     startMusic();

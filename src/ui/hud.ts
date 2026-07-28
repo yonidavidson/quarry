@@ -118,7 +118,13 @@ export class Hud {
 
   /** The headline has to match how the run actually ended — reporting a cell
    *  count after a kill reads as a game that did not notice what you did. */
-  showEnd(won: boolean, cells: number, reason: WinReason, asStalker: boolean): void {
+  showEnd(won: boolean, cells: number, reason: WinReason, asStalker: boolean, abandoned = false): void {
+    if (abandoned) {
+      this.endEl.className = "end";
+      this.endEl.innerHTML = `<h1>they left</h1><p>the hunt needs two</p><p>press R to go again</p>`;
+      this.el.appendChild(this.endEl);
+      return;
+    }
     this.endEl.className = `end ${won ? "won" : "lost"}`;
     const head = !won ? (asStalker ? "put down" : "hunted down")
       : reason === "kill" ? (asStalker ? "prey taken" : "it's dead")

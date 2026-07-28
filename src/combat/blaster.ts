@@ -30,7 +30,13 @@ export class Blaster {
 
   /** @returns true when the shot connected with `targets`. */
   fire(targets: THREE.Object3D[], solids: THREE.Object3D[], drawFrom?: THREE.Vector3): boolean {
-    if (this.cooldown > 0) return false;
+    return !!this.fireAt(targets, solids, drawFrom);
+  }
+
+  /** @returns the root that was struck, or null. Online needs to know WHICH
+   *  player was hit, not merely that something was. */
+  fireAt(targets: THREE.Object3D[], solids: THREE.Object3D[], drawFrom?: THREE.Vector3): THREE.Object3D | null {
+    if (this.cooldown > 0) return null;
     this.cooldown = COOLDOWN;
 
     const origin = new THREE.Vector3();
@@ -53,7 +59,7 @@ export class Blaster {
     this.muzzle.intensity = 7;
     play(AUDIO.blaster, 0.55, 0.95 + Math.random() * 0.1);
 
-    return !!hit && !blocked;
+    return hit && !blocked ? hit.object : null;
   }
 
   private addTracer(from: THREE.Vector3, to: THREE.Vector3): void {

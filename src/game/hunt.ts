@@ -7,7 +7,7 @@ import { play } from "../audio.ts";
 export const NEED_CELLS = 5;
 export const EXTRACTION = new THREE.Vector3(58, 2, 0); // matches the bay platform
 
-export type Outcome = "playing" | "won" | "lost";
+export type Outcome = "playing" | "won" | "lost" | "abandoned";
 /** HOW the run ended — the end screen has to say something true. */
 export type WinReason = "kill" | "extract" | null;
 
@@ -109,6 +109,9 @@ export class Hunt {
       this.winReason = "extract";
     }
   }
+
+  /** The opponent left. Not a win and not a loss — say so rather than pretending. */
+  abandon(): void { if (this.outcome === "playing") this.outcome = "abandoned"; }
 
   /** The other hunter is dead — the win both sides share. */
   foeDown(): void {
