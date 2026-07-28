@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>QUARRY — Skeletal Prototype</title>
+<style>
+body{margin:0;background:#0a080a;overflow:hidden;display:flex;justify-content:center;align-items:center;height:100vh;flex-direction:column;font-family:monospace}
+#c{border:1px solid #1a181a;image-rendering:pixelated}
+#info{color:#6a6a5a;font-size:13px;margin-top:10px}
+#fps{position:fixed;bottom:8px;right:10px;color:#3a3840;font-size:11px}
+</style>
+</head>
+<body>
+<canvas id="c" width="800" height="540"></canvas>
+<div id="info">LOADING...</div>
+<div id="fps"></div>
+<script>
+const canvas = document.getElementById("c");
+const ctx = canvas.getContext("2d");
+const info = document.getElementById("info");
+const fpsEl = document.getElementById("fps");
+
+// ── Pixel-art background ──────────────────────────────────────
+function drawBg() {
+  ctx.imageSmoothingEnabled = false;
+  const grad = ctx.createLinearGradient(0,0,0,540);
+  grad.addColorStop(0,"#0a0812"); grad.addColorStop(0.3,"#141020"); grad.addColorStop(1,"#181625");
+  ctx.fillStyle = grad; ctx.fillRect(0,0,800,540);
+
+  // Wall panels
+  for (let y=200;y<540;y+=32) {
+    ctx.fillStyle = "#1e1c26";
+    ctx.fillRect(0,y,800,1);
+    for (let x=0;x<800;x+=48) {
+      ctx.fillStyle = "#282630";
+      ctx.fillRect(x+22,y+13,3,3);
+    }
+  }
+
+  // Floor
+  ctx.fillStyle = "#282628";
+  ctx.fillRect(0,420,800,120);
+  ctx.fillStyle = "#3a3838";
+  ctx.fillRect(0,420,800,3);
+  for (let x=0;x<800;x+=6) {
+    ctx.fillStyle = "#222026";
+    ctx.fillRect(x+1,423,4,117);
+  }
+
+  // Pipe
+  ctx.fillStyle = "#3a3845";
+  ctx.fillRect(760,0,36,540);
+  ctx.fillStyle = "#4a4855";
+  ctx.fillRect(756,0,4,540);
+  ctx.fillRect(796,0,4,540);
+  for (let y=60;y<400;y+=80) {
+    ctx.fillStyle = "#5a5865";
+    ctx.fillRect(748,y-4,60,8);
+  }
+
+  // Light glow
+  const g = ctx.createRadialGradient(250,150,10,250,150,150);
+  g.addColorStop(0,"rgba(255,230,180,0.04)");
+  g.addColorStop(1,"rgba(255,230,180,0)");
+  ctx.fillStyle = g; ctx.fillRect(0,0,500,300);
+
+  // Lamp
+  ctx.fillStyle = "#8a7850";
+  ctx.fillRect(244,138,12,12);
+  ctx.fillStyle = "#a09060";
+  ctx.fillRect(240,150,20,3);
+  ctx.fillStyle = "#6a5830";
+  ctx.fillRect(248,128,4,10);
+}
+
+// ── Bone system ───────────────────────────────────────────────
+// Positions stored as arrays: [x, y] normalized (0,0 = character center, y-up)
+// During rendering, we scale and offset to canvas position.
+
+const PARTS = {
+  head:     { parent:"neck",     len:16, col:"#d4a574", w:18 },
+  neck:     { parent:"torso",    len:10, col:"#d4a574", w:10 },
+  torso:    { parent:"hip",      len:50, col:"#4a6741", w:16 },
+  hip:      { parent:null,       len:0,  col:null,      w:0  },
+  uArmL:    { parent:"torso",    len:28, col:"#4a6741", w:9  },
+  fArmL:    { parent:"uArmL",    len:28, col:"#d4a574", w:8  },
+  handL:    { parent:"fArmL",    len:10, col:"#d4a574", w:6  },
+  uArmR:    { parent:"torso",    len:28, col:"#4a6741", w:9  },
+  fArmR:    { parent:"uArmR",    len:28, col:"#d4a574", w:8  },
+  handR:    { parent:"fArmR",    len:10, col:"#d4a574", w:6  },
+  uLegL:    { parent:"hip",      len:34, col:"#3a4a2a", w:11 },
+  lLegL:    { parent:"uLegL",    len:34, col:"#3a4a2a", w:9  },
+  footL:    { parent:"lLegL",    len:14, col:"#2a1a0a", w:7  },
+  uLegR:    { parent:"hip",      len:34, col:"#3a4a2a", w:11 },
+  lLegR:    { parent:"uLegR",    len:34, col:"#3a4a2a", w:9  },
+  footR:    { parent:"lLegR",    len:14, col:"#2a1a0a", w:7  },
+};
+
+const PART_KEYS = Object.keys(PARTS);
+const ROOT = "hip";
+
+// Animation keyframes: each keyframe stores { partName: angleDeg } for all parts.
+// Angle 0 = parent direction, positive = CCW (in screen coords where y-down).
+// The "bind pose" defines parent directions: 
+//   hip → torso: up (270° in screen)
+//   torso → head/neck: continue up
+//   torso → uArmL: -45° (slightly down-left)  
+//   torso → uArmR: 45° (slightly down-right)
+//   hip → uLegL: 90° (down)
+//   hip → uLegR: 90° (down)
+
+// Actually, let me use angles relative to the parent's direction where:
+// 0 = same direction as parent, positive = CCW rot, negative = CW rot
+
+// For the bind pose (character standing upright, arms slightly angled, legs straight):
+const BIND = {
+  neck:0, head:0,
+  uArmL:-160, fArmL:0, handL:0,
+  uArmR:160, fArmR:0, handR:0,
+  uLegL:0, lLegL:0, footL:90,
+  uLegR:0, lLegR:0, footR:90,
+  torso:0,
+};
+
+// For spine angle = 0 means upright (pointing up from hip).
+// Let me use: -90° from horizontal = upward in screen coords
+
+// Actually I'll use a completely different approach. Each bone has a parent.
+// I store the bone's position relative to the parent as an angle offset and length.
+// The parent's world angle is computed by accumulating all parent angles.
+// Angle convention: 0 = right, 90 = down, 180 = left, 270 = up (standard screen coords)
+
+// But this is getting complex. Let me just hardcode positions for each keyframe.
+
+// NEW APPROACH: Each keyframe defines absolute screen-space positions for each part
+// relative to the character center. Then we lerp positions and draw.
+
+const CX = 400, CY = 370; // character root on screen
+
+// Define each pose as { part: [dx, dy] } where dx,dy offset from character center (CY goes UP)
+// This is the bind pose (standing)
+function bindPose() {
+  return {
+    hip:     [0, 0],
+    torso:   [0, -55],
+    neck:    [0, -77],
+    head:    [1, -92],
+    uArmL:   [-12, -62],
+    fArmL:   [-30, -85],
+    handL:   [-38, -106],
+    uArmR:   [12, -62],
+    fArmR:   [30, -85],
+    handR:   [38, -106],
+    uLegL:   [-8, 32],
+    lLegL:   [-8, 64],
+    footL:   [-18, 78],
+    uLegR:   [8, 32],
+    lLegR:   [8, 64],
+    footR:   [18, 78],
+  };
+}
+
+// Animation data: array of { pose, duration } where pose is relative to bind pose
+function animData(keys) {
+  return keys.map(k => {
+    const p = {};
+    Object.keys(k).forEach(part => { p[part] = k[part]; });
+    return p;
+  });
+}
+
+// Absolute pose = bind + offset
+function applyOffsets(offsets) {
+  const bp = bindPose();
+  const res = {};
+  Object.keys(bp).forEach(part => {
+    const off = offsets[part] || [0,0];
+    res[part] = [bp[part][0] + off[0], bp[part][1] + off[1]];
+  });
+  return res;
+}
+
+function lerpPose(pA, pB, t) {
+  const res = {};
+  Object.keys(pA).forEach(part => {
+    res[part] = [
+      pA[part][0] + (pB[part][0] - pA[part][0]) * t,
+      pA[part][1] + (pB[part][1] - pA[part][1]) * t,
+    ];
+  });
+  return res;
+}
+
+// ── Animation definitions ─────────────────────────────────────
+const IDLE = animData([
+  { torso:[0,0], head:[0,0], uArmL:[1,-3], fArmL:[2,-5], handL:[3,-6],
+    uArmR:[-1,-3], fArmR:[-2,-5], handR:[-3,-6],
+    uLegL:[0,1], lLegL:[0,2], footL:[0,3],
+    uLegR:[0,-1], lLegR:[0,-2], footR:[0,-3] },
+  { torso:[1,-1], head:[2,-2], uArmL:[0,-2], fArmL:[1,-3], handL:[2,-4],
+    uArmR:[0,-2], fArmR:[-1,-3], handR:[-2,-4],
+    uLegL:[1,0], lLegL:[1,1], footL:[1,1],
+    uLegR:[0,0], lLegR:[0,0], footR:[0,0] },
+  { torso:[0,0], head:[0,0], uArmL:[1,-3], fArmL:[2,-5], handL:[3,-6],
+    uArmR:[-1,-3], fArmR:[-2,-5], handR:[-3,-6],
+    uLegL:[0,1], lLegL:[0,2], footL:[0,3],
+    uLegR:[0,-1], lLegR:[0,-2], footR:[0,-3] },
+  { torso:[-1,-1], head:[-1,-1], uArmL:[2,-4], fArmL:[3,-6], handL:[4,-7],
+    uArmR:[-2,-4], fArmR:[-3,-6], handR:[-4,-7],
+    uLegL:[0,0], lLegL:[0,0], footL:[0,0],
+    uLegR:[1,0], lLegR:[1,1], footR:[1,1] },
+]);
+
+const RUN = animData([
+  { torso:[5,-4], head:[8,-6], uArmL:[-8,5], fArmL:[-18,12], handL:[-24,18],
+    uArmR:[8,-5], fArmR:[18,-15], handR:[24,-22],
+    uLegL:[-5,10], lLegL:[-8,22], footL:[-12,32],
+    uLegR:[5,-8], lLegR:[8,-18], footR:[12,-26] },
+  { torso:[2,-2], head:[4,-3], uArmL:[-3,2], fArmL:[-6,5], handL:[-8,8],
+    uArmR:[3,-2], fArmR:[6,-5], handR:[8,-8],
+    uLegL:[-2,5], lLegL:[-3,12], footL:[-5,18],
+    uLegR:[2,-4], lLegR:[3,-10], footR:[5,-14] },
+  { torso:[-5,-4], head:[-8,-6], uArmL:[8,-5], fArmL:[18,-15], handL:[24,-22],
+    uArmR:[-8,5], fArmR:[-18,12], handR:[-24,18],
+    uLegL:[5,-8], lLegL:[8,-18], footL:[12,-26],
+    uLegR:[-5,10], lLegR:[-8,22], footR:[-12,32] },
+  { torso:[-2,-2], head:[-4,-3], uArmL:[3,-2], fArmL:[6,-5], handR:[8,-8],
+    uArmR:[-3,2], fArmR:[-6,5], handL:[-8,8],
+    uLegL:[2,-4], lLegL:[3,-10], footL:[5,-14],
+    uLegR:[-2,5], lLegR:[-3,12], footR:[-5,18] },
+]);
+
+const CLIMB = animData([
+  { torso:[-10,-20], head:[-15,-28], uArmL:[-12,-25], fArmL:[-18,-40], handL:[-22,-52],
+    uArmR:[12,-25], fArmR:[18,-40], handR:[22,-52],
+    uLegL:[5,15], lLegL:[8,30], footL:[10,40],
+    uLegR:[-5,15], lLegR:[-8,30], footR:[-10,40] },
+  { torso:[-5,-12], head:[-8,-18], uArmL:[-8,-18], fArmL:[-14,-32], handL:[-18,-42],
+    uArmR:[8,-18], fArmR:[14,-32], handR:[18,-42],
+    uLegL:[3,10], lLegL:[5,22], footL:[6,30],
+    uLegR:[-3,10], lLegR:[-5,22], footR:[-6,30] },
+  { torso:[5,-5], head:[8,-8], uArmL:[-5,-10], fArmL:[-10,-22], handL:[-14,-30],
+    uArmR:[5,-10], fArmR:[10,-22], handR:[14,-30],
+    uLegL:[0,5], lLegL:[0,15], footL:[0,22],
+    uLegR:[0,5], lLegR:[0,15], footR:[0,22] },
+  { torso:[10,-2], head:[15,-4], uArmL:[-2,-5], fArmL:[-6,-14], handL:[-8,-20],
+    uArmR:[2,-5], fArmR:[6,-14], handR:[8,-20],
+    uLegL:[-3,2], lLegL:[-5,8], footL:[-6,14],
+    uLegR:[3,2], lLegR:[5,8], footR:[6,14] },
+]);
+
+const CRAWL = animData([
+  { torso:[5,35], head:[8,45], uArmL:[10,28], fArmL:[18,22], handL:[24,18],
+    uArmR:[10,28], fArmR:[18,22], handR:[24,18],
+    uLegL:[-5,38], lLegL:[-8,42], footL:[-12,44],
+    uLegR:[-5,38], lLegR:[-8,42], footR:[-12,44] },
+  { torso:[4,30], head:[6,38], uArmL:[8,24], fArmL:[15,18], handL:[20,14],
+    uArmR:[8,24], fArmR:[15,18], handR:[20,14],
+    uLegL:[-3,34], lLegL:[-5,38], footL:[-8,40],
+    uLegR:[-3,34], lLegR:[-5,38], footR:[-8,40] },
+  { torso:[3,28], head:[4,35], uArmL:[6,22], fArmL:[12,16], handL:[16,12],
+    uArmR:[6,22], fArmR:[12,16], handR:[16,12],
+    uLegL:[-2,32], lLegL:[-3,36], footL:[-5,38],
+    uLegR:[-2,32], lLegR:[-3,36], footR:[-5,38] },
+  { torso:[2,32], head:[3,42], uArmL:[5,26], fArmL:[10,20], handL:[14,16],
+    uArmR:[5,26], fArmR:[10,20], handR:[14,16],
+    uLegL:[-2,36], lLegL:[-4,40], footL:[-6,42],
+    uLegR:[-2,36], lLegR:[-4,40], footR:[-6,42] },
+]);
+
+const ANIMS = [
+  { name:"IDLE",  keys:IDLE,  switchEvery:3.5 },
+  { name:"RUN",   keys:RUN,   switchEvery:3 },
+  { name:"CLIMB", keys:CLIMB, switchEvery:3.5 },
+  { name:"CRAWL", keys:CRAWL, switchEvery:3 },
+];
+
+// ── Rendering ─────────────────────────────────────────────────
+function drawCharacter(pose, scale) {
+  // Convert relative positions to canvas positions
+  const p = {};
+  Object.keys(pose).forEach(part => {
+    p[part] = [CX + pose[part][0] * scale, CY - pose[part][1] * scale];
+  });
+
+  // Drawing order: back to front
+  // Right arm (behind body)
+  drawLine(p.uArmR, p.fArmR, "#4a6741", 9*scale);
+  drawLine(p.fArmR, p.handR, "#d4a574", 8*scale);
+  drawJoint(p.handR, "#d4a574", 3*scale);
+
+  // Left arm (behind part)
+  drawLine(p.uArmL, p.fArmL, "#4a6741", 9*scale);
+  drawLine(p.fArmL, p.handL, "#d4a574", 8*scale);
+  drawJoint(p.handL, "#d4a574", 3*scale);
+
+  // Right leg
+  drawLine(p.uLegR, p.lLegR, "#3a4a2a", 11*scale);
+  drawLine(p.lLegR, p.footR, "#3a4a2a", 9*scale);
+  drawLine(p.footR, [p.footR[0]+14*scale, p.footR[1]], "#2a1a0a", 7*scale);
+
+  // Left leg
+  drawLine(p.uLegL, p.lLegL, "#3a4a2a", 11*scale);
+  drawLine(p.lLegL, p.footL, "#3a4a2a", 9*scale);
+  drawLine(p.footL, [p.footL[0]+14*scale, p.footL[1]], "#2a1a0a", 7*scale);
+
+  // Torso
+  drawLine(p.hip, p.torso, "#4a6741", 16*scale);
+  drawLine(p.torso, p.neck, "#4a6741", 14*scale);
+
+  // Belt
+  ctx.fillStyle = "#3a4a2a";
+  ctx.fillRect(p.hip[0]-10*scale, p.hip[1]-2*scale, 20*scale, 4*scale);
+  ctx.fillStyle = "#8a7a50";
+  ctx.fillRect(p.hip[0]-3*scale, p.hip[1]-1*scale, 6*scale, 4*scale);
+
+  // Neck
+  drawLine(p.neck, p.neck, "#d4a574", 4*scale);
+
+  // Head
+  drawJoint(p.head, "#d4a574", 10*scale);
+  // Hair (top half of head circle)
+  ctx.fillStyle = "#3a3020";
+  ctx.beginPath();
+  ctx.arc(p.head[0], p.head[1]-4*scale, 9*scale, Math.PI*1.1, Math.PI*1.9);
+  ctx.fill();
+
+  // Shadow
+  ctx.fillStyle = "rgba(0,0,0,0.2)";
+  ctx.beginPath();
+  ctx.ellipse(CX, CY+18*scale, 35*scale, 8*scale, 0, 0, Math.PI*2);
+  ctx.fill();
+}
+
+function drawLine(a, b, color, w) {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = w;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(a[0], a[1]);
+  ctx.lineTo(b[0], b[1]);
+  ctx.stroke();
+}
+
+function drawJoint(pos, color, r) {
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(pos[0], pos[1], r, 0, Math.PI*2);
+  ctx.fill();
+}
+
+// ── Main loop ─────────────────────────────────────────────────
+let animIdx = 0;
+let animT = 0;
+let prevTime = performance.now();
+
+function frame(now) {
+  const dt = Math.min((now - prevTime) / 1000, 0.05);
+  prevTime = now;
+
+  const def = ANIMS[animIdx];
+  animT += dt * 1.0;
+  if (animT >= def.switchEvery) {
+    animT = 0;
+    animIdx = (animIdx + 1) % ANIMS.length;
+  }
+
+  // Compute interpolated pose
+  const keys = def.keys;
+  const t = animT / def.switchEvery;
+  const framePos = t * keys.length;
+  const f0 = Math.floor(framePos) % keys.length;
+  const f1 = (f0 + 1) % keys.length;
+  const blend = framePos - Math.floor(framePos);
+
+  const p0 = applyOffsets(keys[f0]);
+  const p1 = applyOffsets(keys[f1]);
+  const pose = lerpPose(p0, p1, blend);
+
+  // Draw
+  drawBg();
+  drawCharacter(pose, 1.25);
+  info.textContent = `Skeletal ${def.name}  frame ${f0}→${f1}  ${(blend*100).toFixed(0)}%`;
+  requestAnimationFrame(frame);
+}
+
+info.textContent = "RUNNING...";
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

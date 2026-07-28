@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Mesh Morph – Clean</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #2a3a2a; display: flex; justify-content: center; align-items: center; min-height: 100vh; flex-wrap: wrap; gap: 10px; }
+  canvas { image-rendering: pixelated; border: 1px solid rgba(255,255,255,0.2); }
+  #info { position: fixed; bottom: 8px; left: 8px; color: #aaa; font: 13px monospace; background: #000c; padding: 6px 12px; border-radius: 4px; }
+</style></head><body>
+<canvas id="warpC"></canvas>
+<div id="info">Loading...</div>
+<script>
+const C = document.getElementById('warpC');
+const ctx = C.getContext('2d');
+const info = document.getElementById('info');
+
+const FW = 252, FH = 223; // frame size in strip
+const BX = 112, BY = 55, BW = 36, BH = 126; // char bounds
+
+C.width = BW * 6;  // 216
+C.height = BH * 6; // 756
+
+let spriteImg = new Image();
+
+fetch('/index.html').then(r => r.text()).then(html => {
+  const m = html.match(/const HUMAN_PNG = "([^"]+)"/);
+  if (m) { spriteImg.onload = init; spriteImg.src = m[1]; }
+});
+
+// ── Grab a clean frame, cropped to character area ──────────────
+function grabFrame(idx) {
+  const colsPerRow = Math.floor(spriteImg.width / FW);
+  const fx = (idx % colsPerRow) * FW + BX;
+  const fy = Math.floor(idx / colsPerRow) * FH + BY;
+  const c = document.createElement('canvas');
+  c.width = BW; c.height = BH; // crop to char area
+  const cx = c.getContext('2d');
+  cx.drawImage(spriteImg, fx, fy, BW, BH, 0, 0, BW, BH);
+
+  // Clean: zero out RGB where alpha is 0
+  const imgData = cx.getImageData(0, 0, BW, BH);
+  for (let i = 0; i < imgData.data.length; i += 4) {
+    if (imgData.data[i + 3] < 10) {
+      imgData.data[i] = 0;
+      imgData.data[i + 1] = 0;
+      imgData.data[i + 2] = 0;
+      imgData.data[i + 3] = 0;
+    }
+  }
+  cx.putImageData(imgData, 0, 0);
+  return c;
+}
+
+// ── Mesh grid over character area ──────────────────────────────
+const COLS = 4, ROWS = 5; // small grid for speed
+const GRID = [];
+
+// Source vertices (in char-area coords)
+for (let r = 0; r < ROWS; r++) {
+  for (let c = 0; c < COLS; c++) {
+    GRID.push({
+      sx: (c / (COLS - 1)) * BW,
+      sy: (r / (ROWS - 1)) * BH,
+      tx: (c / (COLS - 1)) * BW, // target (initialized to same)
+      ty: (r / (ROWS - 1)) * BH,
+    });
+  }
+}
+
+// ── Block matching for each grid point ─────────────────────────
+function matchFlow(fromCanvas, toCanvas) {
+  const fCtx = fromCanvas.getContext('2d');
+  const tCtx = toCanvas.getContext('2d');
+  const from = fCtx.getImageData(0, 0, BW, BH);
+  const to = tCtx.getImageData(0, 0, BW, BH);
+  const fromD = from.data, toD = to.data;
+  const blockR = 3;
+  const searchR = 6;
+
+  for (const v of GRID) {
+    const absSx = v.sx;
+    const absSy = v.sy;
+
+    let bestDx = absSx, bestDy = absSy;
+    let bestCost = Infinity;
+
+    const x0 = Math.max(blockR, Math.round(absSx) - searchR);
+    const x1 = Math.min(BW - blockR - 1, Math.round(absSx) + searchR);
+    const y0 = Math.max(blockR, Math.round(absSy) - searchR);
+    const y1 = Math.min(BH - blockR - 1, Math.round(absSy) + searchR);
+
+    for (let ty = y0; ty <= y1; ty++) {
+      for (let tx = x0; tx <= x1; tx++) {
+        let cost = 0;
+        for (let dy = -blockR; dy <= blockR; dy++) {
+          for (let dx = -blockR; dx <= blockR; dx++) {
+            const si = ((Math.round(absSy) + dy) * BW + (Math.round(absSx) + dx)) * 4;
+            const ti = ((ty + dy) * BW + (tx + dx)) * 4;
+            if (fromD[si + 3] > 30) {
+              cost += Math.abs(fromD[si] - toD[ti])
+                    + Math.abs(fromD[si+1] - toD[ti+1])
+                    + Math.abs(fromD[si+2] - toD[ti+2]);
+            }
+          }
+        }
+        if (cost < bestCost) { bestCost = cost; bestDx = tx; bestDy = ty; }
+      }
+    }
+    v.tx = bestDx;
+    v.ty = bestDy;
+  }
+}
+
+// ── Draw warped frame ─────────────────────────────────────────
+function drawWarp(srcCanvas, pairIdx, t) {
+  const scale = C.width / BW;
+
+  // Interpolate vertex positions
+  const verts = GRID.map(v => ({
+    sx: v.sx, sy: v.sy,
+    dx: v.sx + (v.tx - v.sx) * t,
+    dy: v.sy + (v.ty - v.sy) * t,
+  }));
+
+  ctx.fillStyle = '#2a3a2a';
+  ctx.fillRect(0, 0, C.width, C.height);
+
+  // Draw each quad as 2 triangles
+  for (let r = 0; r < ROWS - 1; r++) {
+    for (let c = 0; c < COLS - 1; c++) {
+      const i00 = r * COLS + c;
+      const i10 = r * COLS + c + 1;
+      const i01 = (r + 1) * COLS + c;
+      const i11 = (r + 1) * COLS + c + 1;
+
+      drawTri(srcCanvas, verts[i00], verts[i10], verts[i01], scale);
+      drawTri(srcCanvas, verts[i10], verts[i11], verts[i01], scale);
+    }
+  }
+}
+
+function drawTri(srcCanvas, a, b, c, scale) {
+  const src = srcCanvas;
+  const sx = a.sx, sy = a.sy, adx = a.dx * scale, ady = a.dy * scale;
+  const bx = b.sx, by = b.sy, bdx = b.dx * scale, bdy = b.dy * scale;
+  const cx = c.sx, cy = c.sy, cdx = c.dx * scale, cdy = c.dy * scale;
+
+  // Affine transform: maps source triangle to destination triangle
+  const dax = bx - sx, day = by - sy;
+  const dbx = cx - sx, dby = cy - sy;
+  const ddx = bdx - adx, ddy = bdy - ady;
+  const dex = cdx - adx, dey = cdy - ady;
+
+  const det = dax * dby - day * dbx;
+  if (Math.abs(det) < 0.01) return;
+
+  const a11 = (ddx * dby - ddy * dbx) / det;
+  const a12 = (ddy * dax - ddx * day) / det;
+  const a21 = (dex * dby - dey * dbx) / det;
+  const a22 = (dey * dax - dex * day) / det;
+  const e = adx - a11 * sx - a12 * sy;
+  const f = ady - a21 * sx - a22 * sy;
+
+  // Clip to dest triangle in screen space
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(adx, ady);
+  ctx.lineTo(bdx, bdy);
+  ctx.lineTo(cdx, cdy);
+  ctx.closePath();
+  ctx.clip();
+
+  // Draw source image with transform
+  // setTransform maps source → dest
+  ctx.setTransform(a11, a21, a12, a22, e, f);
+  ctx.drawImage(src, 0, 0);
+
+  ctx.restore();
+}
+
+// ── Animation ──────────────────────────────────────────────────
+const RUN_FRAMES = [4,5,6,7,8,9,10,11];
+let canvases = [];
+let allFlows = []; // pre-computed flows between each consecutive pair
+let animTime = 0;
+
+function init() {
+  info.textContent = 'Grabbing frames...';
+  for (const idx of RUN_FRAMES) canvases.push(grabFrame(idx));
+
+  info.textContent = 'Computing motion flow (pre-compute)...';
+  for (let i = 0; i < canvases.length; i++) {
+    const next = (i + 1) % canvases.length;
+    matchFlow(canvases[i], canvases[next]);
+    // Copy the computed GRID state into a snapshot
+    allFlows.push(GRID.map(v => ({ tx: v.tx, ty: v.ty })));
+  }
+  info.textContent = `Pre-computed ${allFlows.length} flow maps. Animating...`;
+
+  startLoop();
+}
+
+function startLoop() {
+  let last = 0;
+  function frame(t) {
+    const dt = last ? (t - last) / 1000 : 1/60;
+    last = t;
+    animTime += dt * 2;
+
+    const total = RUN_FRAMES.length;
+    const pos = (animTime % total) / total;
+    const idx = Math.floor(pos * total);
+    const localT = (pos * total) - idx;
+    const pairIdx = idx % total;
+
+    // Restore GRID from pre-computed flow for this pair
+    const flow = allFlows[pairIdx];
+    for (let i = 0; i < GRID.length; i++) {
+      GRID[i].tx = flow[i].tx;
+      GRID[i].ty = flow[i].ty;
+    }
+
+    const srcCanvas = canvases[pairIdx];
+    drawWarp(srcCanvas, pairIdx, localT);
+
+    const nextIdx = (pairIdx + 1) % total;
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    ctx.font = '12px monospace';
+    ctx.fillText(`f${RUN_FRAMES[pairIdx]}→${RUN_FRAMES[nextIdx]} t=${localT.toFixed(2)}`, 4, 14);
+
+    setTimeout(frame, 16);
+  }
+  setTimeout(frame, 16);
+}
+</script>
+</body></html>

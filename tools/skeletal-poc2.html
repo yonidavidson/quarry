@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Skeletal v2 – Proper Proportions</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #222; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+  canvas { image-rendering: pixelated; image-rendering: crisp-edges; border: 1px solid #555; }
+</style></head><body>
+<canvas id="c"></canvas>
+<script>
+const C = document.getElementById('c');
+const ctx = C.getContext('2d');
+C.width = 1200; C.height = 700;
+
+// ── Load sprite strip from game data ───────────────────────────
+const spriteImg = new Image();
+let spriteReady = false;
+
+// Fetch HUMAN_PNG base64 from the game's index.html
+fetch('/index.html').then(r => r.text()).then(html => {
+  const m = html.match(/const HUMAN_PNG = "([^"]+)"/);
+  if (m) {
+    spriteImg.onload = () => { spriteReady = true; };
+    spriteImg.src = m[1];
+  }
+}).catch(() => {
+  // fallback: try global
+  if (typeof HUMAN_PNG !== 'undefined') {
+    spriteImg.onload = () => { spriteReady = true; };
+    spriteImg.src = HUMAN_PNG;
+  }
+});
+
+// ── Measurements from frame-0 pixel analysis ───────────────────
+// Frame: 252×223  Char: x=112..147(36px) y=55..180(126px)
+// Center: (129.5, 117.5) within frame
+// All bone offsets below are RELATIVE to that center (y-down).
+//
+// Landmarks:
+//   head center   (0, -50)
+//   neck          (0, -34)
+//   shoulders     (0, -30)   arms L@x=-13 R@+13
+//   torso center  (0,  -7)
+//   waist/hip     (0, +22)
+//   knee          (0, +44)
+//   ankle         (0, +60)
+//   char width    ±17
+
+const S = {
+  skin: '#d4a574', shirt: '#4a8c3f', pants: '#5c3a1e',
+  shoes: '#2a1a0e', hair: '#2a1a0e', belt: '#8b6914', eye: '#000',
+};
+
+const REST = {
+  head:  [ 0,-50], neck:  [ 0,-34], torso: [ 0, -7], hip:   [ 0, 22],
+  shL:   [-13,-28], elbL:  [-15,-13], wriL:  [-13, 3],
+  shR:   [ 13,-28], elbR:  [ 15,-13], wriR:  [ 13, 3],
+  hipL:  [ -5, 22], kneL:  [ -5, 44], ankL:  [ -4, 60],
+  hipR:  [  5, 22], kneR:  [  5, 44], ankR:  [  4, 60],
+};
+
+const BONES = Object.keys(REST);
+
+// ── Animations ─────────────────────────────────────────────────
+const IDLE = [
+  { dur: 0.5, off: { head:[0,-1], torso:[0,-1] } },
+  { dur: 0.5, off: { head:[0, 1], torso:[0, 1] } },
+];
+const RUN = [
+  { dur: 0.2, off: {
+    shL:[-2,-3], elbL:[-4,-3], wriL:[-5, 2], shR:[ 2, 3], elbR:[ 4, 3], wriR:[ 5,-2],
+    hipL:[ 1,-2], kneL:[ 3,-6], ankL:[ 4,-8], hipR:[-1, 2], kneR:[-3, 6], ankR:[-4, 8],
+  }},
+  { dur: 0.3, off: {
+    shL:[0,0],elbL:[0,0],wriL:[0,0],shR:[0,0],elbR:[0,0],wriR:[0,0],
+    hipL:[0,0],kneL:[0,0],ankL:[0,0],hipR:[0,0],kneR:[0,0],ankR:[0,0],
+  }},
+  { dur: 0.2, off: {
+    shL:[ 2, 3], elbL:[ 4, 3], wriL:[ 5,-2], shR:[-2,-3], elbR:[-4,-3], wriR:[-5, 2],
+    hipL:[-1, 2], kneL:[-3, 6], ankL:[-4, 8], hipR:[ 1,-2], kneR:[ 3,-6], ankR:[ 4,-8],
+  }},
+  { dur: 0.3, off: {
+    shL:[0,0],elbL:[0,0],wriL:[0,0],shR:[0,0],elbR:[0,0],wriR:[0,0],
+    hipL:[0,0],kneL:[0,0],ankL:[0,0],hipR:[0,0],kneR:[0,0],ankR:[0,0],
+  }},
+];
+const CLIMB = [
+  { dur: 0.25, off: { shL:[-2,1],elbL:[-4,0],wriL:[-5,4], shR:[2,2],elbR:[5,2],wriR:[7,-2], hipL:[-1,1],kneL:[-1,-3],ankL:[0,5], hipR:[1,2],kneR:[2,5],ankR:[3,-4] }},
+  { dur: 0.25, off: { shL:[0,0],elbL:[0,0],wriL:[0,0], shR:[0,0],elbR:[0,0],wriR:[0,0], hipL:[0,0],kneL:[0,0],ankL:[0,0], hipR:[0,0],kneR:[0,0],ankR:[0,0] }},
+  { dur: 0.25, off: { shL:[2,2],elbL:[5,2],wriL:[7,-2], shR:[-2,1],elbR:[-4,0],wriR:[-5,4], hipL:[1,2],kneL:[2,5],ankL:[3,-4], hipR:[-1,1],kneR:[-1,-3],ankR:[0,5] }},
+  { dur: 0.25, off: { shL:[0,0],elbL:[0,0],wriL:[0,0], shR:[0,0],elbR:[0,0],wriR:[0,0], hipL:[0,0],kneL:[0,0],ankL:[0,0], hipR:[0,0],kneR:[0,0],ankR:[0,0] }},
+];
+const CRAWL = [
+  { dur: 0.3, off: { shL:[-1,2],elbL:[-2,4],wriL:[-3,6], shR:[1,-1],elbR:[2,-2],wriR:[3,-3], hipL:[-1,1],kneL:[-2,0],ankL:[-2,-2], hipR:[1,0],kneR:[2,1],ankR:[2,4] }},
+  { dur: 0.2, off: { shL:[0,0],elbL:[0,0],wriL:[0,0], shR:[0,0],elbR:[0,0],wriR:[0,0], hipL:[0,0],kneL:[0,0],ankL:[0,0], hipR:[0,0],kneR:[0,0],ankR:[0,0] }},
+  { dur: 0.3, off: { shL:[1,-1],elbL:[2,-2],wriL:[3,-3], shR:[-1,2],elbR:[-2,4],wriR:[-3,6], hipL:[1,0],kneL:[2,1],ankL:[2,4], hipR:[-1,1],kneR:[-2,0],ankR:[-2,-2] }},
+  { dur: 0.2, off: { shL:[0,0],elbL:[0,0],wriL:[0,0], shR:[0,0],elbR:[0,0],wriR:[0,0], hipL:[0,0],kneL:[0,0],ankL:[0,0], hipR:[0,0],kneR:[0,0],ankR:[0,0] }},
+];
+
+// ── Drawing ────────────────────────────────────────────────────
+const SCALE = 3.5;
+const CX = C.width / 2;
+const CY = C.height / 2 + 30;
+
+function lerp(a, b, t) { return a + (b - a) * t; }
+
+function drawPose(offsets, beat, showRef) {
+  const pos = {};
+  for (const name of BONES) {
+    const rest = REST[name];
+    const off = offsets[name] || [0, 0];
+    const phase = Math.sin(beat * Math.PI * 2);
+    pos[name] = [rest[0] + off[0] * phase, rest[1] + off[1] * phase];
+  }
+
+  ctx.save();
+  ctx.translate(CX, CY);
+  ctx.scale(SCALE, SCALE);
+
+  // Draw reference sprite (frame 0) behind skeleton
+  if (showRef && spriteReady) {
+    ctx.globalAlpha = 0.4;
+    // Frame 0 is at (0,0) in the strip, size 252×223
+    // We need to translate to char center (129.5, 117.5)
+    ctx.drawImage(spriteImg, 0, 0, 252, 223, -129.5, -117.5, 252, 223);
+    ctx.globalAlpha = 1;
+  }
+
+  // Torso
+  ctx.fillStyle = S.shirt;
+  const t = pos.torso;
+  ctx.beginPath();
+  roundRect(t[0] - 11, t[1] - 16, 22, 32, 3);
+  ctx.fill();
+  // Belt
+  ctx.fillStyle = S.belt;
+  const h = pos.hip;
+  ctx.fillRect(t[0] - 12, h[1] - 3, 24, 4);
+  // Left arm
+  drawLimb(pos.shL, pos.elbL, pos.wriL, S.skin, 4, S.skin);
+  drawLimb(pos.shR, pos.elbR, pos.wriR, S.skin, 4, S.skin);
+  // Legs
+  drawLimb(pos.hipL, pos.kneL, pos.ankL, S.pants, 5, S.shoes);
+  drawLimb(pos.hipR, pos.kneR, pos.ankR, S.pants, 5, S.shoes);
+  // Neck
+  ctx.fillStyle = S.skin;
+  ctx.fillRect(pos.neck[0] - 4, pos.neck[1] - 3, 8, 8);
+  // Head
+  const hd = pos.head;
+  ctx.fillStyle = S.hair;
+  ctx.beginPath();
+  ctx.ellipse(hd[0], hd[1] - 1, 10, 11, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = S.skin;
+  ctx.beginPath();
+  ctx.arc(hd[0], hd[1], 9, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = S.hair;
+  ctx.beginPath();
+  ctx.ellipse(hd[0], hd[1] - 5, 9, 6, 0, Math.PI, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = S.eye;
+  ctx.fillRect(hd[0] - 3, hd[1] - 2, 2, 2);
+  ctx.fillRect(hd[0] + 2, hd[1] - 2, 2, 2);
+
+  ctx.restore();
+}
+
+function drawLimb(from, mid, to, color, thick, tipColor) {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = thick;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(from[0], from[1]);
+  ctx.lineTo(mid[0], mid[1]);
+  ctx.lineTo(to[0], to[1]);
+  ctx.stroke();
+  if (tipColor) {
+    ctx.fillStyle = tipColor;
+    ctx.beginPath();
+    ctx.arc(to[0], to[1], thick/2 + 0.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function roundRect(x, y, w, h, r) {
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+  ctx.fill();
+}
+
+// ── Animation engine ───────────────────────────────────────────
+let currentAnim = RUN;
+let animTime = 0;
+const ANIMS = { IDLE, RUN, CLIMB, CRAWL };
+const LABELS = Object.keys(ANIMS);
+let animIdx = 1;
+let speed = 1.8;
+let showRef = true;
+
+function totalDur(anim) { let d=0; for(const kf of anim) d+=kf.dur; return d; }
+
+function getPose(anim, t) {
+  const td = totalDur(anim);
+  const phase = t > 0 ? ((t % td) / td) : 0;
+  let accum = 0;
+  for (let i = 0; i < anim.length; i++) {
+    const kf = anim[i];
+    const next = anim[(i+1) % anim.length];
+    const frac = kf.dur / td;
+    if (phase >= accum && phase < accum + frac || i === anim.length-1) {
+      const localT = frac > 0 ? (phase - accum) / frac : 0;
+      const out = {};
+      for (const name of BONES) {
+        const o0 = kf.off[name] || [0,0];
+        const o1 = next.off[name] || [0,0];
+        out[name] = [lerp(o0[0], o1[0], localT), lerp(o0[1], o1[1], localT)];
+      }
+      return out;
+    }
+    accum += frac;
+  }
+  return {};
+}
+
+// ── Loop ───────────────────────────────────────────────────────
+let lastTime = 0;
+function frame(t) {
+  const dt = lastTime ? (t - lastTime) / 1000 : 1/60;
+  lastTime = t;
+  animTime += dt * speed;
+
+  ctx.fillStyle = '#2a3a2a';
+  ctx.fillRect(0, 0, C.width, C.height);
+
+  // Ground
+  ctx.fillStyle = '#4a5a3a';
+  const gy = CY + 65 * SCALE;
+  ctx.fillRect(0, gy, C.width, 200);
+  ctx.fillStyle = '#5a6a4a';
+  for (let x = 0; x < C.width; x += 30) {
+    ctx.fillRect(x, gy, 16, 4);
+  }
+
+  const pose = getPose(currentAnim, animTime);
+  drawPose(pose, animTime, showRef);
+
+  ctx.fillStyle = '#fff';
+  ctx.font = '16px monospace';
+  ctx.fillText('Animation: ' + LABELS[animIdx] + '  [← →]  ShowRef: ' + (showRef?'ON':'OFF') + ' [R]', 10, 24);
+  ctx.fillText('Speed: ' + speed.toFixed(1) + 'x  [↑ ↓]', 10, 48);
+  if (showRef) {
+    ctx.fillStyle = '#ff0';
+    ctx.font = '13px monospace';
+    ctx.fillText('Semi-transparent reference sprite shown behind skeleton. Adjust bone positions to match!', 10, C.height - 10);
+  }
+
+  setTimeout(frame, 16);
+}
+
+// ── Keyboard ───────────────────────────────────────────────────
+window.addEventListener('keydown', e => {
+  if (e.key === 'ArrowLeft') {
+    animIdx = (animIdx - 1 + ANIMS.length) % ANIMS.length;
+    currentAnim = ANIMS[Object.keys(ANIMS)[animIdx]];
+    animTime = 0;
+  }
+  if (e.key === 'ArrowRight') {
+    animIdx = (animIdx + 1) % ANIMS.length;
+    currentAnim = ANIMS[Object.keys(ANIMS)[animIdx]];
+    animTime = 0;
+  }
+  if (e.key === 'ArrowUp') speed = Math.min(6, speed + 0.3);
+  if (e.key === 'ArrowDown') speed = Math.max(0.2, speed - 0.3);
+  if (e.key === 'r' || e.key === 'R') showRef = !showRef;
+});
+// Start the loop
+setTimeout(frame, 16);
+</script>
+</body></html>

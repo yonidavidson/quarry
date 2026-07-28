@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>skeletal proto — QUARRY</title>
+<style>body{margin:0;background:#0c0a0e;overflow:hidden;display:flex;justify-content:center;align-items:center;height:100vh}#c{border:1px solid #2a282e}</style>
+</head>
+<body>
+<canvas id="c" width="640" height="480"></canvas>
+<script>
+// ===== SKELETAL ANIMATION PROTOTYPE =====
+// Each joint stores a local angle offset (degrees, 0 = down, +CW).
+// The renderer walks the tree: translate → rotate(DEG) → draw rect → recurse children → restore.
+
+// Anatomy:
+//   hip ─┬─ torso ─┬─ neck ── head
+//        │          ├─ upperArmR ── forearmR ── handR
+//        │          └─ upperArmL ── forearmL ── handL
+//        ├─ thighR ── shinR ── footR
+//        └─ thighL ── shinL ── footL
+
+const bodyDef = {
+  name:"root",   len:0,  w:0,                      // invisible root
+  children:[{ name:"hip",  len:14, w:16, color:[60,90,170],
+    children:[
+      { name:"torso", len:32, w:14, color:[70,100,190], ox:0, oy:-14, // attaches at TOP of hip
+        children:[
+          { name:"neck", len:6, w:8, color:[180,160,130], ox:0, oy:-32,
+            children:[
+              { name:"head", len:16, w:20, color:[210,190,150], ox:0, oy:-6, scalp:1,
+                children:[]
+              }
+            ]
+          },
+          { name:"upperArmR", len:20, w:8, color:[55,80,150], ox:-3, oy:-28,
+            children:[
+              { name:"forearmR", len:20, w:7, color:[60,85,155],
+                children:[
+                  { name:"handR", len:10, w:5, color:[200,180,140],
+                    children:[]
+                  }
+                ]
+              }
+            ]
+          },
+          { name:"upperArmL", len:20, w:8, color:[55,80,150], ox:3, oy:-28,
+            children:[
+              { name:"forearmL", len:20, w:7, color:[60,85,155],
+                children:[
+                  { name:"handL", len:10, w:5, color:[200,180,140],
+                    children:[]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      { name:"thighR", len:24, w:10, color:[50,80,160], ox:-5, oy:14,
+        children:[
+          { name:"shinR", len:24, w:9, color:[55,85,165],
+            children:[
+              { name:"footR", len:14, w:6, color:[180,150,110],
+                children:[]
+              }
+            ]
+          }
+        ]
+      },
+      { name:"thighL", len:24, w:10, color:[50,80,160], ox:5, oy:14,
+        children:[
+          { name:"shinL", len:24, w:9, color:[55,85,165],
+            children:[
+              { name:"footL", len:14, w:6, color:[180,150,110],
+                children:[]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }]
+};
+
+// Normalize: mark the first child list head, because bones without ox/oy use parent's tip
+function flatten(def, out={}) {
+  const walk = (node, parent) => {
+    if (node.name) out[node.name] = node;
+    node.ox = node.ox ?? 0;
+    node.oy = node.oy ?? 0;
+    for (const c of (node.children||[])) walk(c, node);
+  };
+  walk(def, null);
+  return out;
+}
+const BONES = flatten(bodyDef);
+
+// ===== KEYFRAMES =====
+// Angle convention: 0 = parent's forward direction, +CW
+// For most joints, "forward" is the direction the parent bone points.
+// At rest (all zero), the body hangs straight down like a ragdoll.
+const CYCLE = 1.0; // seconds per full stride
+
+const RUN = [
+  { t:0.00, pose:{
+    torso:-4, head:2,
+    upperArmR:-28, forearmR:-20, handR:-5,
+    upperArmL:12, forearmL:18, handL:3,
+    thighR:-25, shinR:14, footR:5,
+    thighL:18, shinL:-18, footL:-3,
+  }},
+  { t:0.25, pose:{
+    torso:0, head:0,
+    upperArmR:-10, forearmR:-5, handR:0,
+    upperArmL:2, forearmL:3, handL:0,
+    thighR:-8, shinR:4, footR:2,
+    thighL:6, shinL:-6, footL:-1,
+  }},
+  { t:0.50, pose:{
+    torso:4, head:-2,
+    upperArmR:12, forearmR:18, handR:3,
+    upperArmL:-28, forearmL:-20, handL:-5,
+    thighR:18, shinR:-18, footR:-3,
+    thighL:-25, shinL:14, footL:5,
+  }},
+  { t:0.75, pose:{
+    torso:0, head:0,
+    upperArmR:2, forearmL:3, handL:0,
+    upperArmL:-10, forearmR:-5, handR:0,
+    thighR:6, shinL:-6, footL:-1,
+    thighL:-8, shinR:4, footR:2,
+  }}
+];
+
+function lerpAngle(a, b, t) {
+  let d = b - a;
+  if (d > 180) d -= 360;
+  if (d < -180) d += 360;
+  return a + d * t;
+}
+
+function sample(cycleTime) {
+  const T = ((cycleTime % CYCLE) + CYCLE) % CYCLE;
+  // find k0 (last key with t <= T) and k1 (next, wrapping)
+  let k0 = RUN[0], k1 = RUN[0];
+  for (let i = 0; i < RUN.length; i++) {
+    if (RUN[i].t <= T) k0 = RUN[i];
+  }
+  for (let i = RUN.length - 1; i >= 0; i--) {
+    if (RUN[i].t > T) k1 = RUN[i];
+  }
+  if (k0 === k1) { k0 = RUN[RUN.length-1]; k1 = RUN[0]; }
+  // local t between k0 and k1, with wrap if needed
+  let span = k1.t - k0.t;
+  if (span <= 0) span += CYCLE;
+  const localT = (T - k0.t) / span;
+  const result = {};
+  const keys = new Set([...Object.keys(k0.pose), ...Object.keys(k1.pose)]);
+  for (const k of keys) {
+    result[k] = lerpAngle(k0.pose[k]||0, k1.pose[k]||0, localT);
+  }
+  return result;
+}
+
+// ===== RENDER =====
+const ctx = document.getElementById("c").getContext("2d");
+const deg = v => v * Math.PI / 180;
+
+function drawNode(node, pose, cx, cy, accumAngle) {
+  const localDeg = (pose[node.name] || 0);
+  const localRad = deg(localDeg);
+  const totalAngle = accumAngle + localRad;
+
+  // Position: from parent's origin + node's offset in parent frame
+  const px = cx + node.ox;
+  const py = cy + node.oy;
+
+  // Shadow for non-root
+  if (node.len > 0 && node.name !== "root") {
+    ctx.save();
+    ctx.translate(px + 3, py + 4);
+    ctx.rotate(totalAngle);
+    ctx.shadowColor = "rgba(0,0,0,0.35)";
+    ctx.shadowBlur = 5;
+    ctx.shadowOffsetX = 1;
+    ctx.shadowOffsetY = 1;
+    const [r,g,b] = node.color;
+    ctx.fillStyle = `rgba(${r},${g},${b},0.25)`;
+    ctx.fillRect(-node.w/2, 0, node.w, node.len);
+    ctx.restore();
+  }
+
+  // Draw this bone
+  if (node.len > 0 && node.name !== "root") {
+    ctx.save();
+    ctx.translate(px, py);
+    ctx.rotate(totalAngle);
+    const [r,g,b] = node.color;
+    // Rounded-rect body
+    ctx.fillStyle = `rgb(${r},${g},${b})`;
+    ctx.beginPath();
+    ctx.roundRect(-node.w/2, 0, node.w, node.len, 2);
+    ctx.fill();
+    // Lighter inner highlight
+    ctx.fillStyle = `rgba(255,255,255,0.1)`;
+    ctx.fillRect(-node.w/4, 2, node.w/2, node.len/2);
+    ctx.restore();
+  }
+
+  // Tip point for children: node's end in world space
+  const tipX = px + Math.sin(totalAngle) * node.len;
+  const tipY = py + Math.cos(totalAngle) * node.len;
+
+  // Joint dot at origin
+  if (node.len > 0) {
+    ctx.beginPath();
+    ctx.arc(px, py, 2, 0, Math.PI*2);
+    ctx.fillStyle = `rgba(255,255,200,0.15)`;
+    ctx.fill();
+  }
+
+  // Recurse children at this node's tip + child offset
+  for (const child of (node.children||[])) {
+    drawNode(child, pose, tipX, tipY, totalAngle);
+  }
+}
+
+// ===== BOUNCE =====
+function bodyBob(cycleTime) {
+  const T = ((cycleTime % CYCLE) + CYCLE) % CYCLE;
+  const x = T / CYCLE;
+  // Smooth double-bounce per stride (dip at mid-stance)
+  return -Math.sin(x * Math.PI * 2) * 4 - Math.abs(Math.sin(x * Math.PI * 2)) * 2;
+}
+
+// ===== LOOP =====
+let animTime = 0;
+const CX = 320, CY = 290;
+
+function frame(dt) {
+  animTime += dt;
+  const pose = sample(animTime);
+  const bob = bodyBob(animTime);
+
+  ctx.clearRect(0, 0, 640, 480);
+
+  // Ground
+  ctx.strokeStyle = "#2a282e";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(0, CY + 45);
+  ctx.lineTo(640, CY + 45);
+  ctx.stroke();
+  ctx.fillStyle = "#1a1a1e";
+  ctx.fillRect(0, CY + 45, 640, 100);
+
+  // Character
+  ctx.save();
+  ctx.translate(CX, CY + bob);
+
+  // Flat foot placement: find foot positions and pin them during stance
+  drawNode(bodyDef, pose, 0, 0, 0);
+
+  ctx.restore();
+
+  // Legend
+  ctx.fillStyle = "#5a5660";
+  ctx.font = "13px monospace";
+  ctx.fillText("SKELETAL ANIMATION PROTOTYPE", 12, 22);
+  ctx.fillText("→ Body parts as separate rects, each with an angle", 12, 42);
+  ctx.fillText("→ 4 keyframes per cycle, lerp between them = smooth motion", 12, 58);
+  ctx.fillText("→ Replace colored rects with your pixel-art bitmaps", 12, 74);
+  ctx.fillText("→ Add more keyframes / ik foot-pinning for PoP-level quality", 12, 90);
+  ctx.fillStyle = "#3a3840";
+  ctx.fillText("FPS: " + Math.round(1/dt), 600, 22);
+}
+
+// Use interval so it works even when tab is hidden (cmux surfaces lose rAF)
+let last = performance.now();
+setInterval(function() {
+  const now = performance.now();
+  const dt = Math.min((now - last) / 1000, 0.04);
+  last = now;
+  frame(dt);
+}, 16); // ~60fps
+</script>
+</body>
+</html>

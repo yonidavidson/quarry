@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Texture Mesh Deformation</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #222; display: flex; justify-content: center; align-items: center; min-height: 100vh; flex-wrap: wrap; }
+  canvas { image-rendering: pixelated; border: 1px solid #555; margin: 5px; }
+  #controls { position: fixed; bottom: 10px; left: 10px; color: #fff; font: 14px monospace; background: #000a; padding: 8px; }
+</style></head><body>
+<canvas id="refC"></canvas>
+<canvas id="warpC"></canvas>
+<div id="controls">Loading...</div>
+<script>
+const refC = document.getElementById('refC');
+const warpC = document.getElementById('warpC');
+const refCtx = refC.getContext('2d');
+const warpCtx = warpC.getContext('2d');
+const ctrl = document.getElementById('controls');
+
+const FW = 252, FH = 223; // frame dimensions
+const CX = 129.5, CY = 117.5; // char center within frame
+const CH = CX - 112; // 17.5px left half
+const CW = 147 - CX; // 17.5px right half
+const CH_T = CY - 55; // 62.5px above center
+const CH_B = 180 - CY; // 62.5px below center
+
+refC.width = 300; refC.height = 300;
+warpC.width = 300; warpC.height = 300;
+
+let spriteImg = new Image();
+let ready = false;
+
+fetch('/index.html').then(r => r.text()).then(html => {
+  const m = html.match(/const HUMAN_PNG = "([^"]+)"/);
+  if (m) {
+    spriteImg.onload = () => {
+      ready = true;
+      init();
+    };
+    spriteImg.src = m[1];
+  }
+});
+
+// ── Mesh over character bounding box ───────────────────────────
+// We define a regular grid over the character area.
+// Character bbox in frame: x=112..147, y=55..180
+// Mesh dimensions: COLS × ROWS vertices
+const COLS = 7, ROWS = 9;
+const CHAR_X0 = 112, CHAR_Y0 = 55;
+const CHAR_W = 36, CHAR_H = 126;
+
+// Source mesh (resting positions in frame 0)
+function makeRestMesh() {
+  const verts = [];
+  for (let row = 0; row < ROWS; row++) {
+    for (let col = 0; col < COLS; col++) {
+      verts.push({
+        sx: CHAR_X0 + (col / (COLS-1)) * CHAR_W,
+        sy: CHAR_Y0 + (row / (ROWS-1)) * CHAR_H,
+        dx: CHAR_X0 + (col / (COLS-1)) * CHAR_W,
+        dy: CHAR_Y0 + (row / (ROWS-1)) * CHAR_H,
+      });
+    }
+  }
+  return verts;
+}
+
+let restVerts = makeRestMesh();
+
+// ── Extract a sprite frame into an ImageData ───────────────────
+function getFrameData(frameIdx) {
+  const colsPerRow = Math.floor(spriteImg.width / FW);
+  const fx = (frameIdx % colsPerRow) * FW;
+  const fy = Math.floor(frameIdx / colsPerRow) * FH;
+  const c = document.createElement('canvas');
+  c.width = FW; c.height = FH;
+  const ctx = c.getContext('2d');
+  ctx.drawImage(spriteImg, fx, fy, FW, FH, 0, 0, FW, FH);
+  return { data: ctx.getImageData(0, 0, FW, FH), canvas: c, ctx };
+}
+
+// ── Block matching between frames ──────────────────────────────
+// For each mesh vertex, find its position in the target frame
+function matchVertices(srcData, tgtData, verts, searchRad) {
+  const searchR = searchRad || 4;
+  const blockR = 4;
+  const result = [];
+  
+  for (const v of verts) {
+    const sx = v.sx, sy = v.sy;
+    let bestDx = sx, bestDy = sy;
+    let bestCost = Infinity;
+    
+    // Search window around source position in target frame
+    const x0 = Math.max(blockR, Math.round(sx) - searchR);
+    const x1 = Math.min(FW - blockR - 1, Math.round(sx) + searchR);
+    const y0 = Math.max(blockR, Math.round(sy) - searchR);
+    const y1 = Math.min(FH - blockR - 1, Math.round(sy) + searchR);
+    
+    for (let ty = y0; ty <= y1; ty++) {
+      for (let tx = x0; tx <= x1; tx++) {
+        let cost = 0;
+        // Compare blockR×blockR patch
+        for (let dy = -blockR; dy <= blockR; dy++) {
+          for (let dx = -blockR; dx <= blockR; dx++) {
+            const si = ((Math.round(sy) + dy) * FW + (Math.round(sx) + dx)) * 4;
+            const ti = ((ty + dy) * FW + (tx + dx)) * 4;
+            const dr = srcData[si] - tgtData[ti];
+            const dg = srcData[si+1] - tgtData[ti+1];
+            const db = srcData[si+2] - tgtData[ti+2];
+            // Only compare where source has alpha > 30
+            if (srcData[si+3] > 30) {
+              cost += Math.abs(dr) + Math.abs(dg) + Math.abs(db);
+            }
+          }
+        }
+        if (cost < bestCost) {
+          bestCost = cost;
+          bestDx = tx;
+          bestDy = ty;
+        }
+      }
+    }
+    
+    result.push({
+      sx: v.sx, sy: v.sy,
+      tx: bestDx, ty: bestDy,
+      cost: bestCost,
+    });
+  }
+  return result;
+}
+
+// ── Render warped frame using mesh ─────────────────────────────
+function renderWarp(targetCtx, matches, srcCanvas, t) {
+  // t: 0..1 interpolation between rest and matched
+  const w = targetCtx.canvas.width;
+  const h = targetCtx.canvas.height;
+  targetCtx.fillStyle = '#000';
+  targetCtx.fillRect(0, 0, w, h);
+
+  // Build interpolated vertex positions
+  const interp = matches.map(m => ({
+    sx: m.sx, sy: m.sy,
+    dx: m.sx + (m.tx - m.sx) * t,
+    dy: m.sy + (m.ty - m.sy) * t,
+  }));
+
+  // Draw quads as two triangles each
+  for (let row = 0; row < ROWS - 1; row++) {
+    for (let col = 0; col < COLS - 1; col++) {
+      const i00 = row * COLS + col;
+      const i10 = row * COLS + col + 1;
+      const i01 = (row + 1) * COLS + col;
+      const i11 = (row + 1) * COLS + col + 1;
+
+      // Triangle 1: top-left, top-right, bottom-left
+      drawTri(targetCtx, srcCanvas,
+        interp[i00], interp[i10], interp[i01]);
+      // Triangle 2: top-right, bottom-right, bottom-left
+      drawTri(targetCtx, srcCanvas,
+        interp[i10], interp[i11], interp[i01]);
+    }
+  }
+}
+
+function drawTri(ctx, srcCanvas, a, b, c) {
+  // Affine transform mapping source triangle (a.sx,a.sy)-(b.sx,b.sy)-(c.sx,c.sy)
+  // to destination triangle (a.dx,a.dy)-(b.dx,b.dy)-(c.dx,c.dy)
+  
+  // Compute affine matrix that maps source to dest
+  // dest = A * source + t
+  // Using 3 point correspondences
+  
+  const ax = a.sx, ay = a.sy, adx = a.dx, ady = a.dy;
+  const bx = b.sx, by = b.sy, bdx = b.dx, bdy = b.dy;
+  const cx = c.sx, cy = c.sy, cdx = c.dx, cdy = c.dy;
+  
+  // Solve for affine transform:
+  // [adx]   [a11 a12] [ax]   [t1]
+  // [ady] = [a21 a22] [ay] + [t2]
+  //
+  // Using differences to eliminate translation:
+  // (bdx - adx) = a11*(bx-ax) + a12*(by-ay)
+  // (cdx - adx) = a11*(cx-ax) + a12*(cy-ay)
+  
+  const dax = bx - ax, day = by - ay;
+  const dbx = cx - ax, dby = cy - ay;
+  const ddx = bdx - adx, ddy = bdy - ady;
+  const dex = cdx - adx, dey = cdy - ady;
+  
+  const det = dax * dby - day * dbx;
+  if (Math.abs(det) < 0.001) return; // degenerate
+  
+  const a11 = (ddx * dby - ddy * dbx) / det;
+  const a12 = (ddy * dax - ddx * day) / det;
+  const a21 = (dex * dby - dey * dbx) / det;
+  const a22 = (dey * dax - dex * day) / det;
+  
+  const t1 = adx - a11 * ax - a12 * ay;
+  const t2 = ady - a21 * ax - a22 * ay;
+  
+  // The canvas setTransform(a, b, c, d, e, f) maps:
+  // x' = a*x + c*y + e
+  // y' = b*x + d*y + f
+  // So: a=a11, b=a21, c=a12, d=a22, e=t1, f=t2
+  
+  ctx.save();
+  ctx.setTransform(a11, a21, a12, a22, t1, t2);
+  
+  // Create clip path for destination triangle
+  ctx.beginPath();
+  // Transform clip coordinates using INVERSE of the current transform
+  // Since we're in the transformed space, the clip is in source space
+  // which is the triangle (ax,ay)-(bx,by)-(cx,cy)
+  ctx.moveTo(ax, ay);
+  ctx.lineTo(bx, by);
+  ctx.lineTo(cx, cy);
+  ctx.closePath();
+  ctx.clip();
+  
+  // Draw the source image - in the transformed space, this draws the source
+  // triangle pixels into the destination triangle
+  ctx.drawImage(srcCanvas, 0, 0);
+  
+  ctx.restore();
+}
+
+// ── Animation ──────────────────────────────────────────────────
+let frameA = 0, frameB = 1;
+let matches = null;
+let animT = 0;
+
+function init() {
+  // Show frame 0 and frame 1
+  const colsPerRow = Math.floor(spriteImg.width / FW);
+  const drawFrame = (ctx, idx, label) => {
+    const fx = (idx % colsPerRow) * FW;
+    const fy = Math.floor(idx / colsPerRow) * FH;
+    ctx.drawImage(spriteImg, fx, fy, FW, FH, 0, 0, ctx.canvas.width, ctx.canvas.height);
+    ctx.fillStyle = '#ff0';
+    ctx.font = '12px monospace';
+    ctx.fillText(label, 4, 14);
+  };
+
+  refCtx.drawImage(spriteImg, 0, 0, FW, FH, 0, 0, refC.width, refC.height);
+  refCtx.fillStyle = '#ff0';
+  refCtx.font = '12px monospace';
+  refCtx.fillText('Frame 0', 4, 14);
+
+  // Extract frame data and compute motion
+  const fd0 = getFrameData(0);
+  const fd1 = getFrameData(1);
+  
+  const srcData = fd0.ctx.getImageData(0, 0, FW, FH).data;
+  const tgtData = fd1.ctx.getImageData(0, 0, FW, FH).data;
+  
+  ctrl.textContent = 'Matching vertices...';
+  
+  // Use setTimeout to let UI update
+  setTimeout(() => {
+    matches = matchVertices(srcData, tgtData, restVerts, 6);
+    
+    // Show cost heatmap
+    const totalCost = matches.reduce((s, m) => s + m.cost, 0);
+    const avgCost = totalCost / matches.length;
+    ctrl.textContent = `Vertices: ${matches.length} | Avg match cost: ${avgCost.toFixed(0)} | Animating...`;
+    
+    // Start animation
+    startAnim();
+  }, 50);
+}
+
+function startAnim() {
+  let lastTime = 0;
+  const speed = 0.5;
+  
+  function frame(t) {
+    const dt = lastTime ? (t - lastTime) / 1000 : 1/60;
+    lastTime = t;
+    
+    animT += dt * speed;
+    if (animT > 1) animT = 0;
+    
+    // Render warped frame
+    const fd0 = getFrameData(0);
+    renderWarp(warpCtx, matches, fd0.canvas, animT);
+    
+    // Add info
+    warpCtx.fillStyle = '#fff';
+    warpCtx.font = '12px monospace';
+    warpCtx.fillText(`t=${animT.toFixed(2)}`, 4, 14);
+    
+    // Draw mesh overlay on reference
+    refCtx.putImageData(fd0.ctx.getImageData(0, 0, FW, FH), 0, 0);
+    refCtx.fillStyle = '#ff0';
+    refCtx.font = '12px monospace';
+    refCtx.fillText('Frame 0 (source)', 4, 14);
+    
+    // Draw mesh on ref
+    refCtx.strokeStyle = 'rgba(255,255,0,0.5)';
+    refCtx.lineWidth = 1;
+    for (let row = 0; row < ROWS; row++) {
+      for (let col = 0; col < COLS; col++) {
+        const i = row * COLS + col;
+        const mi = matches[i];
+        const scale = warpCtx.canvas.width / FW;
+        const x = (mi.sx + (mi.tx - mi.sx) * animT) * scale;
+        const y = (mi.sy + (mi.ty - mi.sy) * animT) * scale;
+        
+        // Draw vertex
+        refCtx.beginPath();
+        refCtx.arc(x, y, 2, 0, Math.PI * 2);
+        refCtx.fillStyle = mi.cost < 500 ? '#0f0' : mi.cost < 2000 ? '#ff0' : '#f00';
+        refCtx.fill();
+        
+        // Draw search range indicator
+        if (col === 0 && row === 0) {
+          refCtx.strokeStyle = 'rgba(255,255,0,0.3)';
+          refCtx.strokeRect(
+            (mi.sx - 6) * scale, (mi.sy - 6) * scale,
+            12 * scale, 12 * scale
+          );
+        }
+      }
+    }
+    
+    // Draw grid lines
+    refCtx.strokeStyle = 'rgba(0,255,255,0.3)';
+    refCtx.lineWidth = 0.5;
+    for (let row = 0; row < ROWS; row++) {
+      for (let col = 0; col < COLS - 1; col++) {
+        const i = row * COLS + col;
+        const j = row * COLS + col + 1;
+        const scale = warpCtx.canvas.width / FW;
+        const ax = matches[i].sx * scale, ay = matches[i].sy * scale;
+        const bx = matches[j].sx * scale, by = matches[j].sy * scale;
+        refCtx.beginPath();
+        refCtx.moveTo(ax, ay);
+        refCtx.lineTo(bx, by);
+        refCtx.stroke();
+      }
+    }
+    for (let col = 0; col < COLS; col++) {
+      for (let row = 0; row < ROWS - 1; row++) {
+        const i = row * COLS + col;
+        const j = (row+1) * COLS + col;
+        const scale = warpCtx.canvas.width / FW;
+        const ax = matches[i].sx * scale, ay = matches[i].sy * scale;
+        const bx = matches[j].sx * scale, by = matches[j].sy * scale;
+        refCtx.beginPath();
+        refCtx.moveTo(ax, ay);
+        refCtx.lineTo(bx, by);
+        refCtx.stroke();
+      }
+    }
+    
+    warpCtx.strokeStyle = 'rgba(0,255,255,0.3)';
+    warpCtx.lineWidth = 0.5;
+    for (let row = 0; row < ROWS; row++) {
+      for (let col = 0; col < COLS - 1; col++) {
+        const i = row * COLS + col;
+        const j = row * COLS + col + 1;
+        const scale = warpCtx.canvas.width / FW;
+        const ax = (matches[i].sx + (matches[i].tx - matches[i].sx) * animT) * scale;
+        const ay = (matches[i].sy + (matches[i].ty - matches[i].sy) * animT) * scale;
+        const bx = (matches[j].sx + (matches[j].tx - matches[j].sx) * animT) * scale;
+        const by = (matches[j].sy + (matches[j].ty - matches[j].sy) * animT) * scale;
+        warpCtx.beginPath();
+        warpCtx.moveTo(ax, ay);
+        warpCtx.lineTo(bx, by);
+        warpCtx.stroke();
+      }
+    }
+    for (let col = 0; col < COLS; col++) {
+      for (let row = 0; row < ROWS - 1; row++) {
+        const i = row * COLS + col;
+        const j = (row+1) * COLS + col;
+        const scale = warpCtx.canvas.width / FW;
+        const ax = (matches[i].sx + (matches[i].tx - matches[i].sx) * animT) * scale;
+        const ay = (matches[i].sy + (matches[i].ty - matches[i].sy) * animT) * scale;
+        const bx = (matches[j].sx + (matches[j].tx - matches[j].sx) * animT) * scale;
+        const by = (matches[j].sy + (matches[j].ty - matches[j].sy) * animT) * scale;
+        warpCtx.beginPath();
+        warpCtx.moveTo(ax, ay);
+        warpCtx.lineTo(bx, by);
+        warpCtx.stroke();
+      }
+    }
+    
+    warpCtx.fillStyle = '#fff';
+    warpCtx.font = '12px monospace';
+    warpCtx.fillText('Warped (frame 0→1)', 4, warpCtx.canvas.height - 6);
+    
+    setTimeout(frame, 16);
+  }
+  setTimeout(frame, 16);
+}
+</script>
+</body></html>

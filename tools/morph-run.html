@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Sprite Morph – Run</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #111; display: flex; justify-content: center; align-items: center; min-height: 100vh; flex-direction: column; gap: 8px; }
+  canvas { image-rendering: pixelated; image-rendering: crisp-edges; border: 1px solid #555; }
+  #info { color: #aaa; font: 13px monospace; background: #000c; padding: 6px 12px; border-radius: 4px; }
+</style></head><body>
+<canvas id="c"></canvas>
+<div id="info">Loading sprite data...</div>
+<script>
+const C = document.getElementById('c');
+const ctx = C.getContext('2d');
+const info = document.getElementById('info');
+C.width = 400; C.height = 400;
+
+const FW = 252, FH = 223; // frame dimensions
+const CX = 129.5, CY = 117.5; // char center in frame
+// Character bounding box within frame
+const BX = 112, BY = 55, BW = 36, BH = 126;
+
+let spriteImg = new Image();
+let ready = false;
+
+fetch('/index.html').then(r => r.text()).then(html => {
+  const m = html.match(/const HUMAN_PNG = "([^"]+)"/);
+  if (m) {
+    spriteImg.onload = init;
+    spriteImg.src = m[1];
+  }
+});
+
+// ── Extract a frame to an offscreen canvas ────────────────────
+function grabFrame(idx) {
+  const colsPerRow = Math.floor(spriteImg.width / FW);
+  const fx = (idx % colsPerRow) * FW;
+  const fy = Math.floor(idx / colsPerRow) * FH;
+  const c = document.createElement('canvas');
+  c.width = FW; c.height = FH;
+  const cx = c.getContext('2d');
+  cx.drawImage(spriteImg, fx, fy, FW, FH, 0, 0, FW, FH);
+  return c;
+}
+
+// ── Get pixel data for character area only ───────────────────
+function charData(canvas) {
+  const cx = canvas.getContext('2d');
+  return cx.getImageData(BX, BY, BW, BH);
+}
+
+// ── Block matching on character area ───────────────────────────
+// Given two frames' char-area ImageData, compute a motion field
+// Grid of blocks, each block finds best match in next frame.
+const GRID = 6; // 6×6 grid of control points over the char area
+
+function computeFlow(fromData, toData) {
+  const blockR = 4; // 9×9 pixel block
+  const searchR = 8; // search radius in each direction
+  const points = [];
+  
+  for (let gy = 0; gy < GRID; gy++) {
+    for (let gx = 0; gx < GRID; gx++) {
+      // Source position (in char-area coordinates)
+      const sx = (gx / (GRID-1)) * (BW - 1);
+      const sy = (gy / (GRID-1)) * (BH - 1);
+      
+      let bestDx = sx, bestDy = sy;
+      let bestCost = Infinity;
+      
+      // Search window
+      const x0 = Math.max(blockR, Math.round(sx) - searchR);
+      const x1 = Math.min(BW - blockR - 1, Math.round(sx) + searchR);
+      const y0 = Math.max(blockR, Math.round(sy) - searchR);
+      const y1 = Math.min(BH - blockR - 1, Math.round(sy) + searchR);
+      
+      for (let ty = y0; ty <= y1; ty++) {
+        for (let tx = x0; tx <= x1; tx++) {
+          let cost = 0;
+          for (let dy = -blockR; dy <= blockR; dy++) {
+            for (let dx = -blockR; dx <= blockR; dx++) {
+              const si = ((Math.round(sy)+dy) * BW + (Math.round(sx)+dx)) * 4;
+              const ti = ((ty+dy) * BW + (tx+dx)) * 4;
+              const a = fromData[si+3];
+              if (a > 30) { // only compare visible pixels
+                cost += Math.abs(fromData[si] - toData[ti])
+                      + Math.abs(fromData[si+1] - toData[ti+1])
+                      + Math.abs(fromData[si+2] - toData[ti+2]);
+              }
+            }
+          }
+          if (cost < bestCost) { bestCost = cost; bestDx = tx; bestDy = ty; }
+        }
+      }
+      
+      points.push({
+        sx, sy,
+        tx: bestDx, ty: bestDy,
+        cost: bestCost,
+      });
+    }
+  }
+  return points;
+}
+
+// ── Render morphed character ───────────────────────────────────
+// Draws the source character area warped toward target using flow points, at blend t [0,1]
+
+function renderMorph(srcCanvas, flow, t) {
+  const src = srcCanvas.getContext('2d');
+  const srcData = src.getImageData(BX, BY, BW, BH);
+  const out = ctx.createImageData(C.width, C.height);
+  const w = C.width, h = C.height;
+  const scale = w / BW; // scale from char-area to canvas
+
+  // For each output pixel, determine which source pixel to sample
+  // We use the flow field to interpolate positions
+  for (let py = 0; py < h; py++) {
+    for (let px = 0; px < w; px++) {
+      // Map to char-area coordinates
+      const cx = px / scale;
+      const cy = py / scale;
+
+      // Find which grid cell this pixel falls in
+      const gx = (cx / BW) * (GRID-1);
+      const gy = (cy / BH) * (GRID-1);
+      if (gx < 0 || gx >= GRID-1 || gy < 0 || gy >= GRID-1) continue;
+
+      const gxi = Math.floor(gx);
+      const gyi = Math.floor(gy);
+      const fx = gx - gxi;
+      const fy = gy - gyi;
+
+      // Bilinear interpolation of flow vectors from the 4 surrounding grid points
+      function getFlow(gi, gj) {
+        const idx = gi * GRID + gj;
+        if (idx >= flow.length) return { sx: cx, sy: cy };
+        const p = flow[idx];
+        return {
+          sx: p.sx + (p.tx - p.sx) * t,
+          sy: p.sy + (p.ty - p.sy) * t,
+        };
+      }
+
+      const f00 = getFlow(gyi, gxi);
+      const f10 = getFlow(gyi, gxi+1);
+      const f01 = getFlow(gyi+1, gxi);
+      const f11 = getFlow(gyi+1, gxi+1);
+
+      const ix = (1-fx)*(1-fy)*f00.sx + fx*(1-fy)*f10.sx + (1-fx)*fy*f01.sx + fx*fy*f11.sx;
+      const iy = (1-fx)*(1-fy)*f00.sy + fx*(1-fy)*f10.sy + (1-fx)*fy*f01.sy + fx*fy*f11.sy;
+
+      // Sample source at (ix, iy) with bilinear interpolation
+      const si = Math.floor(iy), sj = Math.floor(ix);
+      const si1 = Math.min(BH-1, si+1), sj1 = Math.min(BW-1, sj+1);
+      const fi = iy - si, fj = ix - sj;
+
+      const idx00 = (si * BW + sj) * 4;
+      const idx10 = (si * BW + sj1) * 4;
+      const idx01 = (si1 * BW + sj) * 4;
+      const idx11 = (si1 * BW + sj1) * 4;
+
+      // Only sample if source has alpha
+      if (srcData.data[idx00+3] <= 30 && srcData.data[idx10+3] <= 30 &&
+          srcData.data[idx01+3] <= 30 && srcData.data[idx11+3] <= 30) continue;
+
+      for (let c = 0; c < 4; c++) {
+        const val = (1-fi)*(1-fj)*srcData.data[idx00+c]
+                  + (1-fi)*fj*srcData.data[idx10+c]
+                  + fi*(1-fj)*srcData.data[idx01+c]
+                  + fi*fj*srcData.data[idx11+c];
+        out.data[(py * w + px) * 4 + c] = Math.round(val);
+      }
+    }
+  }
+
+  return out;
+}
+
+// ── Animation ──────────────────────────────────────────────────
+// Run animation: frames 4-11 (8 frames)
+const RUN_FRAMES = [4,5,6,7,8,9,10,11];
+let flows = []; // pre-computed flow between consecutive frames
+let frameCanvases = [];
+
+function init() {
+  info.textContent = 'Pre-processing frames...';
+
+  // Grab all run frames
+  for (const idx of RUN_FRAMES) {
+    frameCanvases.push(grabFrame(idx));
+  }
+
+  // Compute flow between consecutive frame pairs
+  let totalCost = 0;
+  for (let i = 0; i < frameCanvases.length; i++) {
+    const next = (i + 1) % frameCanvases.length;
+    const from = charData(frameCanvases[i]);
+    const to = charData(frameCanvases[next]);
+    const flow = computeFlow(from.data, to.data);
+    const avgCost = flow.reduce((s, p) => s + p.cost, 0) / flow.length;
+    totalCost += avgCost;
+    flows.push(flow);
+    info.textContent = `Frame ${RUN_FRAMES[i]}→${RUN_FRAMES[next]}: avg cost ${avgCost.toFixed(0)}`;
+  }
+
+  const overallAvg = totalCost / flows.length;
+  info.textContent = `Run animation: ${RUN_FRAMES.length} frames, grid points, avg flow cost ${overallAvg.toFixed(0)}. Animating...`;
+
+  // Start animation loop
+  startLoop();
+}
+
+// ── Game loop ──────────────────────────────────────────────────
+// We cycle through the 8 run frames, using flow between consecutive pairs.
+// Each frame transition takes 1/Nth of the cycle time.
+
+let animTime = 0;
+const CYCLE_TIME = 2; // seconds for full cycle
+const SPEED = 1.0;
+
+function startLoop() {
+  let lastTime = 0;
+  function frame(t) {
+    const dt = lastTime ? (t - lastTime) / 1000 : 1/60;
+    lastTime = t;
+    
+    animTime += dt * SPEED;
+    const cyclePos = (animTime % CYCLE_TIME) / CYCLE_TIME;
+    
+    // Determine which frame pair we're between
+    const pairIdx = Math.floor(cyclePos * flows.length);
+    const localT = (cyclePos * flows.length) - pairIdx;
+    
+    const flow = flows[pairIdx];
+    const srcCanvas = frameCanvases[pairIdx];
+    
+    // Render morphed frame
+    const imgData = renderMorph(srcCanvas, flow, localT);
+    ctx.putImageData(imgData, 0, 0);
+    
+    info.textContent = `Frame ${RUN_FRAMES[pairIdx]}→${RUN_FRAMES[(pairIdx+1)%RUN_FRAMES.length]}  t=${localT.toFixed(2)}  cycle=${animTime.toFixed(1)}s`;
+    
+    setTimeout(frame, 16);
+  }
+  setTimeout(frame, 16);
+}
+</script>
+</body></html>
