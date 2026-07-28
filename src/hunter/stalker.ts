@@ -45,6 +45,8 @@ export class Stalker {
   private wallAxis: "x" | "z" = "x";
   private vel = new THREE.Vector3();
   private nextRoar = 6;
+  private life = 0;
+  private senseAt = 6;   // a beat to find your feet before it starts hunting
   private stub: THREE.Mesh;
   private anim?: BodyAnim;
 
@@ -123,6 +125,8 @@ export class Stalker {
 
   update(dt: number, player: THREE.Vector3, playerVisible: boolean): void {
     if (!this.alive) return;
+    this.life += dt;
+    if (this.life < this.senseAt) playerVisible = false;
     this.t += dt;
     if (playerVisible) this.lastKnown.copy(player);
 
@@ -139,7 +143,7 @@ export class Stalker {
       case "climb":   this.climb(dt); break;
       case "ceiling": this.ceiling(dt, player); break;
       case "pounce":  this.pounce(dt, player); break;
-      case "recover": if (this.t > 1.2) this.enter("prowl"); break;
+      case "recover": if (this.t > 2.4) this.enter("prowl"); break;
       case "stunned": if (this.t > 2.0) this.enter("toWall"); break;
     }
 
@@ -159,7 +163,7 @@ export class Stalker {
     // Close on the floor is a losing fight for it — past ~18m it goes vertical,
     // and it always goes vertical eventually so the hunt never settles into a
     // footrace across an open hall.
-    if (flat < 3.5) { this.opts.onHitPlayer(2); this.enter("recover"); }
+    if (flat < 3.5) { this.opts.onHitPlayer(1); this.enter("recover"); }
     else if (this.t > 7 || flat > 18) this.enter("toWall");
   }
 

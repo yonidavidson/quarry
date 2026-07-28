@@ -150,6 +150,16 @@ async function boot(): Promise<void> {
     maxDistance: 12 * bodyScale,
   });
 
+  // #93 — the camera used to orbit freely while the character turned to face its
+  // travel, so after a few direction changes W meant nothing intuitive and the
+  // beast's leap (which launches along the camera azimuth) fired somewhere you
+  // did not intend. Ease the camera behind the heading while moving, and get out
+  // of the way the moment the player looks around on purpose.
+  let lastLook = 0;
+  addEventListener("mousemove", (e) => {
+    if (Math.abs(e.movementX) + Math.abs(e.movementY) > 2) lastLook = performance.now();
+  });
+
   const hintEl = document.querySelector<HTMLElement>("#hint");
   if (hintEl) {
     hintEl.textContent = asStalker
@@ -328,6 +338,12 @@ async function boot(): Promise<void> {
     followCam.setUp(character.upAxis);
     if (physics.stepsLastFrame > 0 && character.isOnPlatform) {
       followCam.applyPlatformTurn(character.turnOnYQuat);
+    }
+    // A deliberate look always wins; alignment resumes shortly after you stop.
+    const steering = kb.getCharacterMovement();
+    const wantsMove = !!(steering.forward || steering.backward || steering.leftward || steering.rightward);
+    if (wantsMove && !cling?.active && performance.now() - lastLook > 850) {
+      followCam.alignHeading(character.bodyZAxis, delta);
     }
     followCam.update(delta);
 
