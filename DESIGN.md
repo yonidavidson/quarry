@@ -40,7 +40,7 @@ Now: ▶ 5. Screens polish + 6. HUD sprite swap
 4. The hunt loop: energy cells, extraction lift, win/lose, instant retry — ✅ → previewed
 5. Screens: loader, title, side select, pause ([#77](https://github.com/yonidavidson/quarry/issues/77)) — ◐ machine + side select done; menu video, branded loader and settings still open
 6. HUD sprite swap from the landed concept ([#78](https://github.com/yonidavidson/quarry/issues/78)) — ⬜
-7. 1v1 asymmetric online ([#83](https://github.com/yonidavidson/quarry/issues/83)) — ⬜ depends on #75
+7. 1v1 asymmetric online ([#83](https://github.com/yonidavidson/quarry/issues/83)) — ◐ seating, sides and remote bodies verified with two identities; feel gate not run
 8. World dressing — the ceiling the Stalker crosses ([#80](https://github.com/yonidavidson/quarry/issues/80)) — ⬜
 
 Open defects:
@@ -248,3 +248,16 @@ does not apply. Rows stay as the split to hand out the moment that changes.
   ([#81](https://github.com/yonidavidson/quarry/issues/81)) cost 26-93 credits
   and the balance is 24; it refills to 100 on Aug 4. Everything else about the
   predator works — those states currently borrow the walk clip.
+- 2026-07-28 — **Online 1v1 is live** ([#83](https://github.com/yonidavidson/quarry/issues/83)).
+  `matchmake()` + the `open` preset at 2/2 — NOT `duel`, whose server-owned
+  winner-stays loop assumes symmetric players. The two seats are different
+  roles, so sides are assigned in game code: the HOST reconciles an
+  `id → side` map into `shared`, every client reads its own from there, and it
+  is never computed per-client (that is how both players end up the same
+  character). `matchmake()` fires on the Play Online click and nowhere else —
+  a player sitting in the menu must not hold a seat others are queuing behind.
+  Verified on the published build with two isolated browser contexts (two
+  distinct guests, not two tabs on one account): both seated, the waiting screen
+  closed on both, one got Jack and one got the Stalker, and Jack's client
+  rendered the remote beast. NOT verified: how it FEELS, the pounce/claw
+  interaction at speed, host migration, and re-seat after a drop.

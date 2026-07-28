@@ -7,8 +7,11 @@
 // replace the look, not the machine — see issues #77 and #78.
 import { KEY_ART } from "../assets.ts";
 
-export type Phase = "loading" | "menu" | "playing" | "paused" | "over";
+export type Phase = "loading" | "menu" | "lobby" | "playing" | "paused" | "over";
 export type Side = "jack" | "stalker";
+/** What the player picked on the menu. Online does not choose a side — the host
+ *  assigns them, because the two seats are different roles, not preferences. */
+export type Choice = { mode: "solo"; side: Side } | { mode: "online" };
 
 const CSS = `
 #screens { position:fixed; inset:0; z-index:50; display:none; place-content:center;
@@ -16,7 +19,7 @@ const CSS = `
   font:600 13px/1.6 ui-monospace,"SF Mono",Menlo,monospace; letter-spacing:.12em;
   color:#cfd6df; text-transform:uppercase; text-align:center; }
 body[data-phase="loading"] #screens, body[data-phase="menu"] #screens,
-body[data-phase="paused"] #screens { display:grid; }
+body[data-phase="lobby"] #screens, body[data-phase="paused"] #screens { display:grid; }
 /* the key art sits behind every non-gameplay screen, dimmed enough to read over */
 #screens::before { content:""; position:absolute; inset:0; background-size:cover;
   background-position:center; opacity:1; }
@@ -51,9 +54,11 @@ body[data-phase="paused"] #screens { display:grid; }
 export class Screens {
   private el: HTMLDivElement;
   private phase: Phase = "loading";
-  /** Resolves with the side the player picked. */
-  readonly chosen: Promise<Side>;
-  private resolve!: (s: Side) => void;
+  /** Resolves with what the player picked on the menu. */
+  readonly chosen: Promise<Choice>;
+  private resolve!: (c: Choice) => void;
+  /** Set by the online lobby so the waiting screen can report the count. */
+  lobbyLine = "";
 
   constructor() {
     const style = document.createElement("style");
@@ -67,7 +72,7 @@ export class Screens {
     const art = document.createElement("style");
     art.textContent = `#screens::before { background-image:url("${KEY_ART}"); }`;
     document.head.appendChild(art);
-    this.chosen = new Promise<Side>((r) => (this.resolve = r));
+    this.chosen = new Promise<Choice>((r) => (this.resolve = r));
     this.set("loading");
   }
 
@@ -76,6 +81,7 @@ export class Screens {
     document.body.dataset.phase = phase;
     if (phase === "loading") this.renderLoading();
     else if (phase === "menu") this.renderMenu();
+    else if (phase === "lobby") this.renderLobby();
     else if (phase === "paused") this.renderPaused();
     else this.el.innerHTML = "";
   }
@@ -112,11 +118,45 @@ export class Screens {
                the complex.</p>
           </div>
         </div>
+        <button class="plain" data-act="online">Play online &mdash; hunt a friend</button>
         <div class="keys">wasd move &middot; shift run &middot; space jump &middot; click to aim &middot; esc pauses</div>
       </div>`;
     this.el.querySelectorAll<HTMLElement>(".side").forEach((card) => {
-      card.addEventListener("click", () => this.resolve(card.dataset.side as Side));
+      card.addEventListener("click", () => {
+        card.blur();
+        this.resolve({ mode: "solo", side: card.dataset.side as Side });
+      });
     });
+    this.el.querySelector<HTMLElement>('[data-act="online"]')?.addEventListener("click", (e) => {
+      (e.currentTarget as HTMLElement).blur();
+      this.resolve({ mode: "online" });
+    });
+  }
+
+  /** Only ever shown AFTER the player committed to online and holds a seat. */
+  private renderLobby(): void {
+    this.el.innerHTML = `
+      <div class="panel">
+        <h1>Quarry</h1>
+        <div class="tag">${this.lobbyLine || "finding an opponent"}</div>
+        <div class="bar"><i></i></div>
+        <p class="keys" style="max-width:40ch;text-transform:none;letter-spacing:.04em;line-height:1.8">
+          One of you will be Jack. The other will be the thing hunting him.
+          You do not get to choose.</p>
+        <button class="plain" data-act="cancel">Back to menu</button>
+      </div>`;
+    this.el.querySelector<HTMLElement>('[data-act="cancel"]')
+      ?.addEventListener("click", () => this.onCancel?.());
+  }
+
+  /** Set by the caller so leaving the queue can free the seat. */
+  onCancel: (() => void) | null = null;
+
+  /** Refresh just the lobby's count line without rebuilding the screen. */
+  setLobbyLine(text: string): void {
+    this.lobbyLine = text;
+    const tag = this.el.querySelector(".tag");
+    if (tag && this.phase === "lobby") tag.textContent = text;
   }
 
   private renderPaused(): void {

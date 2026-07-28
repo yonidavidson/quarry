@@ -30,6 +30,8 @@ import { createPost } from "./render/post.ts";
 import { Screens } from "./game/phase.ts";
 import { Cling } from "./player/cling.ts";
 import { JackAI } from "./hunter/jack.ts";
+import { Online } from "./net/online.ts";
+import type { Side as SideT } from "./game/phase.ts";
 import { AUDIO, MODELS } from "./assets.ts";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { BodyAnim } from "./anim/body-anim.ts";
@@ -134,8 +136,32 @@ async function boot(): Promise<void> {
 
   // Everything heavy is loaded — offer the choice, then build the match around it.
   screens.set("menu");
-  const side = await screens.chosen;
-  const asStalker = side === "stalker";
+  const choice = await screens.chosen;
+  const online = choice.mode === "online" ? new Online() : null;
+  let asStalker = choice.mode === "solo" && choice.side === "stalker";
+
+  if (online) {
+    // matchmake() fires HERE — on the commit, never at boot. A player sitting in
+    // the menu must not hold a seat other people are queuing behind.
+    screens.onCancel = () => { online.leave(); location.reload(); };
+    screens.set("lobby");
+    await online.join();
+    // The waiting screen is driven by the live status, read every frame below —
+    // never by an event, and never by a host-written "go" that might never come.
+    await new Promise<void>((resolve) => {
+      const poll = window.setInterval(() => {
+        online.syncSession();
+        online.reconcileSides();
+        screens.setLobbyLine(
+          online.status === "searching"
+            ? `finding an opponent — ${online.lobbyCount} / 2`
+            : `opponent found — ${online.lobbyCount} / 2`,
+        );
+        if (online.live && online.mySide) { clearInterval(poll); resolve(); }
+      }, 250);
+    });
+    asStalker = online.mySide === "stalker";
+  }
   screens.set("playing");
   // #90 — the follow distance was tuned for Jack at 1.8m. The beast is 2.4m and
   // far broader, so the same offset puts the camera inside its chest. Scale the
@@ -156,6 +182,39 @@ async function boot(): Promise<void> {
   // did not intend. Ease the camera behind the heading while moving, and get out
   // of the way the moment the player looks around on purpose.
   let lastLook = 0;
+  // One body per remote, built exactly once. The reservation is taken
+  // synchronously: `remotes()` is read every frame, and a guard that straddles
+  // an await is not a guard — it spawns a clone per frame and leaves a trail.
+  const remoteBodies = new Map<string, THREE.Group>();
+  const remoteLoading = new Set<string>();
+  const remoteBody = (id: string, remoteSide: SideT | null): THREE.Group | null => {
+    const existing = remoteBodies.get(id);
+    if (existing) return existing;
+    if (remoteLoading.has(id) || !remoteSide) return null;
+    remoteLoading.add(id);
+    void (async () => {
+      try {
+        const url = remoteSide === "stalker" ? MODELS.stalker : MODELS.jack;
+        const gltf = await new GLTFLoader().loadAsync(url);
+        if (!online?.room?.players.has(id)) return;   // left while loading
+        const g = gltf.scene;
+        g.traverse((o) => { if ((o as THREE.Mesh).isMesh) o.castShadow = true; });
+        const box = new THREE.Box3().setFromObject(g);
+        const h = box.max.y - box.min.y || 1.8;
+        const sc = (remoteSide === "stalker" ? 2.4 : 1.8) / h;
+        g.scale.setScalar(sc);
+        scene.add(g);
+        remoteBodies.set(id, g);
+      } finally { remoteLoading.delete(id); }
+    })();
+    return null;
+  };
+  const dropStaleRemotes = (live: Set<string>): void => {
+    for (const [id, g] of remoteBodies) {
+      if (!live.has(id)) { scene.remove(g); remoteBodies.delete(id); }
+    }
+  };
+
   addEventListener("mousemove", (e) => {
     if (Math.abs(e.movementX) + Math.abs(e.movementY) > 2) lastLook = performance.now();
   });
@@ -179,9 +238,10 @@ async function boot(): Promise<void> {
   };
 
   // You are one of these; the AI wears the other.
-  const stalker = asStalker ? null : new Stalker(scene, { pounceDamage: 2, onHitPlayer: hurt });
-  const jack = asStalker ? new JackAI(scene, { damage: 1, onHitPlayer: hurt }) : null;
-  const foe = () => (asStalker ? jack! : stalker!);
+  // Online, the other seat is a person — no AI stands in for them.
+  const stalker = !online && !asStalker ? new Stalker(scene, { pounceDamage: 2, onHitPlayer: hurt }) : null;
+  const jack = !online && asStalker ? new JackAI(scene, { damage: 1, onHitPlayer: hurt }) : null;
+  const foe = () => (asStalker ? jack : stalker);
 
   // Playing the beast: wall-climb and ceiling-crawl take the body off the
   // physics controller — see src/player/cling.ts.
@@ -379,20 +439,43 @@ async function boot(): Promise<void> {
       }
 
       const enemy = foe();
-      // "visible" is line of sight, so breaking it actually loses your hunter
-      const flat = new THREE.Vector3(here.x - enemy.position.x, 0, here.z - enemy.position.z);
-      const dist = flat.length();
-      sightRay.set(enemy.position.clone().setY(1.6), flat.clone().normalize());
-      sightRay.far = Math.max(dist, 0.01);
-      const blocked = dist > 0.2 && sightRay.intersectObjects(walls, false).length > 0;
+      let pressure = 0;
 
-      if (stalker) stalker.update(delta, here, !blocked);
-      if (jack) jack.update(delta, here, !blocked);
+      if (enemy) {
+        // ── solo: the other side is an AI ──
+        const flat = new THREE.Vector3(here.x - enemy.position.x, 0, here.z - enemy.position.z);
+        const dist = flat.length();
+        sightRay.set(enemy.position.clone().setY(1.6), flat.clone().normalize());
+        sightRay.far = Math.max(dist, 0.01);
+        const blocked = dist > 0.2 && sightRay.intersectObjects(walls, false).length > 0;
+        if (stalker) stalker.update(delta, here, !blocked);
+        if (jack) jack.update(delta, here, !blocked);
+        pressure = enemy.alive ? enemy.pressure(here) : 0;
+      } else if (online) {
+        // ── online: the other seat is a person ──
+        online.setLocal(
+          character.root.position,
+          character.root.quaternion,
+          hunt.hp,
+          cling?.active ? 1 : character.isOnGround ? 0 : 2,
+        );
+        online.reconcileSides();
+        for (const r of online.remotes()) {
+          const body = remoteBody(r.id, r.side);
+          if (!body) continue;
+          // straight from `state` — it is already smoothed; re-smoothing here is
+          // what makes a networked game feel laggy
+          body.position.set(r.state.x, r.state.y, r.state.z);
+          if (r.state.q?.length === 4) body.quaternion.fromArray(r.state.q as number[]);
+          const d = here.distanceTo(body.position);
+          pressure = Math.max(pressure, Math.min(1, Math.max(0, 1 - d / 60)));
+        }
+        dropStaleRemotes(new Set(online.remotes().map((r) => r.id)));
+      }
+
       hunt.update(delta, here);
-
-      const pressure = enemy.alive ? enemy.pressure(here) : 0;
       setMusicIntensity(pressure);
-      if (asStalker) hud.setInRange(enemy.alive && here.distanceTo(enemy.position) < 4.2);
+      if (asStalker && enemy) hud.setInRange(enemy.alive && here.distanceTo(enemy.position) < 4.2);
       hud.update(hunt.hp, hunt.cells, hunt.extractionOpen, pressure,
                  stalker ? stalker.state : "prowl");
       if (hunt.outcome !== "playing") hud.showEnd(hunt.outcome === "won", hunt.cells, hunt.winReason, asStalker);
