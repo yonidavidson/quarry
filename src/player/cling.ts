@@ -17,7 +17,7 @@ import { HALL } from "../world/complex.ts";
 import { AUDIO } from "../assets.ts";
 import { play } from "../audio.ts";
 import { sparkBurst } from "../fx/hits.ts";
-import { solveTwoBone, findArm } from "../anim/two-bone-ik.ts";
+import { solveTwoBone, findArm, findLeg } from "../anim/two-bone-ik.ts";
 
 export type ClingState = "off" | "wall" | "ceiling";
 
@@ -61,6 +61,10 @@ export class Cling {
    *  contact, not a direction to wave at. */
   private gripL = new THREE.Vector3();
   private gripR = new THREE.Vector3();
+  private footL = new THREE.Vector3();
+  private footR = new THREE.Vector3();
+  private legL: ReturnType<typeof findLeg> = null;
+  private legR: ReturnType<typeof findLeg> = null;
   private hasGrip = false;
   private scene: THREE.Scene | null = null;
 
@@ -76,6 +80,8 @@ export class Cling {
   setBody(root: THREE.Object3D): void {
     this.armL = findArm(root, "l");
     this.armR = findArm(root, "r");
+    this.legL = findLeg(root, "l");
+    this.legR = findLeg(root, "r");
   }
 
   /** Additive arm pose — call AFTER the animation mixer writes its bones, or the
@@ -94,6 +100,20 @@ export class Cling {
       solveTwoBone(this.armR.upper, this.armR.lower, this.armR.hand, this.gripR,
         _tmpPole.copy(body).add(new THREE.Vector3(2.5, -1.5, 0)));
     }
+    // The legs were the loudest remaining flaw precisely BECAUSE the arms now
+    // look right: a creature gripping a ceiling with its hands while its legs
+    // walk on air. What they do depends on what is being held, and a literal
+    // dangle is only correct on a wall — a ceiling-crawler puts all four limbs
+    // on the surface, which is the whole reason it reads as a thing that belongs
+    // up there rather than a person hanging from it.
+    if (this.legL) {
+      solveTwoBone(this.legL.upper, this.legL.lower, this.legL.hand, this.footL,
+        _tmpPole.copy(body).add(new THREE.Vector3(-2.5, this.state === "ceiling" ? 1.5 : -2, 0)));
+    }
+    if (this.legR) {
+      solveTwoBone(this.legR.upper, this.legR.lower, this.legR.hand, this.footR,
+        _tmpPole.copy(body).add(new THREE.Vector3(2.5, this.state === "ceiling" ? 1.5 : -2, 0)));
+    }
   }
 
   /** Where two hands would land on the thing being held. Called at contact and
@@ -104,12 +124,20 @@ export class Cling {
       const y = CEIL_Y + 1.15;                       // the surface, not the body
       this.gripL.set(p.x - 0.55, y, p.z);
       this.gripR.set(p.x + 0.55, y, p.z);
+      // feet on the ceiling too, planted behind the hands — four points of
+      // contact is what makes it read as belonging up there
+      this.footL.set(p.x - 0.62, y - 0.12, p.z - 0.95);
+      this.footR.set(p.x + 0.62, y - 0.12, p.z - 0.95);
     } else {
       // out along the wall face, at head height
       const along = _tmpAlong.set(-this.normal.z, 0, this.normal.x);
       const face = _tmpFace.copy(this.normal).multiplyScalar(-0.85);
       this.gripL.copy(p).addScaledVector(along, -0.5).add(face).setY(p.y + 1.5);
       this.gripR.copy(p).addScaledVector(along, 0.5).add(face).setY(p.y + 1.5);
+      // on a wall the weight hangs: feet trail below, swinging with the body
+      const sway = Math.sin(this.swingT * 7.5) * this.swing * Math.exp(-this.swingT * 2.6);
+      this.footL.copy(p).addScaledVector(along, -0.42 + sway * 0.8).add(face).setY(p.y - 0.55);
+      this.footR.copy(p).addScaledVector(along, 0.42 + sway * 0.8).add(face).setY(p.y - 0.55);
     }
     this.hasGrip = true;
   }

@@ -98,23 +98,35 @@ export function solveTwoBone(
   aimAt(lower, hand, target);
 }
 
-/** Find the shoulder/elbow/hand chain on a humanoid rig by name, tolerantly. */
-export function findArm(root: THREE.Object3D, side: "l" | "r"): {
-  upper: THREE.Object3D; lower: THREE.Object3D; hand: THREE.Object3D;
-} | null {
-  const sideRe = side === "l" ? /(^|[^a-z])l(eft)?([^a-z]|$)/i : /(^|[^a-z])r(ight)?([^a-z]|$)/i;
-  let upper: THREE.Object3D | null = null;
-  let lower: THREE.Object3D | null = null;
-  let hand: THREE.Object3D | null = null;
+/**
+ * Find a limb chain by name. Deliberately explicit rather than clever: the rigs
+ * this game uses are Mixamo-convention CamelCase (`LeftUpLeg`, `LeftForeArm`),
+ * and an earlier "tolerant" matcher silently matched NOTHING — it required a
+ * non-letter after "Left", which CamelCase never provides, so the IK quietly did
+ * nothing at all and looked plausible enough to be believed. Matchers that fail
+ * silently are worse than matchers that are narrow.
+ */
+export interface Chain { upper: THREE.Object3D; lower: THREE.Object3D; hand: THREE.Object3D }
+
+function chain(root: THREE.Object3D, side: "l" | "r", parts: [RegExp, RegExp, RegExp]): Chain | null {
+  const want = side === "l" ? "left" : "right";
+  const found: Array<THREE.Object3D | null> = [null, null, null];
   root.traverse((o) => {
-    const n = o.name;
-    if (!sideRe.test(n)) return;
-    const l = n.toLowerCase();
-    if (!upper && /upperarm|upper_arm|shoulder|arm(?!.*fore)/.test(l) && !/fore|hand/.test(l)) upper = o;
-    else if (!lower && /forearm|fore_arm|lowerarm|elbow/.test(l)) lower = o;
-    else if (!hand && /hand|wrist/.test(l)) hand = o;
+    const n = o.name.toLowerCase();
+    if (!n.startsWith(want) && !n.includes(`_${side}`) && !n.includes(`.${side}`)) return;
+    parts.forEach((re, i) => { if (!found[i] && re.test(n)) found[i] = o; });
   });
-  // a chain is only usable if all three exist AND are actually nested
-  if (!upper || !lower || !hand) return null;
-  return { upper, lower, hand };
+  const [upper, lower, hand] = found;
+  return upper && lower && hand ? { upper, lower, hand } : null;
+}
+
+/** Hips → knee → foot. */
+export function findLeg(root: THREE.Object3D, side: "l" | "r"): Chain | null {
+  return chain(root, side, [/upleg$|upperleg$|thigh$/, /(?<!up)leg$|calf$|shin$/, /foot$|ankle$/]);
+}
+
+/** Shoulder → elbow → hand. `forearm` is tested FIRST so it cannot be mistaken
+ *  for the upper arm — both end in "arm". */
+export function findArm(root: THREE.Object3D, side: "l" | "r"): Chain | null {
+  return chain(root, side, [/(?<!fore)arm$|upperarm$/, /forearm$|lowerarm$/, /hand$|wrist$/]);
 }
