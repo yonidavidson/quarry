@@ -12,7 +12,7 @@ export const HALL = { w: 140, d: 90, wallH: 14 } as const;
 type Box = {
   /** centre */ p: [number, number, number];
   /** full size */ s: [number, number, number];
-  mat: "floor" | "catwalk" | "wall";
+  mat: "floor" | "catwalk" | "wall" | "machine" | "ceiling" | "pipe";
 };
 
 /** The static solids. One list, so the mesh pass and the collider pass agree. */
@@ -33,7 +33,7 @@ function layout(): Box[] {
   for (let i = 0; i < 6; i++) {
     const x = -50 + i * 20;
     const z = i % 2 === 0 ? -14 : 12;
-    boxes.push({ p: [x, 3, z], s: [12, 6, 9], mat: "wall" });
+    boxes.push({ p: [x, 3, z], s: [12, 6, 9], mat: "machine" });
   }
 
   // Catwalk ring: a raised walkway around the hall, 6m up, with the four
@@ -61,6 +61,25 @@ function layout(): Box[] {
   // Extraction bay platform, far end.
   boxes.push({ p: [58, 1, 0], s: [18, 2, 26], mat: "catwalk" });
 
+  // The ceiling. Without it the camera looks into black void above head height
+  // and the hall reads as a floor floating in nothing — and it is the surface
+  // the whole game asks you to watch.
+  boxes.push({ p: [0, wallH + 0.5, 0], s: [w, 1, d], mat: "ceiling" });
+
+  // Pipe runs across it, so the Stalker crosses something instead of an
+  // invisible plane, and so there is structure overhead to read against.
+  for (let i = 0; i < 7; i++) {
+    const z = -d / 2 + 8 + i * ((d - 16) / 6);
+    boxes.push({ p: [0, wallH - 1.9, z], s: [w - 6, 0.9, 0.9], mat: "pipe" });
+    boxes.push({ p: [0, wallH - 2.9, z + 1.6], s: [w - 6, 0.55, 0.55], mat: "pipe" });
+  }
+  // support columns — vertical anchors that give the space a sense of depth
+  for (const x of [-46, -16, 16, 46]) {
+    for (const z of [-30, 30]) {
+      boxes.push({ p: [x, wallH / 2, z], s: [2.2, wallH, 2.2], mat: "machine" });
+    }
+  }
+
   return boxes;
 }
 
@@ -79,9 +98,13 @@ export function buildComplex(scene: THREE.Scene, physics: PhysicsWorld): THREE.M
   const plateTex = loadTiling(TEXTURES.catwalk, 6);
 
   const mats = {
-    floor: new THREE.MeshStandardMaterial({ map: floorTex, roughness: 0.95, metalness: 0.05 }),
-    catwalk: new THREE.MeshStandardMaterial({ map: plateTex, roughness: 0.8, metalness: 0.35 }),
-    wall: new THREE.MeshStandardMaterial({ color: 0x2a2b2e, roughness: 0.9, metalness: 0.15 }),
+    // the generated concrete reads warm; pull it back toward wet grey
+    floor: new THREE.MeshStandardMaterial({ map: floorTex, color: 0x8e94a0, roughness: 0.62, metalness: 0.12 }),
+    catwalk: new THREE.MeshStandardMaterial({ map: plateTex, color: 0xb8bcc4, roughness: 0.7, metalness: 0.45 }),
+    wall: new THREE.MeshStandardMaterial({ map: loadTiling(TEXTURES.wall, 10), color: 0x9aa0a6, roughness: 0.88, metalness: 0.2 }),
+    machine: new THREE.MeshStandardMaterial({ map: loadTiling(TEXTURES.machine, 3), color: 0x9fa4ac, roughness: 0.72, metalness: 0.55 }),
+    ceiling: new THREE.MeshStandardMaterial({ map: loadTiling(TEXTURES.ceiling, 16), color: 0x6e737c, roughness: 0.9, metalness: 0.3 }),
+    pipe: new THREE.MeshStandardMaterial({ color: 0x4a4038, roughness: 0.75, metalness: 0.6 }),
   };
 
   const box = new THREE.BoxGeometry(1, 1, 1);
@@ -90,7 +113,7 @@ export function buildComplex(scene: THREE.Scene, physics: PhysicsWorld): THREE.M
     const mesh = new THREE.Mesh(box, mats[b.mat]);
     mesh.position.set(b.p[0], b.p[1], b.p[2]);
     mesh.scale.set(b.s[0], b.s[1], b.s[2]);
-    mesh.castShadow = b.mat !== "floor";
+    mesh.castShadow = b.mat !== "floor" && b.mat !== "ceiling";
     mesh.receiveShadow = true;
     scene.add(mesh);
 
@@ -101,32 +124,70 @@ export function buildComplex(scene: THREE.Scene, physics: PhysicsWorld): THREE.M
   return solids;
 }
 
-/** Sodium emergency lighting — dim, warm, and pooled, so the dark between
- *  pools is where the hunt happens. */
+/** Sodium emergency lighting. The rule this follows: every pool of light has a
+ *  FIXTURE you can see making it. A scene lit by invisible point lights reads as
+ *  flat no matter how the numbers are tuned, and in a hunt the dark between the
+ *  pools is the gameplay — so the fill is deliberately low and the falloff is
+ *  short. Fixtures are emissive so the bloom pass turns them into real lamps. */
 export function lightComplex(scene: THREE.Scene, shadowMapSize: number): THREE.DirectionalLight {
-  scene.add(new THREE.AmbientLight(0x3d4654, 1.5));
-  scene.add(new THREE.HemisphereLight(0x7d8ba0, 0x241c14, 1.0));
+  // a true fill, not a wash — enough to keep shapes from going to pure black
+  scene.add(new THREE.AmbientLight(0x3d4b63, 1.7));
+  scene.add(new THREE.HemisphereLight(0x6f83a6, 0x2b2014, 1.3));
 
-  // one weak overhead key so shapes read at all, shadow-casting
-  const key = new THREE.DirectionalLight(0xc4d2e6, 1.6);
-  key.position.set(30, 40, 20);
+  // one cold overhead key, mostly for shadow shape rather than illumination
+  const key = new THREE.DirectionalLight(0xb4c6de, 1.25);
+  key.position.set(30, 44, 20);
   key.castShadow = shadowMapSize > 0;
   key.shadow.mapSize.setScalar(shadowMapSize || 1024);
   key.shadow.camera.near = 1;
-  key.shadow.camera.far = 160;
-  const s = 80;
-  key.shadow.camera.left = -s;
-  key.shadow.camera.right = s;
-  key.shadow.camera.top = s;
-  key.shadow.camera.bottom = -s;
+  key.shadow.camera.far = 180;
+  key.shadow.bias = -0.0012;
+  const s2 = 80;
+  key.shadow.camera.left = -s2;
+  key.shadow.camera.right = s2;
+  key.shadow.camera.top = s2;
+  key.shadow.camera.bottom = -s2;
   scene.add(key);
 
-  for (const [x, z] of [[-50, -30], [-50, 25], [-20, 20], [-20, -22], [20, -20], [20, 22], [50, 25], [50, -25], [58, 0], [0, 0]]) {
-    const lamp = new THREE.PointLight(0xff9840, 220, 60, 2);
-    lamp.position.set(x, 8, z);
+  // the sodium lamps — geometry first, light second
+  const housing = new THREE.MeshStandardMaterial({ color: 0x14161a, roughness: 0.9, metalness: 0.4 });
+  const glass = new THREE.MeshStandardMaterial({
+    color: 0xffb060, emissive: 0xff8a2c, emissiveIntensity: 1.5, roughness: 0.35,
+  });
+  const shade = new THREE.ConeGeometry(1.25, 1.1, 12, 1, true);
+  const bulb = new THREE.SphereGeometry(0.42, 10, 8);
+
+  // A grid, not a scatter. Ten lamps across 140x90m left most of the hall in
+  // black void with nothing to read; the space needs enough sources that the
+  // architecture is legible, and the DARK still has to live between them.
+  const LAMPS: Array<[number, number]> = [];
+  for (const x of [-58, -29, 0, 29, 58]) {
+    for (const z of [-32, 0, 32]) LAMPS.push([x, z]);
+  }
+  for (const [x, z] of LAMPS) {
+    const rig = new THREE.Group();
+    rig.position.set(x, 9.4, z);
+
+    const cone = new THREE.Mesh(shade, housing);
+    cone.rotation.x = Math.PI;      // open end down
+    rig.add(cone);
+    const glow = new THREE.Mesh(bulb, glass);
+    glow.position.y = -0.35;
+    rig.add(glow);
+
+    // a short stem up to the ceiling, so the lamp hangs from something
+    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 3.4, 6), housing);
+    stem.position.y = 2.1;
+    rig.add(stem);
+    scene.add(rig);
+
+    // Short range and quadratic falloff: the pool ends, and between pools it is
+    // genuinely dark. That darkness is where the hunt happens.
+    const lamp = new THREE.PointLight(0xffa862, 260, 46, 1.7);
+    lamp.position.set(x, 8.6, z);
     scene.add(lamp);
   }
 
-  scene.fog = new THREE.FogExp2(0x12161d, 0.0055);
+  scene.fog = new THREE.FogExp2(0x141a24, 0.0048);
   return key;
 }

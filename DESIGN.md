@@ -88,6 +88,9 @@ Menu video: yes.
 | The Stalker — rigged hunter | creature | landed (cms4fiv3a008x2pqlshvq5jnp) | yes |
 | Complex floor — wet concrete | texture | landed | yes |
 | Steel catwalk / plate | texture | landed | yes |
+| Hall walls — chipped paint | texture | landed | yes |
+| Machine casings — oiled metal | texture | landed | yes |
+| Ceiling — corrugated + pipes | texture | landed | yes |
 | Patrol drone | model | planned | — |
 | Energy cell pickup | model | planned | — |
 | Blaster shot | sfx | landed | yes |
@@ -217,3 +220,19 @@ does not apply. Rows stay as the split to hand out the moment that changes.
   **Lesson for the smoke pass**: "no page errors + the HUD updates" is not
   evidence the game is playable. Sample the player's POSITION over time, or hash
   frames and look for repeats.
+- 2026-07-28 — Visual pass ([#86](https://github.com/yonidavidson/quarry/issues/86)),
+  first round. What actually moved the needle, in order:
+  1. **A ceiling.** Without one the camera looked into black void above head
+     height and the hall read as a floor floating in nothing.
+  2. **Lamps as GEOMETRY.** Emissive fixtures hanging on stems, not invisible
+     point lights — light with a visible cause is most of what "lit" means.
+  3. **A grid of them.** Ten lamps across 140x90m left most of the space
+     unreadable; fifteen on a grid make the architecture legible while the dark
+     still lives between the pools.
+  4. **A post stack** — bloom, grade, vignette (`src/render/post.ts`), tier-aware,
+     with the composer's MSAA from `tier.composerSamples`.
+  5. Textures on the walls, machines and ceiling; the floor tinted back toward
+     grey because the generated concrete reads warm.
+  Two tuning passes were needed: the first blew the bloom out into suns and
+  graded the whole hall to lava, the second was too dark to see. Still warm-
+  dominant and Jack's skin reads pale — not finished, just no longer boxes.

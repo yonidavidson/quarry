@@ -9,6 +9,12 @@ export const TEXTURES = {
   floor: `${GEN}/cms4emta7007b2ens0yy80gif/texture-basecolor`,
   /** Catwalks and stairs — rusted diamond plate. */
   catwalk: `${GEN}/cms4emub4006i2pqltf31ogeu/texture-basecolor`,
+  /** Hall walls — chipped grey-green paint over rusted steel. */
+  wall: `${GEN}/cms4nxrid000r2bl48qklh216/texture-basecolor`,
+  /** Machine casings — dark oiled metal, rivets, rust bloom. */
+  machine: `${GEN}/cms4nxsgk000w2bl4zfxv7pvj/texture-basecolor`,
+  /** The ceiling: corrugated metal with pipe runs and cable trays. */
+  ceiling: `${GEN}/cms4nxte7000m2ro5bxj8slct/texture-basecolor`,
 } as const;
 
 export const MODELS = {

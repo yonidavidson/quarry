@@ -26,6 +26,7 @@ import { Blaster } from "./combat/blaster.ts";
 import { Hunt } from "./game/hunt.ts";
 import { Hud } from "./ui/hud.ts";
 import { initAudio, startMusic, setMusicIntensity, play } from "./audio.ts";
+import { createPost } from "./render/post.ts";
 import { Screens } from "./game/phase.ts";
 import { Cling } from "./player/cling.ts";
 import { JackAI } from "./hunter/jack.ts";
@@ -46,14 +47,16 @@ async function boot(): Promise<void> {
   const tier = detectTier();
   const renderer = new THREE.WebGLRenderer({
     canvas,
-    antialias: rendererAntialias(tier, false),
+    // a post stack runs, so context MSAA would anti-alias a buffer the composer
+    // never reads — the samples come from tier.composerSamples instead
+    antialias: rendererAntialias(tier, true),
   });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, tier.dprCap));
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.shadowMap.enabled = tier.shadowMapSize > 0;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.35;
+  renderer.toneMappingExposure = 1.15;
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x12161d);
@@ -65,6 +68,7 @@ async function boot(): Promise<void> {
   );
 
   const sun = lightComplex(scene, tier.shadowMapSize);
+  const post = createPost(renderer, scene, camera, tier);
 
   // ── physics + the floor you walk on ──
   const physics = await PhysicsWorld.create();
@@ -200,6 +204,7 @@ async function boot(): Promise<void> {
     {
       setDprScale: (m) =>
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, tier.dprCap * m)),
+      setPostEnabled: (on) => post.setEnabled(on),
       setShadowQuality: (level) => {
         renderer.shadowMap.enabled = level !== "off";
         if (level !== "off") {
@@ -219,7 +224,7 @@ async function boot(): Promise<void> {
     resizeTimer = window.setTimeout(() => {
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
+      post.setSize(window.innerWidth, window.innerHeight);
     }, 120);
   });
 
@@ -310,7 +315,7 @@ async function boot(): Promise<void> {
     startMusic();
     governor.frame(delta * 1000);
 
-    renderer.render(scene, camera);
+    post.render(delta);
   }
 }
 
