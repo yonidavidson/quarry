@@ -108,6 +108,21 @@ async function boot(): Promise<void> {
     locomotionProfile: player.locomotionProfile,
   });
 
+  // #91 — Jack fires from the camera, which in third person puts the bolt and the
+  // flash in mid-air beside his head. Aim stays on the camera axis (that is what
+  // makes the crosshair honest) but the shot is DRAWN from his hand, and his
+  // upper body turns to point where the crosshair does. Both are procedural:
+  // a real weapon model and an aim clip are blocked on credits.
+  let handBone: THREE.Object3D | null = null;
+  let aimBone: THREE.Object3D | null = null;
+  player.scene.traverse((o) => {
+    const n = o.name.toLowerCase();
+    if (!handBone && /hand/.test(n) && /r|right/.test(n.replace("hand", ""))) handBone = o;
+    if (!aimBone && /(spine.*2|chest|upperchest)/.test(n)) aimBone = o;
+  });
+  if (!aimBone) player.scene.traverse((o) => { if (!aimBone && /spine/.test(o.name.toLowerCase())) aimBone = o; });
+  const handPos = new THREE.Vector3();
+
   // Jack's blaster is mouse-aimed, so pointer-lock aim stays on (the default).
   const kb = new KeyboardInput();
   const aimCue = createAimCue();
@@ -220,7 +235,8 @@ async function boot(): Promise<void> {
       }
     } else {
       hud.pulseCrosshair();
-      if (blaster.fire([stalker!.root], walls)) stalker!.takeHit(1);
+      const from = handBone ? (handBone as THREE.Object3D).getWorldPosition(handPos) : undefined;
+      if (blaster.fire([stalker!.root], walls, from)) stalker!.takeHit(1);
       if (!stalker!.alive) hunt.foeDown();
     }
   });
@@ -317,6 +333,17 @@ async function boot(): Promise<void> {
 
     anims.update(character, delta);
     player.update(delta);
+    // additive aim — the mixer has just written the bone rotations, so this
+    // layers on top of whatever gait is playing rather than fighting it
+    if (aimBone && !asStalker) {
+      const pitch = THREE.MathUtils.clamp(followCam.polarAngle - Math.PI / 2, -0.55, 0.55);
+      let yaw = followCam.azimuthAngle - Math.PI - character.root.rotation.y;
+      while (yaw > Math.PI) yaw -= Math.PI * 2;
+      while (yaw < -Math.PI) yaw += Math.PI * 2;
+      const b = aimBone as THREE.Object3D;
+      b.rotation.x += pitch * 0.8;
+      b.rotation.y += THREE.MathUtils.clamp(yaw, -0.7, 0.7) * 0.5;
+    }
     // clinging to a wall or ceiling is holding on, not travelling
     beastAnim?.update(delta, character.currPos, { frozen: !!cling?.active });
 

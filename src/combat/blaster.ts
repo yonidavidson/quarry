@@ -14,7 +14,7 @@ export class Blaster {
   private cooldown = 0;
   private tracers: Tracer[] = [];
   private ray = new THREE.Raycaster();
-  private muzzle = new THREE.PointLight(0x9fd4ff, 0, 10, 2);
+  private muzzle = new THREE.PointLight(0x9fd4ff, 0, 4.5, 2);
 
   private scene: THREE.Scene;
   private camera: THREE.Camera;
@@ -29,7 +29,7 @@ export class Blaster {
   get ready(): boolean { return this.cooldown <= 0; }
 
   /** @returns true when the shot connected with `targets`. */
-  fire(targets: THREE.Object3D[], solids: THREE.Object3D[]): boolean {
+  fire(targets: THREE.Object3D[], solids: THREE.Object3D[], drawFrom?: THREE.Vector3): boolean {
     if (this.cooldown > 0) return false;
     this.cooldown = COOLDOWN;
 
@@ -45,9 +45,12 @@ export class Blaster {
     const blocked = wall && hit ? wall.distance < hit.distance : !!wall && !hit;
     const end = origin.clone().addScaledVector(dir, hit && !blocked ? hit.distance : wall ? wall.distance : RANGE);
 
-    this.addTracer(origin.clone().addScaledVector(dir, 0.6), end);
-    this.muzzle.position.copy(origin).addScaledVector(dir, 1);
-    this.muzzle.intensity = 26;
+    // Aim from the camera, draw from the gun hand: the bolt still ends where the
+    // raycast hit, so the visual and the hit can never disagree.
+    const muzzleAt = drawFrom ? drawFrom.clone() : origin.clone().addScaledVector(dir, 0.6);
+    this.addTracer(muzzleAt, end);
+    this.muzzle.position.copy(muzzleAt);
+    this.muzzle.intensity = 7;
     play(AUDIO.blaster, 0.55, 0.95 + Math.random() * 0.1);
 
     return !!hit && !blocked;
@@ -65,7 +68,7 @@ export class Blaster {
 
   update(dt: number): void {
     if (this.cooldown > 0) this.cooldown -= dt;
-    this.muzzle.intensity = Math.max(0, this.muzzle.intensity - dt * 220);
+    this.muzzle.intensity = Math.max(0, this.muzzle.intensity - dt * 90);
     for (let i = this.tracers.length - 1; i >= 0; i--) {
       const t = this.tracers[i];
       t.life -= dt;
