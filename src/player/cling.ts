@@ -17,10 +17,14 @@ import { HALL } from "../world/complex.ts";
 import { AUDIO } from "../assets.ts";
 import { play } from "../audio.ts";
 import { sparkBurst } from "../fx/hits.ts";
+import { solveTwoBone, findArm } from "../anim/two-bone-ik.ts";
 
 export type ClingState = "off" | "wall" | "ceiling";
 
 const CEIL_Y = HALL.wallH - 1.2;
+const _tmpPole = new THREE.Vector3();
+const _tmpAlong = new THREE.Vector3();
+const _tmpFace = new THREE.Vector3();
 const REACH = 2.2;      // how close a wall has to be to grab it
 const CLIMB = 7.5;      // m/s up and down
 const STRAFE = 6.0;     // m/s along the wall
@@ -51,8 +55,13 @@ export class Cling {
   private swing = 0;          // amplitude, from the speed you arrived at
   private swingT = 0;         // seconds since contact
   private catching = 0;       // brief input lockout so contact reads as an event
-  private armL: THREE.Object3D | null = null;
-  private armR: THREE.Object3D | null = null;
+  private armL: ReturnType<typeof findArm> = null;
+  private armR: ReturnType<typeof findArm> = null;
+  /** Where the hands actually grip — a POINT on the surface, found by raycast at
+   *  contact, not a direction to wave at. */
+  private gripL = new THREE.Vector3();
+  private gripR = new THREE.Vector3();
+  private hasGrip = false;
   private scene: THREE.Scene | null = null;
 
   constructor(physics: PhysicsWorld, character: CharacterController, solids: THREE.Object3D[], scene?: THREE.Scene) {
@@ -65,22 +74,44 @@ export class Cling {
 
   /** Hand the body over once it loads, so the arms can reach for the surface. */
   setBody(root: THREE.Object3D): void {
-    root.traverse((o) => {
-      const n = o.name.toLowerCase();
-      if (!/upperarm|shoulder|arm/.test(n)) return;
-      if (!this.armL && /l(eft)?($|[^a-z])/.test(n)) this.armL = o;
-      if (!this.armR && /r(ight)?($|[^a-z])/.test(n)) this.armR = o;
-    });
+    this.armL = findArm(root, "l");
+    this.armR = findArm(root, "r");
   }
 
   /** Additive arm pose — call AFTER the animation mixer writes its bones, or the
    *  clip overwrites the reach every frame. The arms lift toward whatever the
    *  body is holding, and lead it on the way in. */
   poseArms(): void {
-    if (this.state === "off" || this.catching > 0.35) return;
-    const lift = this.state === "ceiling" ? -1.15 : -0.95;
-    if (this.armL) this.armL.rotation.x += lift;
-    if (this.armR) this.armR.rotation.x += lift;
+    if (this.state === "off" || !this.hasGrip) return;
+    // The pole hint keeps the elbows breaking outward instead of folding the
+    // arms through the chest — the classic IK tell.
+    const body = this.character.root.position;
+    if (this.armL) {
+      solveTwoBone(this.armL.upper, this.armL.lower, this.armL.hand, this.gripL,
+        _tmpPole.copy(body).add(new THREE.Vector3(-2.5, -1.5, 0)));
+    }
+    if (this.armR) {
+      solveTwoBone(this.armR.upper, this.armR.lower, this.armR.hand, this.gripR,
+        _tmpPole.copy(body).add(new THREE.Vector3(2.5, -1.5, 0)));
+    }
+  }
+
+  /** Where two hands would land on the thing being held. Called at contact and
+   *  kept up to date as the body slides along the surface. */
+  private setGrip(): void {
+    const p = this.pos;
+    if (this.state === "ceiling") {
+      const y = CEIL_Y + 1.15;                       // the surface, not the body
+      this.gripL.set(p.x - 0.55, y, p.z);
+      this.gripR.set(p.x + 0.55, y, p.z);
+    } else {
+      // out along the wall face, at head height
+      const along = _tmpAlong.set(-this.normal.z, 0, this.normal.x);
+      const face = _tmpFace.copy(this.normal).multiplyScalar(-0.85);
+      this.gripL.copy(p).addScaledVector(along, -0.5).add(face).setY(p.y + 1.5);
+      this.gripR.copy(p).addScaledVector(along, 0.5).add(face).setY(p.y + 1.5);
+    }
+    this.hasGrip = true;
   }
 
   get active(): boolean { return this.state !== "off"; }
@@ -133,6 +164,7 @@ export class Cling {
   release(): void {
     if (this.state === "off") return;
     this.state = "off";
+    this.hasGrip = false;
     this.cooldown = 0.35; // stops a held key re-grabbing the wall you just left
     const body = this.character.body;
     body.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
@@ -182,7 +214,7 @@ export class Cling {
     if (this.catching > 0) this.catching -= dt;
     this.swingT += dt;
     // the catch owns the body for a beat — you do not start climbing mid-impact
-    if (this.catching > 0.34) { this.applyPose(yaw); return; }
+    if (this.catching > 0.34) { this.setGrip(); this.applyPose(yaw); return; }
 
     if (input.drop) { this.release(); return; }
 
@@ -214,6 +246,7 @@ export class Cling {
     this.pos.x = THREE.MathUtils.clamp(this.pos.x, -lim.x, lim.x);
     this.pos.z = THREE.MathUtils.clamp(this.pos.z, -lim.z, lim.z);
 
+    this.setGrip();
     this.applyPose(yaw);
   }
 
