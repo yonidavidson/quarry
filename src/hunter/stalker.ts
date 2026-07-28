@@ -13,6 +13,7 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { AUDIO, MODELS } from "../assets.ts";
 import { playAt } from "../audio.ts";
 import { BodyAnim } from "../anim/body-anim.ts";
+import { flashBody, sparkBurst } from "../fx/hits.ts";
 
 export type StalkerState =
   | "prowl"    // walking the floor toward where it last had you
@@ -103,9 +104,21 @@ export class Stalker {
   takeHit(damage: number): void {
     if (!this.alive) return;
     this.hp -= damage;
-    if (this.hp <= 0) { this.alive = false; this.root.visible = false; return; }
+    // the hit has to be visible, or shooting is indistinguishable from missing
+    flashBody(this.root, 0xff4020);
+    sparkBurst(this.scene, this.root.position.clone().setY(1.6), 0xffb070, 16);
+    playAt(AUDIO.claw, this.root.position, this.scene, 0.5, 14);
+    if (this.hp <= 0) { this.alive = false; this.die(); return; }
     // being shot makes it leave — and it leaves UPWARD, which is the threat
     this.enter(this.state === "ceiling" ? "ceiling" : "toWall");
+  }
+
+  /** Bodies used to simply stop being drawn. A kill deserves punctuation. */
+  private dying = 0;
+  private die(): void {
+    this.dying = 1;
+    playAt(AUDIO.roar, this.root.position, this.scene, 1, 26);
+    sparkBurst(this.scene, this.root.position.clone().setY(1.4), 0x8a2418, 26);
   }
 
   private enter(next: StalkerState): void {
@@ -124,7 +137,15 @@ export class Stalker {
   }
 
   update(dt: number, player: THREE.Vector3, playerVisible: boolean): void {
-    if (!this.alive) return;
+    if (!this.alive) {
+      // topple, settle, stay. The corpse is the evidence.
+      if (this.dying > 0 && this.dying < 1.6) {
+        this.dying += dt;
+        this.root.rotation.x = Math.min(this.dying * 1.4, Math.PI / 2.1);
+        this.root.position.y = Math.max(0, this.root.position.y - dt * 3);
+      }
+      return;
+    }
     this.life += dt;
     if (this.life < this.senseAt) playerVisible = false;
     this.t += dt;

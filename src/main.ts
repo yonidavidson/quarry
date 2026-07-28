@@ -27,6 +27,7 @@ import { Hunt } from "./game/hunt.ts";
 import { Hud } from "./ui/hud.ts";
 import { initAudio, startMusic, setMusicIntensity, play } from "./audio.ts";
 import { createPost } from "./render/post.ts";
+import { updateSparks, fadeNearCamera } from "./fx/hits.ts";
 import { Screens } from "./game/phase.ts";
 import { Cling } from "./player/cling.ts";
 import { JackAI } from "./hunter/jack.ts";
@@ -523,14 +524,21 @@ async function boot(): Promise<void> {
         dropStaleRemotes(new Set(online.remotes().map((r) => r.id)));
       }
 
+      // #82 — a landed pounce filled the frame with opaque body; fading whatever
+      // is on top of the lens keeps the room readable
+      if (stalker?.alive) fadeNearCamera(stalker.root, camera);
+      if (jack?.alive) fadeNearCamera(jack.root, camera);
+
       hunt.update(delta, here);
       setMusicIntensity(pressure);
       if (asStalker && enemy) hud.setInRange(enemy.alive && here.distanceTo(enemy.position) < 4.2);
+      const foeHp = stalker ? stalker.hp / 6 : jack ? jack.hp / 5 : 1;
       hud.update(hunt.hp, hunt.cells, hunt.extractionOpen, pressure,
-                 stalker ? stalker.state : "prowl");
+                 stalker ? stalker.state : "prowl", enemy ? foeHp : 1);
       if (hunt.outcome !== "playing") hud.showEnd(hunt.outcome === "won", hunt.cells, hunt.winReason, asStalker, hunt.outcome === "abandoned");
     }
     blaster.update(delta);
+    updateSparks(delta, scene);
     startMusic();
     governor.frame(delta * 1000);
 

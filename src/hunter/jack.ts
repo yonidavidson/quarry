@@ -11,6 +11,7 @@ import { AUDIO, MODELS } from "../assets.ts";
 import { play, playAt } from "../audio.ts";
 import { HALL } from "../world/complex.ts";
 import { BodyAnim } from "../anim/body-anim.ts";
+import { flashBody, sparkBurst } from "../fx/hits.ts";
 
 export type JackState = "patrol" | "engage" | "backpedal" | "reload";
 
@@ -84,7 +85,9 @@ export class JackAI {
     if (!this.alive) return;
     this.hp -= damage;
     play(AUDIO.claw, 0.6);
-    if (this.hp <= 0) { this.alive = false; this.root.visible = false; return; }
+    flashBody(this.root, 0xff5a3c);
+    sparkBurst(this.scene, this.root.position.clone().setY(1.3), 0xff9a70, 14);
+    if (this.hp <= 0) { this.alive = false; this.dying = 0.001; return; }
     this.state = "backpedal";
     this.t = 0;
   }
@@ -97,8 +100,16 @@ export class JackAI {
     );
   }
 
+  private dying = 0;
+
   update(dt: number, player: THREE.Vector3, visible: boolean): void {
-    if (!this.alive) return;
+    if (!this.alive) {
+      if (this.dying > 0 && this.dying < 1.6) {
+        this.dying += dt;
+        this.root.rotation.x = Math.min(this.dying * 1.5, Math.PI / 2.1);
+      }
+      return;
+    }
     this.life += dt;
     if (this.life < this.senseAt) visible = false;
     this.t += dt;

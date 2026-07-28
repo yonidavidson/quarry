@@ -17,6 +17,8 @@ const CSS = `
 #hud .pip { width:26px; height:7px; background:#3a1414; box-shadow:inset 0 0 0 1px #000; }
 #hud .pip.on { background:#e8542c; box-shadow:inset 0 0 0 1px #000, 0 0 9px #e8542c88; }
 #hud .cells { color:#4ee08a; }
+#hud .kill { color:#7c848f; font-size:11px; }
+#hud .kill b { color:#e8542c; font-weight:600; }
 #hud .tr { position:absolute; top:22px; right:26px; text-align:right; }
 #hud .danger { font-size:12px; color:#8b929c; }
 #hud .danger.hot { color:#ff7a3c; }
@@ -42,6 +44,7 @@ export class Hud {
   private el: HTMLDivElement;
   private pips: HTMLElement[] = [];
   private cellsEl: HTMLElement;
+  private killEl!: HTMLElement;
   private dangerEl: HTMLElement;
   private barEl: HTMLElement;
   private endEl: HTMLElement;
@@ -59,6 +62,7 @@ export class Hud {
       <div class="tl">
         <div class="pips"></div>
         <div class="cells">&nbsp;</div>
+        <div class="kill">&nbsp;</div>
       </div>
       <div class="tr">
         <div class="danger">no contact</div>
@@ -76,6 +80,7 @@ export class Hud {
       this.pips.push(p);
     }
     this.cellsEl = this.el.querySelector(".cells") as HTMLElement;
+    this.killEl = this.el.querySelector(".kill") as HTMLElement;
     this.dangerEl = this.el.querySelector(".danger") as HTMLElement;
     this.barEl = this.el.querySelector(".bar i") as HTMLElement;
     this.hurtEl = this.el.querySelector(".hurt") as HTMLElement;
@@ -100,13 +105,22 @@ export class Hud {
     setTimeout(() => (this.hurtEl.style.opacity = "0"), 130);
   }
 
-  update(hp: number, cells: number, extractionOpen: boolean, pressure: number, state: StalkerState): void {
+  update(hp: number, cells: number, extractionOpen: boolean, pressure: number,
+         state: StalkerState, foeHealth = 1): void {
     this.pips.forEach((p, i) => p.classList.toggle("on", i < hp));
     this.cellsEl.textContent = this.needCells === 0
       ? "hunt him down"
       : extractionOpen
         ? `cells ${cells} / ${this.needCells} — extraction open`
         : `cells ${cells} / ${this.needCells}`;
+
+    // #94 — killing the other hunter always won, and the HUD never said so. The
+    // enemy's condition is shown as words rather than a bar: you should be able
+    // to tell shooting is working without reading a number off a meter.
+    this.killEl.innerHTML = foeHealth <= 0 ? "<b>it's down</b>"
+      : foeHealth < 0.35 ? "or kill it &mdash; <b>badly hurt</b>"
+      : foeHealth < 0.8 ? "or kill it &mdash; <b>wounded</b>"
+      : "or kill it";
 
     const above = state === "ceiling" || state === "pounce";
     this.dangerEl.className = "danger" + (above ? " above" : pressure > 0.55 ? " hot" : "");
