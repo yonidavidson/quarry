@@ -302,8 +302,17 @@ async function boot(): Promise<void> {
     const up = 7.5 + t * 9.5;                       // ~2.9m uncharged, ~14m full
     const fwd = 3 + t * 7;
     const a = followCam.azimuthAngle;
+    // Carry the run into the leap. Setting velocity outright made a sprinting
+    // launch land exactly where a standing one did — the same weightlessness the
+    // 2D game had before it started treating speed as a carried quantity
+    // (quarry-2d-final). Momentum ADDS to the launch; it does not get discarded.
+    const v = character.body.linvel();
     character.body.setLinvel(
-      { x: -Math.sin(a) * fwd, y: up, z: -Math.cos(a) * fwd },
+      {
+        x: v.x * 0.8 + -Math.sin(a) * fwd,
+        y: up,
+        z: v.z * 0.8 + -Math.cos(a) * fwd,
+      },
       true,
     );
     play(AUDIO.step, 0.5, 0.7);
