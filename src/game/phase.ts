@@ -140,7 +140,9 @@ export class Screens {
         <h1>Quarry</h1>
         <div class="tag">${this.lobbyLine || "finding an opponent"}</div>
         <div class="bar"><i></i></div>
-        <p class="keys" style="max-width:40ch;text-transform:none;letter-spacing:.04em;line-height:1.8">
+        <p class="keys" style="max-width:44ch;text-transform:none;letter-spacing:.04em;line-height:1.8">
+          This needs a second player. Send someone this page and have them press
+          <b>Play online</b> too &mdash; the match starts the moment they arrive.<br><br>
           One of you will be Jack. The other will be the thing hunting him.
           You do not get to choose.</p>
         <button class="plain" data-act="cancel">Back to menu</button>

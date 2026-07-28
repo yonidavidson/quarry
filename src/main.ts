@@ -130,8 +130,26 @@ async function boot(): Promise<void> {
   const aimCue = createAimCue();
   // the controller's brain runs once per FIXED substep, before world.step()
   physics.onBeforeStep(() => {
-    character.setMovement(kb.getCharacterMovement());
+    const mv = kb.getCharacterMovement();
+    character.setMovement(mv);
     character.update();
+
+    // Shift is a HOLD, and the input layer honours that — but the controller only
+    // ever pushes UP to its target speed and never brakes back down, and the
+    // capsule's friction is negative on purpose (traction is synthesised by the
+    // move impulse). So letting go of Shift left you coasting at run speed
+    // indefinitely, which reads exactly like a toggle. Bleed the excess off.
+    if (!mv.run && character.isOnGround) {
+      const v = character.body.linvel();
+      const speed = Math.hypot(v.x, v.z);
+      const walkCap = 2.2;
+      if (speed > walkCap) {
+        // ease down over a few steps rather than snapping — an instant stop reads
+        // as hitting a wall
+        const k = Math.max(walkCap / speed, 0.90);
+        character.body.setLinvel({ x: v.x * k, y: v.y, z: v.z * k }, true);
+      }
+    }
   });
 
   // Everything heavy is loaded — offer the choice, then build the match around it.
@@ -152,10 +170,11 @@ async function boot(): Promise<void> {
       const poll = window.setInterval(() => {
         online.syncSession();
         online.reconcileSides();
+        // "opponent found" while you sit there alone is a lie — say what is true
+        const st = online.status;
         screens.setLobbyLine(
-          online.status === "searching"
-            ? `finding an opponent — ${online.lobbyCount} / 2`
-            : `opponent found — ${online.lobbyCount} / 2`,
+          st === "playing" ? "opponent found — starting"
+          : `waiting for an opponent — ${online.lobbyCount} / 2`,
         );
         if (online.live && online.mySide) { clearInterval(poll); resolve(); }
       }, 250);
