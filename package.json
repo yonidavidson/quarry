@@ -1,5 +1,5 @@
 {
-  "name": "hunter-hunted",
+  "name": "quarry",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -19,5 +19,6 @@
     "@genex-ai/embed-sdk": "^0.11.0",
     "@pixiv/three-vrm": "^3.5.5",
     "three": "^0.185.1"
-  }
+  },
+  "description": "A 3D hunt-or-be-hunted browser game — three.js on Genex."
 }

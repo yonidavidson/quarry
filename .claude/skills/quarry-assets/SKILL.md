@@ -1,59 +1,73 @@
 ---
 name: quarry-assets
-description: Regenerate QUARRY's embedded art and audio — PixelLab character animations for Jack and the Stalker, rebaking sprite strips with tools/pipeline/driver.py, PixelLab map objects, and ElevenLabs sound effects via tools/gen_sfx.mjs. Use whenever a task involves new or changed character poses/animations, sprite strips, HUMAN_PNG/STALKER_PNG, world object art, SVG→pixel-art conversion, or sound effects, including issue #47.
+description: Generate and re-roll QUARRY's art and audio through Genex — characters (Jack), rigged creatures (the Stalker), textures, models, sound effects, music, HUD sprites and menu video — plus this game's current asset inventory and the approval gates that need the player's yes. Use whenever a task involves new or changed characters, creature models, world textures, props, sound effects, music, or UI art.
 ---
 
-# Asset pipelines
+# QUARRY's art and audio
 
-Everything ends up base64-embedded in `index.html` — nothing is loaded from disk
-at runtime. Source frames and raw PNGs are committed under `tools/` so a
-regenerated asset can always be reproduced.
+Everything generated goes through `npx genex …` and comes back as a **permanent
+URL in Genex storage**. Nothing large is committed. The URLs are collected in
+`src/assets.ts`; the plan and status live in `DESIGN.md`'s Assets table. Keep the
+two in step — a generated asset that never got wired in is the most common way
+finished art gets lost.
 
-## Characters (PixelLab)
+The `genex-ai-*` skills are authoritative on each generator's flags and loader
+code — load the one that owns the lane. This skill is only what is specific to
+QUARRY.
 
-- Jack `a3aefd17-e5dc-4e76-a699-48a6c03e26c3`
-- Stalker `1071585a-fb6d-4b65-9118-4151afc0df6e`
-- 252×252, east-facing only — the game mirrors with `flipX`. Mode v3 `animate_character`.
-- Source frames live in `tools/frames/{jack,stalker}/`.
-- Download a character: `https://api.pixellab.ai/mcp/characters/<id>/download`
+## Current inventory
 
-Hard lessons, learned the expensive way:
+| Asset | Command | Id |
+|---|---|---|
+| Jack — player character | `genex character` | `cms4fbaky009f2ens0f1kmmbi` |
+| The Stalker — rigged creature | `genex creature` | `cms4fiv3a008x2pqlshvq5jnp` |
+| Machine-hall floor (`--terrain`) | `genex texture` | `cms4emta7007b2ens0yy80gif` |
+| Catwalk diamond plate | `genex texture` | `cms4emub4006i2pqltf31ogeu` |
+| Blaster / claw / footstep / roar | `genex sfx` | see `src/assets.ts` |
+| Industrial dread bed (~90s loop) | `genex music` | `cms4emv98007g2ensjvsuohe2` |
 
-- **Text-only prompts drift back to the standing pose.** For anything inverted,
-  prone, or gripping, compose a start frame yourself (PIL), quantize to ≤64
-  colors, commit it under `tools/ref/`, and pass `custom_start_frame_url` —
-  inline base64 gets truncated.
-- **Never name props in a prompt.** The model paints them into the sprite.
-- Cycles are 8 frames. When registering a multi-frame cycle, line it up so the
-  legs' bbox center-x lands ≈ 126, otherwise the character slides while animating.
-- Back views (ropes, ladders, hangs) need `directions: ["north"]`.
+`npx genex wait --all` gives one status line per generation — run it at **every**
+preview. A job can fail server-side while its URL is already wired into the game,
+and looking is the only way to find out.
 
-## Rebaking strips — required after any frame change
+## The art direction to prompt against
 
-```bash
-cd tools/pipeline && python3 driver.py [jack|stalker|both]   # → ../frames/<name>_strip.png
-```
+Wet concrete and rusted steel. Sodium-orange emergency light against near-black.
+Hazard-stripe accents, stencilled industrial type. Muted and desaturated, with
+orange (threat) and toxic green (energy cells, extraction) as the only accents.
+Grounded near-future realism — no fantasy, no clean sci-fi chrome.
 
-Then base64 the strip into `HUMAN_PNG` / `STALKER_PNG`, keep the anim indices in
-`index.html` matching `driver.py`'s row-major order, and retune `SIDES` from the
-bake output. See **quarry-codebase** for why those two couplings matter.
+## Approval gates — do not spend past them silently
 
-## World objects (PixelLab map objects)
+- **`genex character`** returns **three concepts**. Show the player all three
+  numbered links and wait for an explicit pick. Then `genex character preview
+  <id> --candidate <n> --user-approved` returns four views — show all four and
+  wait again before `genex character finalize <id> --user-approved
+  --approve-remesh 10000`.
+- **`genex creature`** is one-shot: model → rig → clips, no approval ceremony.
+  That is why the Stalker was a creature and Jack was a character.
+- The HUD's Stage-1 concept mockup is shown to the player as **information, not a
+  gate** — enqueue the Stage-2 sheet, menu still and logotype immediately, then
+  ask keep-or-change. Only the menu video waits.
 
-- `create_map_object` — 32px minimum.
-- Download from `https://api.pixellab.ai/mcp/map-objects/<id>/download`
-  (the backblaze URL 404s).
-- **The server deletes objects after 8 hours** — commit the raw PNG to
-  `tools/objs/` immediately or it's gone.
-- Deliberately still SVG: cable, brackets, stains, and pure light/atmosphere
-  gradients. Weapons and the rope are already PixelLab.
+## Wiring the results
 
-## Sounds (ElevenLabs)
+- **The player's body** is a manifest, not code: `npx genex controller character
+  --character <id>` writes `public/assets/meshy-character.json` and the next
+  reload swaps it in. `src/main.ts` never changes. **Never run this for an
+  enemy** — it would replace Jack.
+- **Enemies** load their rigged GLB directly (see `stalker.ts` → `loadBody()`),
+  scaled from their own bounding box so the Stalker towers over Jack, with a
+  procedural stand-in until it arrives.
+- **Textures** tile through `loadTiling()` in `world/complex.ts`.
+- **Phones**: models and textures should go through the adaptive-quality kit's
+  `loadModelWithFallback` / `loadTextureWithFallback` so small rungs are used.
+  `genex preview` warns where they don't — treat that as work, not noise.
 
-```bash
-node tools/gen_sfx.mjs   # rewrites the SND_DATA markers in place
-```
+## The 2D pipeline is retired
 
-Clips are cached in `tools/sfx/`; the API key is read from
-`~/.config/elevenlabs/key`. The Web Audio synthesis layer stays as the complete
-fallback if a clip fails to decode — don't remove it when adding clips.
+Jack and the Stalker used to be baked PixelLab sprite strips rebaked with
+`tools/pipeline/driver.py`, and sound came from `tools/gen_sfx.mjs` (ElevenLabs).
+Both are historical. That art is still in the repo under `tools/` and embedded in
+the 2D game at tag `quarry-2d-final`, and the strips remain a good reference for
+palette and proportion — but new art comes from Genex.

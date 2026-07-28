@@ -1,58 +1,117 @@
 # QUARRY
 
-A browser hunt-or-be-hunted platformer inspired by the asymmetric design of the 1996 classic *Hunter Hunted* — original theme, art, and code.
+A 3D hunt-or-be-hunted game in the browser, inspired by the asymmetric design of
+the 1996 classic *Hunter Hunted* — original theme, art, and code.
 
-**[▶ Play it now](https://yonidavidson.github.io/quarry/)** — one HTML file, no install. Works with keyboard or a plugged-in gamepad (Switch Pro Controller included).
+**[▶ Open QUARRY](https://genex.games/draft/quarry-d291c2)**
 
-## Pick a side
+> **Early build.** One floor, one hunt loop, one weapon. It is a long way from
+> finished — see [Where it's up to](#where-its-up-to). The plan and its status
+> live in [DESIGN.md](DESIGN.md).
 
-| | 🔵 **JACK — Human** | 🔴 **The STALKER — Beast** |
-|---|---|---|
-| **Edge** | Blaster + throwable bombs | Claw lunge up close |
-| **Mobility** | Standard jump • thread-leaps | **Faster than you** • double jump • wall-climb • super leap (K/Y) |
-| **Toughness** | Fragile (5 HP) | Tough (6 HP) |
+## The idea
 
-Whichever side you pick, **the other side hunts you** across the complex — an AI nemesis that patrols, spots you, chases across floors, and attacks. When the heartbeat starts, run.
+You are Jack — a human alone in a dead industrial complex with a blaster and no
+margin for error. Something else is in here with you, and the interesting thing
+about it is that it does not stay on the floor.
 
-## The world wants you dead too
+The Stalker prowls, breaks for the nearest wall, **climbs it**, crosses the
+**ceiling** tracking where you are standing, and drops on you. It always goes
+vertical eventually — across open floor, after a few seconds of prowling, or the
+instant you shoot it — so the hunt never settles into a footrace. Landing a hit
+does not make it back off; it makes it go *up*. A missed pounce is the window you
+get to shoot back.
 
-A sprawling industrial complex that's anything but a stack of corridors: open **atrium wells** cut clean through the floors (hop the perches up, or drop four storeys in one fall), mezzanine half-decks give every corridor a high road and a low road, the ground **rolls in hills**, and in three places the floor simply ends — a chasm drop into the **underdeep**, a dark cavern level with its own hilly floor, rich loot, and things living in it. Spikes, patrol drones, sewage pools that slow your wading, ladders, climbable chain-nets, teleport doors, flickering lamps, steam vents, ceiling drips. The roofline opens onto a **dusk vista of mountains and a sunset lake** where crows wheel overhead (land hard and they scatter); steel-framed windows glimpse the outside from the upper floors, and each depth has its own light — cool daylight up top, green industry mid, rust-warm depths. Ropes hang from every corridor ceiling — grab one, kick off with real momentum, and chain thread-to-thread leaps across long gaps (Prince-of-Persia-style ledge grabs catch you if you miss). Lever-gates open for only a few seconds — sprint through before they slam, because **the gate coming down on you is instant death**. Health pods are stashed around the complex for whoever reaches them first. Grab energy cells, find the glowing **EXIT** on the roof.
+The HUD's only real job is the threat read. When the beast is overhead the
+warning goes red and says so, because in a game whose monster spends half its
+time on the ceiling, **"above you"** has to be legible without looking up.
 
-**Random weapons** spawn on pads — you can hold only one, and you take one deliberately with **E** (no accidental swaps while dodging past a drop); swapping leaves your current weapon where you stand. Human pool: Blaster / Scattergun / Rail Lance / Shotgun / Machine Gun / Crossbow / Flamethrower / Grenade Launcher / Ricochet Disc / Arc Welder / Proximity Mine. Beast pool: Claws / Spine Volley / Bone Scythe / Barb Whip / Bone Bat / Lash Tongue (longest reach in the game — yanks prey closer) / Acid Spit / Bone Spear / Sonic Shriek. Every weapon has its own attack visuals and sound. The hunter arms itself too.
+## What you do
 
-## Online 2P — hunt a real friend
+Find five energy cells scattered across the floor — they are placed to walk you
+through every corner of it, which is exactly where you can be found — then reach
+the extraction pad, which lights green once you have enough. Or kill the thing.
+Die and press **R** to go straight back in.
 
-Press **O** on the menu. A 3-step wizard walks you through it: pick your name and side, send the invite code, paste the answer back. In-game: floating name tags, **T to chat**, live link/ping indicator. (Two windows on one machine? Keep both visible — a hidden tab pauses its game.) Pure P2P over WebRTC — works across separate networks: Google STUN for most home connections, with a free TURN relay fallback for strict NATs (no server of ours, no accounts). First to kill the other — or escape — wins. The link survives game over: hit ENTER on the results screen to offer a **rematch** on the same connection — no new codes — with a running series score across games.
+Cover is real cover: the machine blocks stop bullets, so standing behind one
+means something.
 
 ## Controls
 
-| Action | Keyboard | Gamepad |
-|--------|----------|---------|
-| Walk / climb | ←→↑↓ / WASD | stick / d-pad |
-| Run | hold Shift while moving | full-tilt stick |
-| Jump | Space | A |
-| Crouch / crawl | hold ↓ / S | stick down |
-| Climb down a ledge | ↓ at the edge | stick down |
-| Attack | J / X | B / X |
-| Bomb (Jack) / Super leap (Beast) | K / C | Y |
-| Use door / take weapon | E | d-pad up |
-| Pause / Mute / Restart | Esc / N / Shift+R | — |
+| Action | Keyboard |
+|---|---|
+| Move | WASD |
+| Run | hold Shift |
+| Jump | Space |
+| Look / aim | mouse (click to lock the cursor) |
+| Fire | left click |
+| Retry after death | R |
+| Release the cursor | Esc |
 
-Wall-climb (Beast): hold into a wall + Up. Coyote time, jump buffering, and variable jump height are all in — the controls are forgiving on purpose.
+Sound starts on your first click — browsers require a gesture before any audio
+plays.
 
-**The Prince-of-Persia ledge set.** Walking is the default gait and Shift is a run, so you can edge up to a drop instead of sprinting off it. Fall past a lip with your hands near it and you catch it; from a hang, ↑ mantles up and over, ←→ shimmies along, and a fresh press of ↓ lets go. Standing at an edge, ↓ turns you around and lowers you into that same hang — a way down that isn't a fall.
+## Where it's up to
 
-## Live ticker — see who's hunting, worldwide
+Built and playable:
 
-The bottom bar shows live events from **every player everywhere** — who entered the hunt, hunter takedowns, escapes with energy counts. It works out of the box via a free keyless pub/sub channel (ntfy.sh); events are anonymous codenames only (`Hunter-551 escaped as JACK with 21 energy`). Prefer your own private backend? Fill the `LIVE` config in `index.html` with a free Supabase project — setup SQL is in the comment right above it.
+- The machine hall — floor, cover blocks, a catwalk ring with ramps, a pump-room
+  annex, the extraction bay
+- Third-person movement over Rapier physics, with a collision-aware follow camera
+- The Stalker's full vertical hunt: prowl → wall → climb → ceiling → pounce
+- Hitscan blaster with line-of-sight blocking, energy cells, extraction, win and
+  lose states, one-key retry
+- Both characters generated and rigged; positional roars and a tension bed that
+  leans louder as it closes
+
+Not built yet:
+
+- **Playing as the Stalker.** The asymmetric 1v1 — one human as prey, one as
+  predator — is the point of the game and is still ahead.
+- Online multiplayer (Genex relay, two seats)
+- The rest of the weapons, the nuisance enemies, the vent crawl
+- The real HUD and menu — what ships now is hand-written scaffolding; the
+  generated sprite set is the production art
+- Anything above you worth looking at: the ceiling is dark, and giving the
+  Stalker visible pipes and handholds to cling to would make the threat readable
 
 ## Built with
 
-- [KAPLAY](https://kaplayjs.com) (successor to Kaboom.js) from CDN
-- World art: inline SVG (hand-authored, baked to bitmap at load)
-- Characters: a **vector skeleton** — a bone tree posed by keyframed joint angles and interpolated continuously, so moves are data rather than baked frames and transitions come free. Both hunters share one pose table; palettes and proportions are sampled from the original [PixelLab](https://pixellab.ai) strips, which are still embedded and still render on `?sprites=1`
-- Audio: sound effects and room tones generated with [ElevenLabs](https://elevenlabs.io) (embedded base64, zone-crossfaded ambience), layered over Web Audio synthesis — noise + tones through a generated impulse-response reverb — which remains the complete fallback if clips fail to decode
-- One self-contained `index.html`. That's the whole game.
+- [three.js](https://threejs.org) on the [Genex](https://genex.games) platform —
+  Genex handles sign-in, hosting, publishing and (soon) multiplayer
+- [Rapier](https://rapier.rs) physics, via Genex's tuned character controller —
+  movement is not hand-rolled
+- Characters, textures, music and sound effects are generated through Genex and
+  streamed from its storage; nothing large lives in this repo
+- Vite + TypeScript
+
+## Running it
+
+```bash
+npm install
+npm run dev          # then open http://localhost:5173/?genex_local_test=1
+```
+
+The `genex_local_test` marker boots a local session without the platform sign-in
+gate. It exercises rendering, controls and feel — not identity, saves or
+multiplayer, which only exist on the hosted build.
+
+```bash
+npx genex preview    # build + push to the private draft
+npx genex publish    # list it publicly
+```
+
+## The 2D game
+
+QUARRY started as a 2D platformer: a single self-contained 1.8MB `index.html`
+running on KAPLAY, with a vector skeleton driving both characters and a
+Prince-of-Persia ledge system. It is preserved at the tag `quarry-2d-final` and
+still runs — one file, no build:
+
+```bash
+git checkout quarry-2d-final -- index.html
+python3 -m http.server 8765
+```
 
 ## License
 

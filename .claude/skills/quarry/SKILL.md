@@ -1,83 +1,100 @@
 ---
 name: quarry
-description: Entry point and operating manual for the QUARRY game repo (hunt-or-be-hunted browser platformer, the whole game is one self-contained index.html). Use this whenever working in this repo at all — before editing index.html, running or serving the game, shipping a change, or deciding which specialist skill applies. Covers the one-file hard constraint, local serving, the ship loop, and routing to quarry-playtest, quarry-codebase, quarry-assets, and quarry-agentcomm.
+description: Entry point and operating manual for the QUARRY game repo — a 3D hunt-or-be-hunted browser game built in three.js on the Genex platform. Use this whenever working in this repo at all — before editing game code, running or previewing the game, shipping a change, or deciding which specialist skill applies. Covers how the project is laid out, how to run and preview it, the ship loop, and routing to the quarry-* and genex-* skills.
 ---
 
 # QUARRY — operating manual
 
-A hunt-or-be-hunted browser platformer inspired by *Hunter Hunted* (1996).
+A 3D hunt-or-be-hunted game: you are Jack, alone in an industrial complex with a
+blaster, and the Stalker hunts you from the walls and ceiling.
 
 | | |
 |---|---|
 | Repo | `yonidavidson/quarry` (local checkout may be named `hunter-hunted`) |
-| Live | https://yonidavidson.github.io/quarry/ |
-| Deploy | push `main` → GitHub Pages (~40s). HTML cached `max-age=600` — hard-refresh after deploy |
-| Player docs | `README.md` — update it when player-facing behavior changes |
+| Play | https://genex.games/draft/quarry-d291c2 — the game's page on Genex |
+| Platform | [Genex](https://genex.games) — identity, hosting, publishing, multiplayer |
+| Stack | three.js + Rapier + Vite + TypeScript |
+| Contract | **`DESIGN.md`** — the plan, its status, and the asset budget |
 
-## The one-file constraint
+## Read DESIGN.md first, every time
 
-**The entire game is one self-contained `index.html`** (~1.7MB): KAPLAY v3001 from
-CDN, all art and audio embedded as base64. Everything the game loads at runtime
-lives inside that file. Never add external asset files the game fetches at
-runtime — a change that breaks "download one file and it works" breaks the
-product's whole premise. Build tooling under `tools/` is fine; it produces
-artifacts you paste *into* `index.html`.
+`DESIGN.md` is the single source of truth: the pitch, the core loop, the numbered
+build plan with a `Now:` line, the content contract, and the Assets table. After
+any break or context compaction, resume from its `Now:` line rather than from
+memory. Keep it current as decisions land — a stale contract is worse than a
+short one.
 
 ## Run it
 
 ```bash
-cd "$(git rev-parse --show-toplevel)"
-python3 -m http.server 8765
-# open http://localhost:8765/
+npm install
+npm run dev          # http://localhost:5173/?genex_local_test=1
 ```
 
-Or play live: https://yonidavidson.github.io/quarry/
+The `?genex_local_test=1` marker is **required** for local self-testing: without
+it, an unpublished draft shows the platform's sign-in gate to your browser, and a
+screenshot of that gate is not a screenshot of the game. It validates rendering,
+controls and feel — never identity, saves, leaderboards or multiplayer, which
+have no local equivalent. Label evidence from it accordingly.
 
 ## Ship loop
 
-1. Edit `index.html` (and `tools/` if assets changed) → serve locally → playtest.
-   A change isn't done until you've seen it run: screenshots, `get('player').length === 1`,
-   zero console errors. See **quarry-playtest**.
-2. Commit with an imperative summary + body; push `main`.
-3. Verify the deploy actually landed — Pages is cached, so poll for a marker
-   unique to your change:
-   ```bash
-   until curl -s "https://yonidavidson.github.io/quarry/?cb=$(date +%s)" | grep -q "<unique-marker>"; do sleep 5; done
-   ```
-4. Update `README.md` when player-facing behavior changes.
-5. Report on the bus — see **quarry-agentcomm**.
+1. Edit → `npm run build` (the template type-checks; a build error is a real
+   error) → drive it locally and screenshot. See **quarry-playtest**.
+2. `npx genex preview` — builds and pushes to the hosted draft. Hand the player
+   the **page** link (`https://genex.games/draft/<slug>`), never the bare
+   `*.genex.technology` origin, never localhost, never a file path.
+3. `npx genex wait --all` at every preview — a generation can fail server-side
+   while its URL is already wired in, and looking is the only way to find out.
+4. Update `DESIGN.md`: a milestone is done only once it reached a preview.
+5. Commit and push `main`.
+6. `npx genex publish` lists it publicly — only when the player says so.
+
+GitHub Pages still serves the repo's `docs/` folder, which is a redirect to the
+Genex page so old links don't dead-end. The repo root is Vite source now; a
+static host cannot run it.
+
+## The hard rules
+
+- **Everything Genex owns goes through `genex` commands.** All generated art,
+  audio, video, characters and UI come from `npx genex …`; the game builds,
+  previews and publishes only through `genex preview` / `genex publish`. Don't
+  reach for another generation or hosting tool.
+- **Generated assets are URLs, not files.** They live in Genex storage. Their
+  permanent URLs are collected in `src/assets.ts` — keep that in step with
+  `DESIGN.md`'s Assets table. Nothing large belongs in this repo.
+- **Never hand-roll movement physics.** The bundled controllers under
+  `src/controllers/` are tuned; see **quarry-codebase** for the loop contract
+  they require.
+- **`src/genex.config.ts` is read-only** and environment URLs are never
+  hardcoded. If it goes missing, re-run `genex init` rather than writing one.
+- **Never scaffold over this directory.** `npm create vite .` empties the folder
+  — it has already destroyed this repo once. Write new config files by hand.
 
 ## Which skill to read next
 
 | You're about to… | Read |
 |---|---|
-| Open the game in a browser, drive it, screenshot, check for errors | **quarry-playtest** |
-| Find or change game code inside `index.html` | **quarry-codebase** |
-| Regenerate character sprites, world objects, or sound effects | **quarry-assets** |
-| Coordinate with other agents, claim work, file playtest bugs | **quarry-agentcomm** |
+| Find or change game code | **quarry-codebase** |
+| Run the game, screenshot it, check it works | **quarry-playtest** |
+| Generate or re-roll art, audio, characters | **quarry-assets** |
+| Coordinate with other agents, claim work, file bugs | **quarry-agentcomm** |
+| Anything the above don't cover | the `genex-*` skills — start with `genex-game-director` |
 
-## Controls (player-facing)
+The `genex-*` skills are the platform's own and are authoritative on their
+subjects (identity, adaptive quality, multiplayer, HUD, creatures, lighting).
+The `quarry-*` skills are this game's specifics. When they disagree about
+platform mechanics, the `genex-*` skill wins.
 
-| Action | Keyboard | Gamepad |
-|--------|----------|---------|
-| Walk / climb | ←→↑↓ / WASD | stick / d-pad |
-| Run | hold Shift | full-tilt stick |
-| Jump | Space | A |
-| Crouch / crawl / climb down a ledge | hold ↓ / S | stick down |
-| Attack | J / X | B / X |
-| Bomb (Jack) / Super leap (Beast) | K / C | Y |
-| Use door / take weapon | E | d-pad up |
-| Pause / Mute / Restart | Esc / N / Shift+R | — |
-| Online 2P (menu) | O | — |
-| Chat (online) | T | — |
+## The 2D game
 
-Beast wall-climb: hold into wall + Up. Jack is fragile ranged; the Stalker is
-tough melee with better mobility.
+QUARRY was a 2D KAPLAY platformer in a single self-contained `index.html` until
+July 2026. It is preserved at the tag `quarry-2d-final`:
 
-## Backlog
+```bash
+git checkout quarry-2d-final -- index.html   # one file, no build
+```
 
-`gh issue list --repo yonidavidson/quarry` is the truth. Long-running threads:
-
-- **#47** remaining SVG→PixelLab conversions (portraits, structural tiles/props).
-  Weapons and rope are done. Often blocked on PixelLab credits.
-- Playtest polish leftovers from #48/#50 as they surface.
+Its vector rig — a bone tree of 33 keyframed poses driving both characters — is
+worth reading before building the Stalker's 3D movement vocabulary, since it
+already solved wall-cling, ceiling-crawl, ledge-hang and mantle as pose data.

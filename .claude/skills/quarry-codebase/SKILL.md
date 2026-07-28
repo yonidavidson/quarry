@@ -1,72 +1,64 @@
 ---
 name: quarry-codebase
-description: Map of QUARRY's single 1.7MB index.html — which marker comment to search for each system (sound engine, sprite strips, level generator, SIDES character config, scenes, enemies, online 2P, outside world), plus the hitbox/anim-index coupling rules and the gotchas that have bitten past changes. Use this before searching, reading, or editing index.html, when hunting down where a game behavior lives, or when a change involves hitboxes, animation frames, level generation determinism, or performance.
+description: Map of QUARRY's three.js source — which file owns each system (boot, world, the Stalker's vertical AI, blaster, hunt loop, HUD, assets, bundled controllers), plus the loop contract the character controller requires and the gotchas that have already cost a debugging round. Use this before searching, reading, or editing game code, when hunting down where a behavior lives, or when a change touches physics, the camera, or the render loop.
 ---
 
-# Finding your way around `index.html`
+# Finding your way around `src/`
 
-The file is ~1.7MB, so don't read it top to bottom — grep for the marker comment
-that owns the system you're changing.
+Small files, one system each. Read `DESIGN.md` first — it says what is built and
+what is next.
 
-| Marker | What lives there |
+| File | What lives there |
 |---|---|
-| `SOUND ENGINE` | Web Audio synthesis fallback for every cue |
-| `AI SOUND LAYER (#49)` | ElevenLabs clips in `SND_DATA` (`/*SND_DATA_START*/…/*SND_DATA_END*/`) |
-| `JACK v5` / `BEAST v5` | sprite strips `HUMAN_PNG` / `STALKER_PNG` + `loadSprite` anim tables — the `?sprites=1` fallback |
-| `VECTOR RIG (#74)` | the default renderer: `RIGCFG` palettes/scale, `RIG_BONES`, `RIG_ANIMS` keyframes, `rigPose`/`rigFK`/`rigDraw`, `rigComp` |
-| `OUTSIDE WORLD (#50)` | dusk vista parallax, crows, window views, clouds |
-| `LEVEL GENERATOR` | seeded generation (`sRand`, seed `20260714`) |
-| `SIDES` | per-character config (frame size, scale, hitbox areas, shadow) |
-| `scene("game")` | gameplay: `curAnim`, `animSpeed`, crouch area mutation, mantle, climb snap, `mkHeld` |
-| `spawnEnemy` | `"drone"` \| `"hunterbot"` (3 HP) \| `"crawlbot"` (2 HP) |
-| `spawnNemesis` | the AI hunter — uses `LADDERS`, can crouch-crawl gaps |
-| `ONLINE 2P` | manual-signal WebRTC; msgs `{t:"atk"\|"crate"\|"lever"\|"pod"\|"rematch"\|"left"}` |
-| `scene("boot")` | audio-unlock gate |
+| `src/main.ts` | Boot and the only render loop. Identity → tier → renderer → physics → world → player → hunt. The **only** writer of shared boot state. |
+| `src/world/complex.ts` | The floor: one `layout()` list that emits both the mesh and its static collider, plus the light rig. Returns the wall meshes the camera and bullets need. |
+| `src/hunter/stalker.ts` | The Stalker: the prowl → wall → climb → ceiling → pounce state machine, kinematic movement, the generated creature model. |
+| `src/combat/blaster.ts` | Hitscan fire down the camera's forward axis, tracers, muzzle flash, line-of-sight blocking. |
+| `src/game/hunt.ts` | Health, energy cells, the extraction pad, win/lose. |
+| `src/ui/hud.ts` | The DOM HUD — health pips, cell count, the danger read, end screen. **Scaffolding**: the generated sprite set replaces it (`DESIGN.md` → HUD lane). |
+| `src/audio.ts` | One listener, positional roars, the tension bed. Everything waits on a user gesture. |
+| `src/assets.ts` | Permanent Genex URLs for every generated texture, model and sound. Keep in step with `DESIGN.md`'s Assets table. |
+| `src/genex.config.ts` | Written by `genex init`. **Read-only** — never hardcode environment URLs. |
+| `src/controllers/**` | Vendored Genex kits: `character/` (controller, follow camera, animations, player body), `shared/` (PhysicsWorld, colliders), `quality/` (device tier, governor), `touch/`. Treat as library code. |
 
-## The rig is the default renderer
+## The loop contract — get this wrong and nothing moves
 
-`RIG_ON` (true unless `?sprites=1`) swaps `sprite(...)` for `rigComp(sideKey)` on
-the player, the nemesis and the online remote. `rigComp` deliberately mimics the
-sprite comp's surface — `play()`, `curAnim()`, `animSpeed`, `flipX`, `width`/
-`height`, `renderArea()` — so the game code around it is renderer-agnostic. Two
-rules when you touch it:
+The bundled character controller is strict about ordering, and the CLI's short
+wiring sketch omits half of it. The correct shape lives in
+`$genex-threejs-character-controller`; the parts that have already bitten:
 
-- **Every `play()` goes through `animFor()`.** The rig has `walk` and `cdown`; the
-  strips don't. Anim names also cross the wire in online 2P, where the peer may be
-  running the other renderer.
-- **Poses that touch the floor need a `root` drop.** The hip is the root and does
-  not move on its own, so folding the legs lifts the feet instead of lowering the
-  body. Knees bend one way only: shin absolute angle ≥ thigh's. Foot height is
-  `-(cos(thighAbs) + cos(shinAbs)) * 10 + root[1]`, and standing is 20 — audit a
-  new pose against that number before trusting how it looks in one screenshot.
+- `physics.onBeforeStep(...)` runs `character.setMovement(kb.getCharacterMovement())`
+  then `character.update()` — once per **fixed substep**, before `world.step()`.
+  `character.update()` takes **no** dt; it uses the fixed timestep internally.
+- `physics.registerBody(character.body, character.root)` is required, or the
+  visible root never follows the physics body.
+- A `FollowCamera` must be constructed and driven every render frame. Passing the
+  camera to `CharacterController` alone does **not** move it — the symptom is a
+  frozen view of nothing while the game otherwise runs fine.
+- The render delta comes from `performance.now()`, never `THREE.Clock.getDelta()`.
 
-## Two couplings that break silently
+## Two rules the code depends on
 
-**Anim frame indices ↔ `tools/pipeline/driver.py`.** The `loadSprite` anim tables
-index into a baked strip whose layout is decided by `driver.py` (row-major, in
-its order). Change one without the other and you get the wrong pose playing, with
-no error. See **quarry-assets** for the rebake.
+**One layout list, two consumers.** `world/complex.ts` builds every solid from a
+single array, emitting the mesh and the static cuboid collider in the same pass.
+Add geometry there and nowhere else, or the walkable shape and the visible shape
+drift apart silently.
 
-**`SIDES` ↔ baked strip size.** `frameW`/`frameH`/`areaX`/`areaY`/`sc`/`shadowY`
-are all tuned against the strip's actual frame dimensions. The hitbox is
-frame × `sc` × `areaX`/`areaY`. Targets: ≈ HIT_W 30 / HIT_H 57 for the human,
-≈ 32.5 / 68.5 for the beast. Retune `SIDES` from the bake output whenever the
-strip dimensions move.
+**The Stalker is kinematic on purpose.** It is not a physics character. A dynamic
+capsule cannot hold a wall or hang from a ceiling without fighting gravity every
+frame, so the Stalker's position is set directly and its collider exists only for
+bullets to raycast against. Do not "fix" this by giving it a rigid body.
 
-## Level generation is deterministic on purpose
+## Gotchas
 
-The generator is seeded (`sRand`, seed `20260714`) and **online peers rely on
-both sides generating the identical level**. Never use unseeded `rand()` for
-anything that affects collision, geometry, or pickups — it desyncs multiplayer.
-Cosmetic-only decoration may use `rand()`.
-
-## Gotchas that bit us
-
-- zsh does not word-split unquoted vars — use python for pair loops in shell work.
-- `dx` and input are locals of the game update loop; key handlers must read input inline.
-- `lifespan()` needs `opacity()` on the same object.
-- `offscreen({hide})` culls by position, not bbox — chunk wide tiled sprites (≤12 tiles).
-- Buried solid cells (all 4 neighbors solid) skip sprites; colliders merge per row from `GRID`.
-- Object count is the perf ceiling (~2500 is fine); measure `get('*').length` and `debug.fps()`.
-- Gate/lever state and destroyed stubs mutate module-level `GRID` — this persists
-  across rematches, and that's intentional.
+- **Never run `npm create vite .` here.** `--overwrite ignore` empties the whole
+  directory; it has already destroyed this repo once, including `.genex/` and the
+  skills. Write config files by hand.
+- The TypeScript config is strict with `erasableSyntaxOnly`: **constructor
+  parameter properties** (`constructor(private scene: Scene)`) are a compile
+  error. Declare the field, assign in the body.
+- `THREE.Audio.playbackRate` is read-only — use `setPlaybackRate()`.
+- Generated models load without a per-tier rung unless routed through
+  `loadModelWithFallback`; `genex preview` warns about it, and phones pay for it.
+- `npm run build` type-checks before bundling, so it is the cheap correctness
+  gate — run it before any preview.
