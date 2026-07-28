@@ -6,6 +6,7 @@
 // threat spends half its time on the ceiling, "it is above you" has to be legible
 // without looking up.
 import { NEED_CELLS } from "../game/hunt.ts";
+import type { WinReason } from "../game/hunt.ts";
 import type { StalkerState } from "../hunter/stalker.ts";
 
 const CSS = `
@@ -115,11 +116,19 @@ export class Hud {
     this.barEl.style.width = `${Math.round(pressure * 100)}%`;
   }
 
-  showEnd(won: boolean, cells: number): void {
+  /** The headline has to match how the run actually ended — reporting a cell
+   *  count after a kill reads as a game that did not notice what you did. */
+  showEnd(won: boolean, cells: number, reason: WinReason, asStalker: boolean): void {
     this.endEl.className = `end ${won ? "won" : "lost"}`;
+    const head = !won ? (asStalker ? "put down" : "hunted down")
+      : reason === "kill" ? (asStalker ? "prey taken" : "it's dead")
+      : "extracted";
+    const sub = !won ? (asStalker ? "he got you first" : "it got you")
+      : reason === "kill" ? (asStalker ? "the complex is yours" : "you killed the thing hunting you")
+      : `${cells} energy ${cells === 1 ? "cell" : "cells"} recovered`;
     this.endEl.innerHTML = `
-      <h1>${won ? "extracted" : "hunted down"}</h1>
-      <p>${cells} energy ${cells === 1 ? "cell" : "cells"} recovered</p>
+      <h1>${head}</h1>
+      <p>${sub}</p>
       <p>press R to go again</p>`;
     this.el.appendChild(this.endEl);
   }

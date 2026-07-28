@@ -8,6 +8,8 @@ export const NEED_CELLS = 5;
 export const EXTRACTION = new THREE.Vector3(58, 2, 0); // matches the bay platform
 
 export type Outcome = "playing" | "won" | "lost";
+/** HOW the run ended — the end screen has to say something true. */
+export type WinReason = "kill" | "extract" | null;
 
 /** Where the cells sit — spread so collecting them walks you past every part of
  *  the floor, which is what puts you where the Stalker can find you. */
@@ -28,6 +30,7 @@ export class Hunt {
   needCells: number;
   cells = 0;
   outcome: Outcome = "playing";
+  winReason: WinReason = null;
   extractionOpen = false;
 
   private pickups: THREE.Mesh[] = [];
@@ -101,9 +104,16 @@ export class Hunt {
     padMat.emissive.setHex(this.extractionOpen ? 0x2ad06a : 0x14202e);
     padMat.emissiveIntensity = this.extractionOpen ? 2.4 : 1;
 
-    if (this.extractionOpen && player.distanceTo(EXTRACTION) < 5.5) this.outcome = "won";
+    if (this.extractionOpen && player.distanceTo(EXTRACTION) < 5.5) {
+      this.outcome = "won";
+      this.winReason = "extract";
+    }
   }
 
   /** The other hunter is dead — the win both sides share. */
-  foeDown(): void { if (this.outcome === "playing") this.outcome = "won"; }
+  foeDown(): void {
+    if (this.outcome !== "playing") return;
+    this.outcome = "won";
+    this.winReason = "kill";
+  }
 }

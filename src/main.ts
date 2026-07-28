@@ -379,7 +379,7 @@ async function boot(): Promise<void> {
       if (asStalker) hud.setInRange(enemy.alive && here.distanceTo(enemy.position) < 4.2);
       hud.update(hunt.hp, hunt.cells, hunt.extractionOpen, pressure,
                  stalker ? stalker.state : "prowl");
-      if (hunt.outcome !== "playing") hud.showEnd(hunt.outcome === "won", hunt.cells);
+      if (hunt.outcome !== "playing") hud.showEnd(hunt.outcome === "won", hunt.cells, hunt.winReason, asStalker);
     }
     blaster.update(delta);
     startMusic();
