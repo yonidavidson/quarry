@@ -32,6 +32,7 @@ import { Cling } from "./player/cling.ts";
 import { JackAI } from "./hunter/jack.ts";
 import { AUDIO, MODELS } from "./assets.ts";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { BodyAnim } from "./anim/body-anim.ts";
 
 const $ = <T extends Element>(sel: string): T => {
   const el = document.querySelector<T>(sel);
@@ -157,7 +158,7 @@ async function boot(): Promise<void> {
   // ...and you wear the beast, not Jack. The platform's character loader always
   // resolves the game's ONE generated character (Jack), so the second playable
   // body is swapped in here rather than fought for upstream.
-  let beastMixer: THREE.AnimationMixer | null = null;
+  let beastAnim: BodyAnim | null = null;
   if (asStalker) {
     player.scene.visible = false;
     new GLTFLoader().load(MODELS.stalker, (gltf) => {
@@ -169,11 +170,7 @@ async function boot(): Promise<void> {
       body.scale.setScalar(sc);
       body.position.y = fit.modelOffsetY - box.min.y * sc;
       character.root.add(body);
-      if (gltf.animations.length) {
-        beastMixer = new THREE.AnimationMixer(body);
-        const walk = gltf.animations.find((c) => /walk/i.test(c.name)) ?? gltf.animations[0];
-        beastMixer.clipAction(walk).play();
-      }
+      if (gltf.animations.length) beastAnim = new BodyAnim(body, gltf.animations);
     });
   }
 
@@ -288,7 +285,8 @@ async function boot(): Promise<void> {
 
     anims.update(character, delta);
     player.update(delta);
-    beastMixer?.update(delta);
+    // clinging to a wall or ceiling is holding on, not travelling
+    beastAnim?.update(delta, character.currPos, { frozen: !!cling?.active });
 
     // ── the hunt ──
     const here = character.currPos;

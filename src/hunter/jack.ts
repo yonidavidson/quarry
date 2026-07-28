@@ -10,6 +10,7 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { AUDIO, MODELS } from "../assets.ts";
 import { play, playAt } from "../audio.ts";
 import { HALL } from "../world/complex.ts";
+import { BodyAnim } from "../anim/body-anim.ts";
 
 export type JackState = "patrol" | "engage" | "backpedal" | "reload";
 
@@ -36,7 +37,7 @@ export class JackAI {
   private lastKnown = new THREE.Vector3();
   private waypoint = new THREE.Vector3();
   private prevPos = new THREE.Vector3();
-  private mixer?: THREE.AnimationMixer;
+  private anim?: BodyAnim;
   private tracers: Array<{ line: THREE.Line; life: number }> = [];
 
   private scene: THREE.Scene;
@@ -66,11 +67,7 @@ export class JackAI {
       body.position.y = -box.min.y * s;
       this.root.remove(stub);
       this.root.add(body);
-      if (gltf.animations.length) {
-        this.mixer = new THREE.AnimationMixer(body);
-        const walk = gltf.animations.find((c) => /walk/i.test(c.name)) ?? gltf.animations[0];
-        this.mixer.clipAction(walk).play();
-      }
+      if (gltf.animations.length) this.anim = new BodyAnim(body, gltf.animations);
     }, undefined, () => { /* the stand-in is a worse Jack, not no Jack */ });
   }
 
@@ -141,7 +138,7 @@ export class JackAI {
     }
 
     this.faceTravel(dt, visible ? player : null);
-    this.mixer?.update(dt);
+    this.anim?.update(dt, this.root.position);
     this.updateTracers(dt);
   }
 

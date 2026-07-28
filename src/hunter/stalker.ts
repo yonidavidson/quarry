@@ -12,6 +12,7 @@ import { HALL } from "../world/complex.ts";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { AUDIO, MODELS } from "../assets.ts";
 import { playAt } from "../audio.ts";
+import { BodyAnim } from "../anim/body-anim.ts";
 
 export type StalkerState =
   | "prowl"    // walking the floor toward where it last had you
@@ -45,7 +46,7 @@ export class Stalker {
   private vel = new THREE.Vector3();
   private nextRoar = 6;
   private stub: THREE.Mesh;
-  private mixer?: THREE.AnimationMixer;
+  private anim?: BodyAnim;
 
   private scene: THREE.Scene;
   private opts: StalkerOpts;
@@ -84,11 +85,7 @@ export class Stalker {
       body.position.y = -box.min.y * scale;
       this.root.remove(this.stub);
       this.root.add(body);
-      if (gltf.animations.length) {
-        this.mixer = new THREE.AnimationMixer(body);
-        const walk = gltf.animations.find((c) => /walk/i.test(c.name)) ?? gltf.animations[0];
-        this.mixer.clipAction(walk).play();
-      }
+      if (gltf.animations.length) this.anim = new BodyAnim(body, gltf.animations);
     }, undefined, () => { /* keep the stand-in rather than lose the enemy */ });
   }
 
@@ -147,10 +144,10 @@ export class Stalker {
     }
 
     this.faceTravel(dt);
-    // limbs only move when the body does — a treadmilling walk on a hanging
-    // creature reads worse than no animation at all
-    const moving = this.state !== "recover" && this.state !== "stunned";
-    this.mixer?.update(moving ? dt : 0);
+    // limbs only move when the body does — a treadmilling walk on a creature
+    // hanging from the ceiling reads worse than no animation at all
+    const holding = this.state === "ceiling" || this.state === "recover" || this.state === "stunned";
+    this.anim?.update(dt, this.root.position, { frozen: holding });
   }
 
   // ── states ──────────────────────────────────────────────────────────────
