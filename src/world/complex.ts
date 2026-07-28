@@ -129,7 +129,11 @@ export function buildComplex(scene: THREE.Scene, physics: PhysicsWorld): THREE.M
  *  flat no matter how the numbers are tuned, and in a hunt the dark between the
  *  pools is the gameplay — so the fill is deliberately low and the falloff is
  *  short. Fixtures are emissive so the bloom pass turns them into real lamps. */
+export interface Lamp { light: THREE.PointLight; glass: THREE.MeshStandardMaterial }
+export const LAMP_RIG: Lamp[] = [];
+
 export function lightComplex(scene: THREE.Scene, shadowMapSize: number): THREE.DirectionalLight {
+  LAMP_RIG.length = 0;
   // a true fill, not a wash — enough to keep shapes from going to pure black
   scene.add(new THREE.AmbientLight(0x3d4b63, 1.7));
   scene.add(new THREE.HemisphereLight(0x6f83a6, 0x2b2014, 1.3));
@@ -186,6 +190,10 @@ export function lightComplex(scene: THREE.Scene, shadowMapSize: number): THREE.D
     const lamp = new THREE.PointLight(0xffa862, 260, 46, 1.7);
     lamp.position.set(x, 8.6, z);
     scene.add(lamp);
+    // each fixture keeps its own glass material so one can fail alone
+    const ownGlass = glass.clone();
+    glow.material = ownGlass;
+    LAMP_RIG.push({ light: lamp, glass: ownGlass });
   }
 
   scene.fog = new THREE.FogExp2(0x141a24, 0.0048);

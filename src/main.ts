@@ -20,7 +20,8 @@ import { createAimCue } from "./controllers/character/aim-cue.ts";
 import { KeyboardInput } from "./controllers/character/keyboard-input.ts";
 import { loadPlayerCharacter } from "./controllers/character/player-character.ts";
 import { capsuleFromModel } from "./controllers/character/vrm/capsule-fit.ts";
-import { buildComplex, lightComplex, HALL } from "./world/complex.ts";
+import { buildComplex, lightComplex, HALL, LAMP_RIG } from "./world/complex.ts";
+import { buildAmbience, updateAmbience } from "./world/ambience.ts";
 import { Stalker } from "./hunter/stalker.ts";
 import { Blaster } from "./combat/blaster.ts";
 import { Hunt } from "./game/hunt.ts";
@@ -77,6 +78,7 @@ async function boot(): Promise<void> {
   // ── physics + the floor you walk on ──
   const physics = await PhysicsWorld.create();
   const walls = buildComplex(scene, physics);
+  buildAmbience(scene, LAMP_RIG);   // steam, sparks, failing lamps, fans (#95)
 
   // ── the player's body: this game's character once it lands, the visiting
   // player's avatar until then. One shape either way — no rewrite later. ──
@@ -542,6 +544,7 @@ async function boot(): Promise<void> {
     }
     blaster.update(delta);
     updateSparks(delta, scene);
+    updateAmbience(delta, now / 1000);
     startMusic();
     governor.frame(delta * 1000);
 
