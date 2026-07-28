@@ -95,6 +95,7 @@ Menu video: yes.
 | Boot on steel grating | sfx | landed | yes |
 | Stalker roar | sfx | landed | yes |
 | Industrial dread bed | music | landed | yes |
+| Key art (loader + title + cover) | image | landed (cms4m26n400iy2pqliielme17) | yes |
 | Menu still | image | enqueue on concept landing | — |
 | Menu video | video | waits: player's yes / next preview after still / style-only-left | — |
 | Logotype | image | enqueue on concept landing | — |
@@ -190,3 +191,14 @@ does not apply. Rows stay as the split to hand out the moment that changes.
   takes a beat to notice you.
   The second playable body is swapped in locally — the platform's loader always
   resolves the game's ONE generated character (Jack).
+- 2026-07-28 — Gallery card fixed ([#85](https://github.com/yonidavidson/quarry/issues/85)).
+  It was listing the SLUG as the title and an auto-minted cover of a literal
+  rock quarry — an open-pit mine with a dump truck. `genex publish --title
+  --description --regenerate-cover` fixes it, but **the cover must be re-minted
+  in a SECOND call**: run in the same invocation as `--description`, the art is
+  generated before the description persists, so it re-draws the same wrong image.
+- 2026-07-28 — Purpose-built key art landed and is wired behind the loader and
+  title screen: Jack alone in the machine hall, the beast on the ceiling above
+  him. Treat it as the game's canonical frame — the menu still and the branded
+  loader ([#77](https://github.com/yonidavidson/quarry/issues/77)) should anchor
+  to it with `--edit` rather than starting fresh.

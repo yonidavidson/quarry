@@ -19,6 +19,11 @@ export const MODELS = {
   jack: `${GEN}/cms4fbaky009f2ens0f1kmmbi/rigged-character.glb`,
 } as const;
 
+/** Key art: Jack alone in the hall, the beast on the ceiling above him. Used by
+ *  the loader and the title screen; also the frame the gallery cover should be
+ *  minted against. */
+export const KEY_ART = `${GEN}/cms4m26n400iy2pqliielme17/image-main`;
+
 export const AUDIO = {
   /** ~90s looping bed: sub-bass drone, distant metal, dripping water. */
   music: `${GEN}/cms4emv98007g2ensjvsuohe2/audio-music`,

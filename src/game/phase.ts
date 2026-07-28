@@ -5,17 +5,26 @@
 //
 // This is still hand-built chrome. The generated menu art and HUD sprites
 // replace the look, not the machine — see issues #77 and #78.
+import { KEY_ART } from "../assets.ts";
+
 export type Phase = "loading" | "menu" | "playing" | "paused" | "over";
 export type Side = "jack" | "stalker";
 
 const CSS = `
 #screens { position:fixed; inset:0; z-index:50; display:none; place-content:center;
-  background:radial-gradient(60% 60% at 50% 45%, #12161d 0%, #05070b 100%);
+  background:#05070b;
   font:600 13px/1.6 ui-monospace,"SF Mono",Menlo,monospace; letter-spacing:.12em;
   color:#cfd6df; text-transform:uppercase; text-align:center; }
 body[data-phase="loading"] #screens, body[data-phase="menu"] #screens,
 body[data-phase="paused"] #screens { display:grid; }
-#screens .panel { display:grid; gap:26px; justify-items:center; padding:0 24px; }
+/* the key art sits behind every non-gameplay screen, dimmed enough to read over */
+#screens::before { content:""; position:absolute; inset:0; background-size:cover;
+  background-position:center; opacity:1; }
+/* the art is already near-black — this only has to protect the type, not dim
+   the picture, so keep it a soft vignette rather than a scrim */
+#screens::after { content:""; position:absolute; inset:0;
+  background:radial-gradient(78% 78% at 50% 42%, transparent 0%, #05070bcc 100%); }
+#screens .panel { position:relative; z-index:1; display:grid; gap:26px; justify-items:center; padding:0 24px; }
 #screens h1 { margin:0; font-size:clamp(38px,9vw,74px); letter-spacing:.34em;
   color:#e8542c; text-shadow:0 0 34px #e8542c44; }
 #screens .tag { color:#7c848f; font-size:12px; letter-spacing:.24em; }
@@ -54,6 +63,10 @@ export class Screens {
     this.el = document.createElement("div");
     this.el.id = "screens";
     document.body.appendChild(this.el);
+    // set on the element so the URL stays in assets.ts rather than in the CSS
+    const art = document.createElement("style");
+    art.textContent = `#screens::before { background-image:url("${KEY_ART}"); }`;
+    document.head.appendChild(art);
     this.chosen = new Promise<Side>((r) => (this.resolve = r));
     this.set("loading");
   }
