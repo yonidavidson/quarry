@@ -79,11 +79,21 @@ export function createPost(
   }
 
   const size = new THREE.Vector2(window.innerWidth, window.innerHeight);
+  const phone = tier.name === "phone" || tier.name === "phone-low";
   const target = new THREE.WebGLRenderTarget(size.x, size.y, {
     samples: tier.composerSamples,
-    type: THREE.HalfFloatType,
+    // Half-float buffers cost twice the memory of 8-bit ones. Desktop keeps them
+    // because bloom wants headroom above white; the light post tier does not run
+    // enough passes for banding to show, and on a phone the memory is the thing
+    // that decides whether the page survives at all.
+    type: phone ? THREE.UnsignedByteType : THREE.HalfFloatType,
   });
   const composer = new EffectComposer(renderer, target);
+  // The composer allocates its OWN render targets and does not inherit the
+  // renderer's cap — a phone at DPR 3 was getting full-resolution half-float
+  // buffers no matter what the renderer was set to. This is most of the
+  // difference between fitting the phone GPU budget and being killed by it.
+  composer.setPixelRatio(Math.min(window.devicePixelRatio, tier.dprCap));
   composer.addPass(new RenderPass(scene, camera));
 
   // Bloom carries the whole mood: it is what turns the lamps into light sources
@@ -101,7 +111,11 @@ export function createPost(
   let enabled = true;
   return {
     render: (delta) => (enabled ? composer.render(delta) : renderer.render(scene, camera)),
-    setSize: (w, h) => { renderer.setSize(w, h); composer.setSize(w, h); },
+    setSize: (w, h) => {
+      renderer.setSize(w, h);
+      composer.setPixelRatio(Math.min(window.devicePixelRatio, tier.dprCap));
+      composer.setSize(w, h);
+    },
     setEnabled: (on) => { enabled = on; },
     get active() { return enabled; },
   };

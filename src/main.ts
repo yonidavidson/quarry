@@ -36,6 +36,8 @@ import { Online } from "./net/online.ts";
 import type { Side as SideT } from "./game/phase.ts";
 import { AUDIO, MODELS } from "./assets.ts";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { pickModel } from "./controllers/quality/pick-asset.ts";
+import { createGltfLoader } from "./controllers/quality/gltf-loader.ts";
 import { BodyAnim } from "./anim/body-anim.ts";
 
 const $ = <T extends Element>(sel: string): T => {
@@ -83,7 +85,21 @@ async function boot(): Promise<void> {
   // ── the player's body: this game's character once it lands, the visiting
   // player's avatar until then. One shape either way — no rewrite later. ──
   const { user } = await waitForPlayer();
-  const player = await loadPlayerCharacter({ avatarUrl: user.avatarUrl });
+  // #79 — the player's body goes through the rung ladder too: a decoder-wired
+  // loader plus the candidate list, best rung first, bare URL last so a missing
+  // rung degrades instead of failing.
+  const gltf = createGltfLoader(renderer);
+  const player = await loadPlayerCharacter({
+    avatarUrl: user.avatarUrl,
+    meshy: {
+      loader: gltf.loader,
+      modelUrlCandidates: (url) => [
+        pickModel(url, tier, { ktx2: true }),
+        pickModel(url, tier),
+        url,
+      ],
+    },
+  });
   const fit = capsuleFromModel(player.scene);
 
   const character = new CharacterController(physics.world, camera, {
@@ -217,7 +233,7 @@ async function boot(): Promise<void> {
     void (async () => {
       try {
         const url = remoteSide === "stalker" ? MODELS.stalker : MODELS.jack;
-        const gltf = await new GLTFLoader().loadAsync(url);
+        const gltf = await new GLTFLoader().loadAsync(pickModel(url, tier));
         if (!online?.room?.players.has(id)) return;   // left while loading
         const g = gltf.scene;
         g.traverse((o) => { if ((o as THREE.Mesh).isMesh) o.castShadow = true; });
@@ -280,7 +296,7 @@ async function boot(): Promise<void> {
   let beastAnim: BodyAnim | null = null;
   if (asStalker) {
     player.scene.visible = false;
-    new GLTFLoader().load(MODELS.stalker, (gltf) => {
+    new GLTFLoader().load(pickModel(MODELS.stalker, tier), (gltf) => {
       const body = gltf.scene;
       body.traverse((o) => { if ((o as THREE.Mesh).isMesh) o.castShadow = true; });
       const box = new THREE.Box3().setFromObject(body);

@@ -11,6 +11,8 @@ import * as THREE from "three";
 import { HALL } from "../world/complex.ts";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { AUDIO, MODELS } from "../assets.ts";
+import { pickModel } from "../controllers/quality/pick-asset.ts";
+import { detectTier } from "../controllers/quality/tier.ts";
 import { playAt } from "../audio.ts";
 import { BodyAnim } from "../anim/body-anim.ts";
 import { flashBody, sparkBurst } from "../fx/hits.ts";
@@ -77,7 +79,7 @@ export class Stalker {
   /** Load the generated creature and drop the stand-in. Async on purpose: the
    *  hunt is playable from frame one and the beast swaps in when it arrives. */
   private loadBody(): void {
-    new GLTFLoader().load(MODELS.stalker, (gltf) => {
+    new GLTFLoader().load(pickModel(MODELS.stalker, detectTier()), (gltf) => {
       const body = gltf.scene;
       body.traverse((o) => { if ((o as THREE.Mesh).isMesh) o.castShadow = true; });
       // Meshy bipeds come in at ~1.8m; the Stalker should tower over Jack
@@ -179,6 +181,8 @@ export class Stalker {
 
   private prowl(dt: number, player: THREE.Vector3): void {
     this.target.set(this.lastKnown.x, 0, this.lastKnown.z);
+    // settle onto the level it is walking on rather than sinking to the slab
+    this.root.position.y = Math.max(0, Math.min(this.root.position.y, player.y - 1.05));
     this.step(dt, SPEED.prowl);
     const flat = this.root.position.distanceTo(new THREE.Vector3(player.x, 0, player.z));
     // Close on the floor is a losing fight for it — past ~18m it goes vertical,
@@ -232,16 +236,20 @@ export class Stalker {
 
   private pounce(dt: number, player: THREE.Vector3): void {
     this.root.rotation.z = 0;
+    // #80 — the pounce used to fall to the FLOOR, so standing on the catwalk
+    // meant the beast dropped harmlessly past you and height was a free win.
+    // It lands at whatever level you are actually standing on.
+    const landY = Math.max(0, player.y - 1.05);
     this.vel.y -= 34 * dt;                                  // heavier than gravity — it dives
     const lead = new THREE.Vector3(player.x - this.root.position.x, 0, player.z - this.root.position.z);
     if (lead.length() > 0.001) lead.normalize().multiplyScalar(6 * dt);
     this.root.position.add(lead);
     this.root.position.y += this.vel.y * dt;
-    if (this.root.position.y <= 0) {
-      this.root.position.y = 0;
+    if (this.root.position.y <= landY) {
+      this.root.position.y = landY;
       this.vel.set(0, 0, 0);
       playAt(AUDIO.claw, this.root.position, this.scene, 1.0, 20);
-      const hit = this.root.position.distanceTo(new THREE.Vector3(player.x, 0, player.z));
+      const hit = this.root.position.distanceTo(new THREE.Vector3(player.x, landY, player.z));
       if (hit < 3.2) this.opts.onHitPlayer(this.opts.pounceDamage);
       this.enter("recover");                                 // a missed pounce is your window
     }

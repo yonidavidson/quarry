@@ -8,6 +8,8 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { AUDIO, MODELS } from "../assets.ts";
+import { pickModel } from "../controllers/quality/pick-asset.ts";
+import { detectTier } from "../controllers/quality/tier.ts";
 import { play, playAt } from "../audio.ts";
 import { HALL } from "../world/complex.ts";
 import { BodyAnim } from "../anim/body-anim.ts";
@@ -58,7 +60,7 @@ export class JackAI {
     scene.add(this.root);
     this.pickWaypoint();
 
-    new GLTFLoader().load(MODELS.jack, (gltf) => {
+    new GLTFLoader().load(pickModel(MODELS.jack, detectTier()), (gltf) => {
       const body = gltf.scene;
       body.traverse((o) => { if ((o as THREE.Mesh).isMesh) o.castShadow = true; });
       const box = new THREE.Box3().setFromObject(body);

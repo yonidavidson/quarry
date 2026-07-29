@@ -5,6 +5,8 @@ import * as THREE from "three";
 import type { PhysicsWorld } from "../controllers/shared/physics-world.ts";
 import { cuboidCollider } from "../controllers/shared/colliders.ts";
 import { TEXTURES } from "../assets.ts";
+import { pickAsset } from "../controllers/quality/pick-asset.ts";
+import { detectTier } from "../controllers/quality/tier.ts";
 
 /** Interior bounds, metres. Matches DESIGN.md → World & scale. */
 export const HALL = { w: 140, d: 90, wallH: 14 } as const;
@@ -84,7 +86,9 @@ function layout(): Box[] {
 }
 
 function loadTiling(url: string, repeat: number): THREE.Texture {
-  const tex = new THREE.TextureLoader().load(url);
+  // #79 — phones take the small rung. A phone fetching the full-size basecolor
+  // for six surfaces is how iOS silently kills the page.
+  const tex = new THREE.TextureLoader().load(pickAsset(url, detectTier()));
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
   tex.repeat.set(repeat, repeat);
   tex.colorSpace = THREE.SRGBColorSpace;
