@@ -28,7 +28,7 @@ import { Hunt } from "./game/hunt.ts";
 import { Hud } from "./ui/hud.ts";
 import { initAudio, startMusic, setMusicIntensity, play } from "./audio.ts";
 import { createPost } from "./render/post.ts";
-import { updateSparks, fadeNearCamera } from "./fx/hits.ts";
+import { updateSparks, fadeNearCamera, flashBody, sparkBurst } from "./fx/hits.ts";
 import { Screens } from "./game/phase.ts";
 import { Cling } from "./player/cling.ts";
 import { JackAI } from "./hunter/jack.ts";
@@ -256,7 +256,12 @@ async function boot(): Promise<void> {
   const hurt = (d: number) => {
     const before = hunt.hp;
     hunt.damage(d);
-    if (hunt.hp < before) hud.flashHurt();
+    if (hunt.hp < before) {
+      hud.flashHurt();
+      // your own body reacts too — in third person you can see yourself take it
+      flashBody(character.root, 0xff3a24);
+      sparkBurst(scene, character.currPos.clone().setY(character.currPos.y + 1.2), 0xff8a60, 12);
+    }
   };
 
   // You are one of these; the AI wears the other.
@@ -322,6 +327,21 @@ async function boot(): Promise<void> {
     play(AUDIO.step, 0.5, 0.7);
   };
 
+  /**
+   * Online the opponent is a remote BODY, not an AI instance — and all the hit
+   * feedback lived inside the AI classes' takeHit(). So a shot across the wire
+   * produced a tracer and nothing else: the beast never felt the bullets.
+   *
+   * The shooter predicts the impact locally rather than waiting for the round
+   * trip. That is correct here because it is purely cosmetic: the victim still
+   * owns the damage, so a mispredicted flash costs a flash, never a health point.
+   */
+  const impact = (body: THREE.Object3D, hex: number): void => {
+    flashBody(body, hex);
+    sparkBurst(scene, body.position.clone().setY(body.position.y + 1.5), 0xffb070, 16);
+    play(AUDIO.claw, 0.45, 1.15);
+  };
+
   addEventListener("pointerdown", () => {
     if (hunt.outcome !== "playing" || screens.current !== "playing") return;
     // from a hang, a click is the dive — the AI's pounce, in the player's hands
@@ -342,7 +362,7 @@ async function boot(): Promise<void> {
         if (character.currPos.distanceTo(at) > 4.2) continue;
         play(AUDIO.claw, 0.8);
         if (id === "ai") { jack!.takeHit(2); if (!jack!.alive) hunt.foeDown(); }
-        else online!.hit(id, 2);          // the VICTIM applies it — see net/online.ts
+        else { online!.hit(id, 2); impact(body as THREE.Object3D, 0xff5a3c); }
         break;
       }
     } else {
@@ -352,7 +372,7 @@ async function boot(): Promise<void> {
       if (struck) {
         const entry = targets.find(([, b]) => struck === b || (b as THREE.Object3D).getObjectById(struck.id));
         if (entry?.[0] === "ai") { stalker!.takeHit(1); if (!stalker!.alive) hunt.foeDown(); }
-        else if (entry) online!.hit(entry[0], 1);
+        else if (entry) { online!.hit(entry[0], 1); impact(entry[1] as THREE.Object3D, 0xff4020); }
       }
     }
   });
