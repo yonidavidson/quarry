@@ -32,7 +32,7 @@ Concept image: _pending — the UI plan gate has not run yet; the character conc
 
 ## Build plan & status
 
-Now: ▶ 5. Screens polish + 6. HUD sprite swap
+Now: ▶ 5. Screens + 6. HUD sprites — menu still, logotype, fonts, settings and the sprite HUD are wired; **menu video + threat-mask clean-up wait on the Aug 4 credit refill** (recorded commands in Decisions).
 
 1. Boot, identity, and a walkable floor — ✅ → previewed
 2. Jack moves and shoots; the Stalker hunts — ✅ → previewed
@@ -99,15 +99,28 @@ Menu video: yes.
 | Stalker roar | sfx | landed | yes |
 | Industrial dread bed | music | landed | yes |
 | Key art (loader + title + cover) | image | landed (cms4m26n400iy2pqliielme17) | yes |
-| Menu still | image | enqueue on concept landing | — |
-| Menu video | video | waits: player's yes / next preview after still / style-only-left | — |
-| Logotype | image | enqueue on concept landing | — |
+| Menu still | image | landed (cms9cfc2y00a82tmkpp4splh6) | yes |
+| Menu video | video | declined (this pass) — credit-blocked at balance 0 until the Aug 4 refill; verbatim command recorded in Decisions | — |
+| Logotype | image | landed (cms9cfc07009d2qqfxrylzrtt) | yes |
 | Night sky through the windows | skybox | proposed — only if v0 keeps window views | — |
 
 Status flow: proposed → planned → generating (id) → landed (URL) → wired.
 
-HUD pipeline state (sprites lane): _not started — Stage-1 mockup is the next
-art action._
+HUD pipeline state (sprites lane): Stage-1 mockup landed and the lane decision
+recorded, but the style chain (Stage-2 sheet · menu still · logotype) was never
+enqueued behind it — fired late on 2026-07-31 (see Decisions). Stage-2 sheet
+`cms9cfbzo00a32tmky8munqs7` landed; extracted 7 sprites into `public/assets/hud/`
+(health full/half/empty, threat frame + annotated twin, cell counter, weapon
+frame) and WIRED into `src/ui/hud.ts` (#78). `hp-half` is cut from the wiring —
+health is integer (5 or 6 slots), a half state never occurs. Stopgap notes
+recorded there and in
+Decisions: the annotated threat twin was drawn shaded + off-registration so
+`genex ui masks` correctly refuses it (model-edit + `--clean` waits on the Aug 4
+refill); the threat fill mask is currently DERIVED from the frame art (channel
+band rows 22–48 minus the ~15px separators, fillBox `0.0222,0.2716,0.9511,0.3210`)
+and swaps for the real mask on refill. `genex ui text-color` sampling of the
+mockup's widget regions recorded for the visual pass — the mockup's boxes need
+an eyeball first.
 
 ## World & scale
 
@@ -141,6 +154,8 @@ does not apply. Rows stay as the split to hand out the moment that changes.
 
 ## Decisions & changes
 
+- 2026-07-31 — **Milestone 5/6 wired, minus credits.** The menu now opens on the generated **still** (UI-free, calm lower third) with the **logotype** wordmark, Black Ops One + Oswald loaded, keyboard side-select (↑↓ + Enter), and pause-hosted **settings** (music/sfx/look sliders, persisted). The sprite **HUD** is wired: health slots, energy-cell counter panel, weapon frame, and the segmented threat meter with a fill **derived from the frame art** (channel rows 22–48, ~15px separator pitch, fillBox `0.0222,0.2716,0.9511,0.3210`) because the sheet's green twin was drawn shaded + off-registration and the model-edit fix needs credits. Smoke pass (local test mode): menu renders with still + logo, HUD reads live (danger reached "above you", threat fill tracked pressure), pause/settings open + resume, zero page errors. Not exercised: auth/saves/multiplayer (local mode), the menu video, and the real mask. Pre-existing noise: 6 status-0 loads of the fallback VRM character's animation GLBs (200 over curl — client-side abort, unrelated to this milestone).\n- 2026-07-31 — **The style chain fires late** ([#77](https://github.com/yonidavidson/quarry/issues/77), [#78](https://github.com/yonidavidson/quarry/issues/78)). When the UI concept landed (2026-07-28) the Stage-2 HUD sheet, menu still and logotype should have enqueued `--no-wait` behind it and never did; the menu video's event triple also never fired. Pushed now: Stage-2 sheet `cms9cfbzo00a32tmky8munqs7` (asset list from the game contract — health segments, segmented threat meter, energy-cell counter chrome, weapon readout frame), menu still `cms9cfc2y00a82tmkpp4splh6`, logotype `cms9cfc07009d2qqfxrylzrtt`. The menu still anchors to the **key art** (`cms4m26n…`, already UI-free and recorded as the canonical frame) rather than the mockup — the mockup has a HUD baked in and must never seed UI into the menu frame; one-line reason recorded per menu-skill rule.
+- 2026-07-31 — **Menu video blocked on credits; the still ships.** The video costs 20 credits and the balance is 0 (refills Aug 4). The still menu is live — key art → still backdrop with a slow breathing pan/zoom, logotype, cinematic side-select rail, keyboard nav, and settings (music/sfx/look) in pause. The hover/confirm `genex sfx` ticks (5 credits each) are blocked the same way — procedural WebAudio blips keep the menu from being silent until then. Fires on the refill, recorded verbatim: `npx genex video "slow drifting fog moves across the floor and settles back, a hanging lamp sways a hair and steadies, dust motes drift and return, steam pulses from a vent and thins, the beast on the ceiling stirs and returns to stillness — every motion ends where it began" --frame https://assets.genex.technology/generations/cms9cfc2y00a82tmkpp4splh6/image-main --duration 8 --no-wait` then paste the URL into `src/assets.ts` `MENU_VIDEO`.
 - 2026-07-28 — Rebuild in three.js on Genex, replacing the KAPLAY 2D game on
   `main`. The 2D game is preserved at tag `quarry-2d-final` and is restorable
   with `git checkout quarry-2d-final -- index.html`.
@@ -261,3 +276,22 @@ does not apply. Rows stay as the split to hand out the moment that changes.
   closed on both, one got Jack and one got the Stalker, and Jack's client
   rendered the remote beast. NOT verified: how it FEELS, the pounce/claw
   interaction at speed, host migration, and re-seat after a drop.
+
+- 2026-07-31 — **Weapons: all four now real** (`src/combat/arsenal.ts`). The
+  contract promised blaster/scatter/shotgun/bomb and the game shipped only the
+  blaster. One hitscan core, spec-driven, so the tracer and the hit can never
+  disagree: blaster (∞, the floor you never lose), scatter (70, fast and weak),
+  shotgun (8, seven pellets, damage falls off past 9m so it stays a close-range
+  answer), bomb (3, arcs under gravity, 7m blast, can catch you too). Running dry
+  falls back to the blaster rather than leaving a dead button. Six crates
+  (`src/combat/crates.ts`), placed off the cell circuit so arming yourself costs
+  time in the open — and checked against the hall's real geometry after a first
+  pass left one crate hanging at y=7 over open floor with no catwalk under it and
+  another hidden behind a machine block. Q/wheel cycles, 1-4 selects.
+  Verified in local test mode: walked into the crate → "SCATTER recovered",
+  70 rounds, Q cycles BLASTER↔SCATTER, and 12 shots spent exactly 12 rounds.
+- 2026-07-31 — **Footsteps** (`src/fx/footsteps.ts`). Nothing in the game made a
+  sound when it moved, in a game about hearing something before you see it.
+  Spaced by distance travelled rather than a timer, so cadence follows speed and
+  cannot drift out of sync with the legs; yours are quiet and 2D, everyone
+  else's are positional, and the beast's stride is longer and heavier.

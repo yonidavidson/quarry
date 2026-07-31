@@ -23,18 +23,20 @@ import { capsuleFromModel } from "./controllers/character/vrm/capsule-fit.ts";
 import { buildComplex, lightComplex, HALL, LAMP_RIG } from "./world/complex.ts";
 import { buildAmbience, updateAmbience } from "./world/ambience.ts";
 import { Stalker } from "./hunter/stalker.ts";
-import { Blaster } from "./combat/blaster.ts";
+import { Arsenal, WEAPONS } from "./combat/arsenal.ts";
+import { Crates } from "./combat/crates.ts";
 import { Hunt } from "./game/hunt.ts";
 import { Hud } from "./ui/hud.ts";
-import { initAudio, startMusic, setMusicIntensity, play } from "./audio.ts";
+import { initAudio, setMusicIntensity, play } from "./audio.ts";
 import { createPost } from "./render/post.ts";
 import { updateSparks, fadeNearCamera, flashBody, sparkBurst } from "./fx/hits.ts";
+import { Footsteps } from "./fx/footsteps.ts";
 import { Screens } from "./game/phase.ts";
 import { Cling } from "./player/cling.ts";
 import { JackAI } from "./hunter/jack.ts";
 import { Online } from "./net/online.ts";
 import type { Side as SideT } from "./game/phase.ts";
-import { AUDIO, MODELS } from "./assets.ts";
+import { AUDIO, MODELS, MENU_VIDEO } from "./assets.ts";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { pickModel } from "./controllers/quality/pick-asset.ts";
 import { createGltfLoader } from "./controllers/quality/gltf-loader.ts";
@@ -76,6 +78,9 @@ async function boot(): Promise<void> {
 
   const sun = lightComplex(scene, tier.shadowMapSize);
   const post = createPost(renderer, scene, camera, tier);
+  // Audio belongs to the camera and must exist before the menu — the menu needs
+  // its bed and its ticks, and the unlock listener rides the first gesture.
+  initAudio(camera);
 
   // ── physics + the floor you walk on ──
   const physics = await PhysicsWorld.create();
@@ -214,6 +219,13 @@ async function boot(): Promise<void> {
     maxDistance: 12 * bodyScale,
   });
 
+  // The pause menu's Look slider drives the camera's sensitivity live; the
+  // persisted value applies at boot. The looping menu clip animates the still
+  // once credits pay for one (#77) — phone tiers keep the poster.
+  screens.onSensitivity = (v: number) => { followCam.aimSensitivity = v; };
+  followCam.aimSensitivity = screens.sensitivity;
+  if (tier.name !== "phone-low" && tier.name !== "phone") screens.attachMenuVideo(MENU_VIDEO);
+
   // #93 — the camera used to orbit freely while the character turned to face its
   // travel, so after a few direction changes W meant nothing intuitive and the
   // beast's leap (which launches along the camera azimuth) fired somewhere you
@@ -265,10 +277,15 @@ async function boot(): Promise<void> {
   }
 
   // ── the hunt ──
-  initAudio(camera);
   const hud = new Hud(asStalker ? 6 : 5, asStalker ? 0 : 5);
   const hunt = new Hunt(scene, { maxHp: asStalker ? 6 : 5, needCells: asStalker ? 0 : 5 });
-  const blaster = new Blaster(scene, camera);
+  // A bomb detonates seconds after it leaves your hand, by which time the list
+  // of things it can hurt has moved. The hook is filled in below, once the
+  // targets exist — the arsenal itself stays ignorant of who is in the match.
+  let onBlastHook: (at: THREE.Vector3, damage: number, radius: number) => void = () => {};
+  const arsenal = new Arsenal(scene, camera, (at, d, r) => onBlastHook(at, d, r));
+  const crates = asStalker ? null : new Crates(scene);
+  if (asStalker) hud.hideWeapon();
   const hurt = (d: number) => {
     const before = hunt.hp;
     hunt.damage(d);
@@ -358,18 +375,50 @@ async function boot(): Promise<void> {
     play(AUDIO.claw, 0.45, 1.15);
   };
 
+  // Online the opponent is a person, not an AI — the AI handles are null, and
+  // dereferencing them here is what made attacking throw and do nothing at all.
+  const liveTargets = (): Array<readonly [string, THREE.Object3D]> => (
+    online
+      ? [...remoteBodies.entries()] as Array<readonly [string, THREE.Object3D]>
+      : asStalker
+        ? (jack ? [["ai", jack.root] as const] : [])
+        : (stalker ? [["ai", stalker.root] as const] : [])
+  );
+
+  /** One door for every source of damage — bullets, pellets and blasts all end
+   *  up here, so a new weapon can never forget to check for the kill. */
+  const dealTo = (id: string, body: THREE.Object3D, amount: number, hex = 0xff4020): void => {
+    if (id === "ai") {
+      const ai = asStalker ? jack : stalker;
+      if (!ai || !ai.alive) return;
+      ai.takeHit(amount);
+      if (!ai.alive) hunt.foeDown();
+    } else {
+      online!.hit(id, amount);
+      impact(body, hex);
+    }
+  };
+
+  // filled in now that the targets exist — see the note at the arsenal
+  onBlastHook = (at, damage, radius) => {
+    sparkBurst(scene, at.clone(), 0xffb070, 40);
+    for (const [id, body] of liveTargets()) {
+      const d = body.position.distanceTo(at);
+      if (d > radius) continue;
+      // full damage at the centre, tapering to nothing at the rim
+      dealTo(id, body, damage * (1 - d / radius), 0xffa040);
+    }
+    // your own bomb can catch you — the reason you throw it and then move
+    const mine = character.currPos.distanceTo(at);
+    if (mine < radius) hurt(Math.round(damage * (1 - mine / radius) * 0.6));
+  };
+
   addEventListener("pointerdown", () => {
     if (hunt.outcome !== "playing" || screens.current !== "playing") return;
     // from a hang, a click is the dive — the AI's pounce, in the player's hands
     if (asStalker && cling?.state === "ceiling") { cling.pounce(followCam.azimuthAngle); return; }
     hud.pulseCrosshair();
-    // Online the opponent is a person, not an AI — the AI handles are null, and
-    // dereferencing them here is what made attacking throw and do nothing at all.
-    const targets = online
-      ? [...remoteBodies.entries()]
-      : asStalker
-        ? (jack ? [["ai", jack.root] as const] : [])
-        : (stalker ? [["ai", stalker.root] as const] : []);
+    const targets = liveTargets();
 
     if (asStalker) {
       // claws: short reach, heavy hit, no ammo
@@ -383,15 +432,28 @@ async function boot(): Promise<void> {
       }
     } else {
       const from = handBone ? (handBone as THREE.Object3D).getWorldPosition(handPos) : undefined;
-      const meshes = targets.map(([, b]) => b as THREE.Object3D);
-      const struck = blaster.fireAt(meshes, walls, from);
-      if (struck) {
-        const entry = targets.find(([, b]) => struck === b || (b as THREE.Object3D).getObjectById(struck.id));
-        if (entry?.[0] === "ai") { stalker!.takeHit(1); if (!stalker!.alive) hunt.foeDown(); }
-        else if (entry) { online!.hit(entry[0], 1); impact(entry[1] as THREE.Object3D, 0xff4020); }
+      const meshes = targets.map(([, b]) => b);
+      // a shotgun lands several pellets on one body — they arrive summed, so the
+      // damage owed is one number per victim rather than one per pellet
+      for (const { root, damage } of arsenal.fireAt(meshes, walls, from)) {
+        const entry = targets.find(([, b]) => root === b || b.getObjectById(root.id));
+        if (entry) dealTo(entry[0], entry[1], damage);
       }
     }
   });
+
+  // Q cycles, 1-4 select directly. Both are ignored playing the beast, which
+  // has claws and nothing to swap between.
+  if (!asStalker) {
+    const slots = ["blaster", "scatter", "shotgun", "bomb"] as const;
+    addEventListener("keydown", (e) => {
+      if (screens.current !== "playing") return;
+      if (e.code === "KeyQ") { arsenal.cycle(); return; }
+      const n = ["Digit1", "Digit2", "Digit3", "Digit4"].indexOf(e.code);
+      if (n >= 0) arsenal.select(slots[n]);
+    });
+    addEventListener("wheel", () => { if (screens.current === "playing") arsenal.cycle(); }, { passive: true });
+  }
 
   addEventListener("keyup", (e) => { if (e.code === "Space") launch(); });
   addEventListener("keydown", (e) => {
@@ -451,6 +513,12 @@ async function boot(): Promise<void> {
   // ── the loop. performance.now delta, never THREE.Clock.getDelta(). ──
   const pivot = new THREE.Vector3();
   const sightRay = new THREE.Raycaster();
+
+  // Footsteps. Yours are 2D and quiet; everyone else's are positional and are
+  // meant to be heard through a wall before they are seen around it.
+  const myFeet = new Footsteps(asStalker);
+  const foeFeet = new Footsteps(!asStalker);
+  const remoteFeet = new Map<string, Footsteps>();
   let last = performance.now();
   // A throw inside the animation callback stops three.js re-requesting the
   // frame, so ONE bad frame ends the game permanently — which is exactly how a
@@ -535,6 +603,8 @@ async function boot(): Promise<void> {
         if (stalker) stalker.update(delta, here, !blocked);
         if (jack) jack.update(delta, here, !blocked);
         pressure = enemy.alive ? enemy.pressure(here) : 0;
+        // the AI's approach is now audible before it is visible
+        if (enemy.alive) foeFeet.update(enemy.position, false, scene);
       } else if (online) {
         // ── online: the other seat is a person ──
         online.setLocal(
@@ -559,16 +629,29 @@ async function boot(): Promise<void> {
           // what makes a networked game feel laggy
           body.position.set(r.state.x, r.state.y, r.state.z);
           if (r.state.q?.length === 4) body.quaternion.fromArray(r.state.q as number[]);
+          let feet = remoteFeet.get(r.id);
+          if (!feet) { feet = new Footsteps(r.side === "stalker"); remoteFeet.set(r.id, feet); }
+          // pose 2 is airborne — a leaping body is not stepping
+          feet.update(body.position, false, scene, r.state.pose === 2);
           const d = here.distanceTo(body.position);
           pressure = Math.max(pressure, Math.min(1, Math.max(0, 1 - d / 60)));
         }
-        dropStaleRemotes(new Set(online.remotes().map((r) => r.id)));
+        const live = new Set(online.remotes().map((r) => r.id));
+        dropStaleRemotes(live);
+        for (const id of remoteFeet.keys()) if (!live.has(id)) remoteFeet.delete(id);
       }
 
       // #82 — a landed pounce filled the frame with opaque body; fading whatever
       // is on top of the lens keeps the room readable
       if (stalker?.alive) fadeNearCamera(stalker.root, camera);
       if (jack?.alive) fadeNearCamera(jack.root, camera);
+
+      // your own steps — not while airborne, and not while hanging off a wall
+      myFeet.update(here, true, scene, !character.isOnGround || !!cling?.active);
+
+      const got = crates?.update(delta, here);
+      if (got) { arsenal.give(got); hud.announcePickup(WEAPONS[got].label); }
+      if (!asStalker) hud.setWeapon(arsenal.label, arsenal.rounds);
 
       hunt.update(delta, here);
       setMusicIntensity(pressure);
@@ -578,10 +661,9 @@ async function boot(): Promise<void> {
                  stalker ? stalker.state : "prowl", enemy ? foeHp : 1);
       if (hunt.outcome !== "playing") hud.showEnd(hunt.outcome === "won", hunt.cells, hunt.winReason, asStalker, hunt.outcome === "abandoned");
     }
-    blaster.update(delta);
+    arsenal.update(delta, walls);
     updateSparks(delta, scene);
     updateAmbience(delta, now / 1000);
-    startMusic();
     governor.frame(delta * 1000);
 
     post.render(delta);

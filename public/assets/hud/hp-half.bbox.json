@@ -1,0 +1,25 @@
+{
+  "sheet": {
+    "w": 1088,
+    "h": 608
+  },
+  "sheetBBox": {
+    "x": 295,
+    "y": 44,
+    "w": 144,
+    "h": 70
+  },
+  "sheetBBoxNorm": {
+    "x": 0.271,
+    "y": 0.072,
+    "w": 0.132,
+    "h": 0.115
+  },
+  "cropDims": {
+    "w": 144,
+    "h": 70
+  },
+  "aspectRatio": 2.057,
+  "componentPixels": 6904,
+  "defringed": true
+}

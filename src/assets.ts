@@ -30,6 +30,16 @@ export const MODELS = {
  *  minted against. */
 export const KEY_ART = `${GEN}/cms4m26n400iy2pqliielme17/image-main`;
 
+/** The menu still — a UI-free establishing shot anchored to the key art. Doubles
+ *  as the loader background. Menu video (when it exists) animates it. */
+export const MENU_STILL = `${GEN}/cms9cfc2y00a82tmkpp4splh6/image-main`;
+
+/** Seamless looping menu video generated from MENU_STILL. */
+export const MENU_VIDEO = "";
+
+/** The generated logotype: 'QUARRY' cut from rusted steel, transparent PNG. */
+export const LOGO = `${GEN}/cms9cfc07009d2qqfxrylzrtt/image-main`;
+
 export const AUDIO = {
   /** ~90s looping bed: sub-bass drone, distant metal, dripping water. */
   music: `${GEN}/cms4emv98007g2ensjvsuohe2/audio-music`,

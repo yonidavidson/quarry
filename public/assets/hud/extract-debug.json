@@ -1,0 +1,126 @@
+{
+  "timestamp": "2026-07-31T19:42:31.858Z",
+  "input": "https://assets.genex.technology/generations/cms9cfbzo00a32tmky8munqs7/image-main",
+  "sheet": {
+    "w": 1088,
+    "h": 608
+  },
+  "mode": "chroma",
+  "rawComponentCount": 7,
+  "filteredComponentCount": 7,
+  "bandH": 39,
+  "extractions": [
+    {
+      "name": "hp-full",
+      "sheetBBox": {
+        "x": 93,
+        "y": 44,
+        "w": 140,
+        "h": 71
+      },
+      "sheetBBoxNorm": {
+        "x": 0.085,
+        "y": 0.072,
+        "w": 0.129,
+        "h": 0.117
+      },
+      "ar": 1.972
+    },
+    {
+      "name": "hp-half",
+      "sheetBBox": {
+        "x": 295,
+        "y": 44,
+        "w": 144,
+        "h": 70
+      },
+      "sheetBBoxNorm": {
+        "x": 0.271,
+        "y": 0.072,
+        "w": 0.132,
+        "h": 0.115
+      },
+      "ar": 2.057
+    },
+    {
+      "name": "hp-empty",
+      "sheetBBox": {
+        "x": 490,
+        "y": 44,
+        "w": 144,
+        "h": 70
+      },
+      "sheetBBoxNorm": {
+        "x": 0.45,
+        "y": 0.072,
+        "w": 0.132,
+        "h": 0.115
+      },
+      "ar": 2.057
+    },
+    {
+      "name": "threat-frame",
+      "sheetBBox": {
+        "x": 70,
+        "y": 149,
+        "w": 450,
+        "h": 81
+      },
+      "sheetBBoxNorm": {
+        "x": 0.064,
+        "y": 0.245,
+        "w": 0.414,
+        "h": 0.133
+      },
+      "ar": 5.556
+    },
+    {
+      "name": "threat-mask",
+      "sheetBBox": {
+        "x": 547,
+        "y": 149,
+        "w": 472,
+        "h": 81
+      },
+      "sheetBBoxNorm": {
+        "x": 0.503,
+        "y": 0.245,
+        "w": 0.434,
+        "h": 0.133
+      },
+      "ar": 5.827
+    },
+    {
+      "name": "cell-counter",
+      "sheetBBox": {
+        "x": 71,
+        "y": 267,
+        "w": 105,
+        "h": 155
+      },
+      "sheetBBoxNorm": {
+        "x": 0.065,
+        "y": 0.439,
+        "w": 0.097,
+        "h": 0.255
+      },
+      "ar": 0.677
+    },
+    {
+      "name": "weapon-frame",
+      "sheetBBox": {
+        "x": 368,
+        "y": 324,
+        "w": 476,
+        "h": 240
+      },
+      "sheetBBoxNorm": {
+        "x": 0.338,
+        "y": 0.533,
+        "w": 0.438,
+        "h": 0.395
+      },
+      "ar": 1.983
+    }
+  ]
+}
