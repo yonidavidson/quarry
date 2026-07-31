@@ -5,6 +5,7 @@
 // Deliberately threat-free. The Stalker does the hunting; these exist so that
 // standing still is interesting and so its roar has something to cut through.
 import * as THREE from "three";
+import { softDot } from "../fx/soft-dot.ts";
 import { HALL } from "./complex.ts";
 
 interface Vent { pts: THREE.Points; base: Float32Array; vel: Float32Array; t: number; period: number; origin: THREE.Vector3 }
@@ -20,7 +21,9 @@ function makePoints(count: number, size: number, hex: number, opacity: number): 
   const geo = new THREE.BufferGeometry();
   geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(count * 3), 3));
   return new THREE.Points(geo, new THREE.PointsMaterial({
+    // the sprite is what makes steam read as vapour rather than grey boxes
     color: hex, size, transparent: true, opacity, depthWrite: false,
+    map: softDot(), alphaTest: 0.01,
     blending: THREE.AdditiveBlending,
   }));
 }

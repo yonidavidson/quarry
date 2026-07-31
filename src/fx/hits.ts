@@ -3,6 +3,7 @@
 // — and it flees on a timer anyway. These are the three cheapest things that make
 // a hit legible, none of which need generated assets.
 import * as THREE from "three";
+import { softDot } from "./soft-dot.ts";
 
 type Mat = THREE.MeshStandardMaterial;
 
@@ -57,7 +58,9 @@ export function sparkBurst(scene: THREE.Scene, at: THREE.Vector3, hex = 0xffc27a
   const geo = new THREE.BufferGeometry();
   geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
   const pts = new THREE.Points(geo, new THREE.PointsMaterial({
+    // map + alphaTest: without a sprite every spark is an opaque square
     color: hex, size: 0.12, transparent: true, depthWrite: false,
+    map: softDot(), alphaTest: 0.01, blending: THREE.AdditiveBlending,
   }));
   scene.add(pts);
   sparks.push({ pts, vel, life: 0.5, max: 0.5 });
