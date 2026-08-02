@@ -11,8 +11,10 @@
 import * as THREE from "three";
 import type { PhysicsWorld } from "../controllers/shared/physics-world.ts";
 import { cuboidCollider } from "../controllers/shared/colliders.ts";
+import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { templeWall, glyphWall, skullFrieze, templeFloor, stepStone } from "./stone.ts";
 import { buildSky, SUN_DIR } from "./sky.ts";
+import { detectTier } from "../controllers/quality/tier.ts";
 
 /** Interior bounds, metres. Matches DESIGN.md → World & scale. */
 export const HALL = { w: 140, d: 90, wallH: 14 } as const;
@@ -94,8 +96,10 @@ function altar(out: Box[], x: number, z: number): void {
   out.push({ p: [x, 6.9, z], s: [1.6, 1.8, 1.6], mat: "frieze" });
 }
 
-/** The static solids. One list, so the mesh pass and the collider pass agree. */
-function layout(): Box[] {
+/** The static solids. One list, so the mesh pass and the collider pass agree.
+ *  `rubble` is tier-scaled: it is the one part of the ruin that is pure dressing,
+ *  so a phone gets a handful instead of the full scatter (#79). */
+function layout(rubbleCount: number): Box[] {
   const { w, d, wallH } = HALL;
   const boxes: Box[] = [{ p: [0, -0.5, 0], s: [w, 1, d], mat: "floor" }];
 
@@ -182,7 +186,7 @@ function layout(): Box[] {
   // reference has broken stone in every frame.
   let s = 20260802;
   const rnd = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
-  for (let i = 0; i < 46; i++) {
+  for (let i = 0; i < rubbleCount; i++) {
     const x = (rnd() - 0.5) * (w - 14), z = (rnd() - 0.5) * (d - 14);
     if (Math.abs(x) < 12 && Math.abs(z) < 12) continue;      // keep spawn clear
     const sz = 0.9 + rnd() * 2.2;
@@ -199,8 +203,9 @@ function layout(): Box[] {
 
 /** Chains, vines and the canopy past the walls — decoration with no collider,
  *  added straight to the scene so it never enters the solids list. */
-function dressing(scene: THREE.Scene, mats: Record<Mat, THREE.Material>): void {
+function dressing(scene: THREE.Scene, mats: Record<Mat, THREE.Material>, phone: boolean): void {
   const { w, d, wallH } = HALL;
+  const VINES = phone ? 40 : 110, LEAVES = phone ? 90 : 260, TREES = phone ? 70 : 150;
   let s = 991;
   const rnd = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
 
@@ -220,14 +225,14 @@ function dressing(scene: THREE.Scene, mats: Record<Mat, THREE.Material>): void {
   const vineMat = new THREE.MeshStandardMaterial({ color: 0x3c5c2c, roughness: 0.9, side: THREE.DoubleSide });
   const leafGeo = new THREE.PlaneGeometry(0.7, 0.4);
   const vineGeo = new THREE.CylinderGeometry(0.06, 0.04, 1, 4);
-  const vines = new THREE.InstancedMesh(vineGeo, vineMat, 110);
-  const leaves = new THREE.InstancedMesh(leafGeo, vineMat, 260);
+  const vines = new THREE.InstancedMesh(vineGeo, vineMat, VINES);
+  const leaves = new THREE.InstancedMesh(leafGeo, vineMat, LEAVES);
   const m = new THREE.Matrix4();
   let li = 0;
   // Vines hang from the BEAMS, not from open air — the first pass left them
   // dangling in the middle of a hole in the roof with nothing above them.
   const beamZ = Array.from({ length: 7 }, (_, i) => -d / 2 + 8 + i * ((d - 16) / 6));
-  for (let i = 0; i < 110; i++) {
+  for (let i = 0; i < VINES; i++) {
     const x = (rnd() - 0.5) * (w - 10);
     const z = beamZ[Math.floor(rnd() * beamZ.length)] + (rnd() - 0.5) * 1.4;
     const len = 2 + rnd() * 7;
@@ -237,7 +242,7 @@ function dressing(scene: THREE.Scene, mats: Record<Mat, THREE.Material>): void {
       new THREE.Vector3(1, len, 1),
     );
     vines.setMatrixAt(i, m);
-    for (let k = 0; k < 2 && li < 260; k++, li++) {
+    for (let k = 0; k < 2 && li < LEAVES; k++, li++) {
       m.compose(
         new THREE.Vector3(x + (rnd() - 0.5) * 0.5, wallH - 2 - rnd() * len, z + (rnd() - 0.5) * 0.5),
         new THREE.Quaternion().setFromEuler(new THREE.Euler(rnd(), rnd() * 3, rnd())),
@@ -256,10 +261,10 @@ function dressing(scene: THREE.Scene, mats: Record<Mat, THREE.Material>): void {
   const trunkMat = new THREE.MeshStandardMaterial({ color: 0x40331f, roughness: 1 });
   const crown = new THREE.SphereGeometry(1, 7, 5);
   const trunk = new THREE.CylinderGeometry(0.5, 0.8, 1, 5);
-  const crowns = new THREE.InstancedMesh(crown, canopyMat, 150);
-  const trunks = new THREE.InstancedMesh(trunk, trunkMat, 150);
-  for (let i = 0; i < 150; i++) {
-    const ang = (i / 150) * Math.PI * 2 + rnd() * 0.3;
+  const crowns = new THREE.InstancedMesh(crown, canopyMat, TREES);
+  const trunks = new THREE.InstancedMesh(trunk, trunkMat, TREES);
+  for (let i = 0; i < TREES; i++) {
+    const ang = (i / TREES) * Math.PI * 2 + rnd() * 0.3;
     const rad = 88 + rnd() * 46;
     const x = Math.cos(ang) * rad * 1.25, z = Math.sin(ang) * rad;
     const hgt = 16 + rnd() * 16, cr = 5 + rnd() * 5;
@@ -333,23 +338,48 @@ export function buildComplex(scene: THREE.Scene, physics: PhysicsWorld): THREE.M
     timber: new THREE.MeshStandardMaterial({ color: 0x7a5f38, roughness: 0.95, metalness: 0.0 }),
   };
 
-  const solids: THREE.Mesh[] = [];
-  for (const b of layout()) {
-    const mesh = new THREE.Mesh(uvBox(b.s[0], b.s[1], b.s[2], TILE[b.mat]), mats[b.mat]);
-    mesh.position.set(b.p[0], b.p[1], b.p[2]);
-    mesh.scale.set(b.s[0], b.s[1], b.s[2]);
-    if (b.yaw) mesh.rotation.y = b.yaw;
-    mesh.castShadow = b.mat !== "floor";
-    mesh.receiveShadow = true;
-    scene.add(mesh);
+  // A carved temple needs many more pieces than a box hall did — facades,
+  // altars and rubble are what stop a wall reading as a plane — and ~270 draw
+  // calls is how you lose a phone. The pieces are STATIC, so they are baked into
+  // one merged mesh per material: seven draw calls for the whole ruin.
+  // Colliders stay per-box, and every consumer of the returned list raycasts
+  // (camera collision, the Stalker's cling, shots, line-of-sight), which reads
+  // merged geometry exactly the same way.
+  const tier = detectTier();
+  const phone = tier.name === "phone" || tier.name === "phone-low";
+  const batches = new Map<Mat, THREE.BufferGeometry[]>();
+  const m4 = new THREE.Matrix4();
+  const q = new THREE.Quaternion();
+
+  for (const b of layout(phone ? 12 : 46)) {
+    const geo = uvBox(b.s[0], b.s[1], b.s[2], TILE[b.mat]).clone();
+    q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), b.yaw ?? 0);
+    geo.applyMatrix4(m4.compose(
+      new THREE.Vector3(b.p[0], b.p[1], b.p[2]), q,
+      new THREE.Vector3(b.s[0], b.s[1], b.s[2]),
+    ));
+    geo.clearGroups();          // one material per batch — per-face groups would fight the merge
+    const list = batches.get(b.mat);
+    if (list) list.push(geo); else batches.set(b.mat, [geo]);
     if (b.ghost) continue;
 
     const body = physics.createBody({ type: "fixed", position: b.p, rotation: [0, b.yaw ?? 0, 0] });
     cuboidCollider(physics.world, body, [b.s[0] / 2, b.s[1] / 2, b.s[2] / 2]);
+  }
+
+  const solids: THREE.Mesh[] = [];
+  for (const [mat, geos] of batches) {
+    const merged = mergeGeometries(geos, false);
+    for (const g of geos) g.dispose();
+    if (!merged) continue;
+    const mesh = new THREE.Mesh(merged, mats[mat]);
+    mesh.castShadow = mat !== "floor";
+    mesh.receiveShadow = true;
+    scene.add(mesh);
     solids.push(mesh);
   }
 
-  dressing(scene, mats);
+  dressing(scene, mats, phone);
   return solids;
 }
 

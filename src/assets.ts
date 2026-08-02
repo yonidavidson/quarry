@@ -4,18 +4,15 @@
 // adaptive-quality kit's loadTextureWithFallback).
 const GEN = "https://assets.genex.technology/generations";
 
-export const TEXTURES = {
-  /** Machine-hall floor — wet stained concrete, seamless. */
-  floor: `${GEN}/cms4emta7007b2ens0yy80gif/texture-basecolor`,
-  /** Catwalks and stairs — rusted diamond plate. */
-  catwalk: `${GEN}/cms4emub4006i2pqltf31ogeu/texture-basecolor`,
-  /** Hall walls — chipped grey-green paint over rusted steel. */
-  wall: `${GEN}/cms4nxrid000r2bl48qklh216/texture-basecolor`,
-  /** Machine casings — dark oiled metal, rivets, rust bloom. */
-  machine: `${GEN}/cms4nxsgk000w2bl4zfxv7pvj/texture-basecolor`,
-  /** The ceiling: corrugated metal with pipe runs and cable trays. */
-  ceiling: `${GEN}/cms4nxte7000m2ro5bxj8slct/texture-basecolor`,
-} as const;
+/** The temple surface set (#100) lands here when the Aug 4 credit refill clears
+ *  the generation queue. Until then `src/world/stone.ts` paints the stand-in,
+ *  and wiring these is: drop the URL in, load it through `pickAsset`, and swap
+ *  the `map`/`bumpMap` on the matching material in `src/world/complex.ts`.
+ *
+ *  The industrial set this replaced (wet concrete, diamond plate, chipped paint,
+ *  oiled machine casing, corrugated ceiling) is unwired and its generation ids
+ *  live in DESIGN.md's Assets table — nothing in the game reads them any more. */
+export const TEXTURES = {} as const;
 
 export const MODELS = {
   /** The Stalker — rigged biped, with its own walk/run clips baked in. */

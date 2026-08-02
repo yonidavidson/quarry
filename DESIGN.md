@@ -84,7 +84,9 @@ dark machine hall.
 HUD lane: **sprites** — the brief is stencilled metal with hazard-stripe accents
 and etched frames; a CSS rebuild would not pass for it. The hand-written DOM HUD
 in `src/ui/hud.ts` is scaffolding until the sprite sheet lands.
-Menu video: yes.
+Menu video: declined (this pass) — credit-blocked at balance 0 until the Aug 4
+refill; the verbatim command to fire on the refill is recorded in Decisions. The
+prompt is re-written for the ruins before it fires (#100).
 
 ## Assets — the generation plan AND the budget
 
@@ -93,11 +95,11 @@ Menu video: yes.
 | Concept + HUD mockup | image | landed (cms4fujmg00bm2ensvgzgdfqj) — confirms the sprites lane | n/a |
 | Jack — player character | character | landed (cms4fbaky009f2ens0f1kmmbi) | yes |
 | The Stalker — rigged hunter | creature | landed (cms4fiv3a008x2pqlshvq5jnp) | yes |
-| Complex floor — wet concrete | texture | landed — **retired by #100**, unwired | no |
-| Steel catwalk / plate | texture | landed — **retired by #100**, unwired | no |
-| Hall walls — chipped paint | texture | landed — **retired by #100**, unwired | no |
-| Machine casings — oiled metal | texture | landed — **retired by #100**, unwired | no |
-| Ceiling — corrugated + pipes | texture | landed — **retired by #100**, unwired | no |
+| Complex floor — wet concrete | texture | landed (cms4emta7007b2ens0yy80gif) — **retired by #100**, removed from `assets.ts` | no |
+| Steel catwalk / plate | texture | landed (cms4emub4006i2pqltf31ogeu) — **retired by #100**, removed from `assets.ts` | no |
+| Hall walls — chipped paint | texture | landed (cms4nxrid000r2bl48qklh216) — **retired by #100**, removed from `assets.ts` | no |
+| Machine casings — oiled metal | texture | landed (cms4nxsgk000w2bl4zfxv7pvj) — **retired by #100**, removed from `assets.ts` | no |
+| Ceiling — corrugated + pipes | texture | landed (cms4nxte7000m2ro5bxj8slct) — **retired by #100**, removed from `assets.ts` | no |
 | Temple flagstone floor | texture | planned (#100) — credit-blocked to Aug 4; procedural stand-in in `src/world/stone.ts` | stand-in |
 | Carved glyph wall | texture | planned (#100) — same | stand-in |
 | Skull frieze block | texture | planned (#100) — same | stand-in |
