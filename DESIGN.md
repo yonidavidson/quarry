@@ -37,7 +37,7 @@ Concept image: _pending — the UI plan gate has not run yet; the character conc
 
 ## Build plan & status
 
-Now: ▶ 9. The temple reskin ([#100](https://github.com/yonidavidson/quarry/issues/100)) — the world's geometry, sun rig and post stack are rebuilt against the player's art reference and previewed; **every generation lane in it (temple textures, skybox, props, character reskins, new key art, jungle audio) waits on the Aug 4 credit refill**, along with the menu video and threat mask from milestone 5/6.
+Now: ▶ 11. Waiting on the Aug 4 credit refill. Every no-credit ticket is closed and previewed — the temple, traversal, hazards, feel and touch controls. What remains is generation only: both characters, the temple texture set and skybox, the props, the new key art/menu/cover, the per-weapon sounds and the HUD threat mask. Commands are written verbatim in `docs/generation-queue.md`; run Tier 1 first.
 
 1. Boot, identity, and a walkable floor — ✅ → previewed
 2. Jack moves and shoots; the Stalker hunts — ✅ → previewed
@@ -46,14 +46,18 @@ Now: ▶ 9. The temple reskin ([#100](https://github.com/yonidavidson/quarry/iss
 5. Screens: loader, title, side select, pause ([#77](https://github.com/yonidavidson/quarry/issues/77)) — ◐ machine + side select done; menu video, branded loader and settings still open
 6. HUD sprite swap from the landed concept ([#78](https://github.com/yonidavidson/quarry/issues/78)) — ⬜
 7. 1v1 asymmetric online ([#83](https://github.com/yonidavidson/quarry/issues/83)) — ◐ seating, sides and remote bodies verified with two identities; feel gate not run
-8. World dressing — the ceiling the Stalker crosses ([#80](https://github.com/yonidavidson/quarry/issues/80)) — ◐ stone beams, vines and roof collapse landed with the reskin; props still owed
+8. World dressing — the ceiling the Stalker crosses ([#80](https://github.com/yonidavidson/quarry/issues/80)) — ✅ → previewed
 9. The temple reskin ([#100](https://github.com/yonidavidson/quarry/issues/100)) — ◐ geometry, sun rig, sky and grade previewed; the generated asset half is credit-blocked
+10. Traversal, hazards and feel — ledge/wall/rope/vine climbing, swinging, swinging-log traps, scarabs, shake/hitstop/fall damage, touch controls ([#101](https://github.com/yonidavidson/quarry/issues/101)) — ✅ → previewed
+11. The generation batch on the refill — `docs/generation-queue.md` — ⬜
 
-Open defects:
-[#79](https://github.com/yonidavidson/quarry/issues/79) phone budgets ·
+Open, and every one of them credit-blocked or owner-only:
+[#91](https://github.com/yonidavidson/quarry/issues/91) Jack's gun model ·
+[#99](https://github.com/yonidavidson/quarry/issues/99) per-weapon sfx + bomb model ·
+[#104](https://github.com/yonidavidson/quarry/issues/104) cover + menu art ·
+[#78](https://github.com/yonidavidson/quarry/issues/78) HUD threat mask ·
 [#81](https://github.com/yonidavidson/quarry/issues/81) Stalker attack anims ·
-[#82](https://github.com/yonidavidson/quarry/issues/82) camera clips on pounce ·
-[#84](https://github.com/yonidavidson/quarry/issues/84) stray dashboard project
+[#84](https://github.com/yonidavidson/quarry/issues/84) stray dashboard project (no CLI verb — dashboard only)
 
 A milestone is done only once its work reached a `genex preview` (`→ previewed`).
 After any break, resume from `Now:`.
@@ -64,8 +68,9 @@ After any break, resume from `Now:`.
   tough, 6 HP, wall-climb + ceiling-crawl + double jump)
 - **Weapons:** 4 for v0 — blaster, scatter, shotgun, bomb — found in crates, not
   bought
-- **Enemies besides the other hunter:** 2 kinds — a patrol drone and a crawlbot;
-  neither hunts you, both punish carelessness
+- **Enemies besides the other hunter:** 2 kinds — swinging spiked logs and
+  scarab swarms; neither hunts you, both punish carelessness (the temple's
+  answer to the drone and the crawlbot, #95)
 - **Locations:** 1 floor of the ruin for v0 — great hall, stone ledge ring,
   hanging platforms, burial chamber, the gate (same footprints as the machine
   hall / catwalk ring / pump room / extraction bay they replaced, #100)
