@@ -53,10 +53,11 @@ export const CHAINS: Array<{ x: number; z: number; top: number; foot: number }> 
   // beams. Every one is placed where climbing it puts you on the ledge ring, a
   // hanging platform, or the beam run — a rope is a route, never scenery.
   const TOP = 28 - 3.0, FOOT = 2.05;
+  // Ten, not sixteen. Sixteen ropes plus twelve vines plus the decorative
+  // scatter turned the hall into a curtain you could not see the room through.
   const spots: Array<[number, number]> = [
-    [-44, 26], [42, -26], [-6, -34], [12, 34], [-22, 20], [24, -22],
-    [-62, 8], [62, -8], [-30, -30], [30, 30], [0, -12], [-12, 40],
-    [52, 14], [-52, -14], [8, -40], [-38, 38],
+    [-44, 26], [42, -26], [-6, -34], [12, 34], [-22, 20],
+    [24, -22], [-62, 8], [62, -8], [-30, -30], [30, 30],
   ];
   return spots.map(([x, z]) => ({ x, z, top: TOP, foot: FOOT }));
 })();
@@ -74,9 +75,7 @@ export const VINES: Array<{ x: number; z: number; anchorY: number; length: numbe
   const ANCHOR = 28 - 3.4;              // just under the beam run
   const FREE_END = 3.2;
   const spots: Array<[number, number]> = [
-    [-34, -37], [-16, -24.7], [2, -12.3], [20, 0], [38, 12.3],
-    [-38, 12.3], [-20, 24.7], [-2, 37], [16, 24.7], [34, -24.7],
-    [56, 0], [-56, 0],
+    [-34, -37], [2, -12.3], [20, 0], [-38, 12.3], [-2, 37], [34, -24.7],
   ];
   return spots.map(([x, z]) => ({ x, z, anchorY: ANCHOR, length: ANCHOR - FREE_END }));
 })();
@@ -123,15 +122,20 @@ function facade(out: Box[], axis: "x" | "z", side: 1 | -1): void {
   out.push({ p: place(0, wallH - 3.4, -0.45), s: size(len, 2.3, 0.9), mat: "frieze" });
   // a moulding under it, so the band sits on something
   out.push({ p: place(0, wallH - 4.8, -0.6), s: size(len, 0.55, 1.2), mat: "step" });
-  // a second, lower course — a 21m wall with one band near the top reads as a
-  // blank slab for its bottom two thirds
+  // a plain moulding low down — a long horizontal that reads at a glance and
+  // gives the eye somewhere to rest between the carved bays
   out.push({ p: place(0, 9.4, -0.4), s: size(len, 1.1, 0.8), mat: "step" });
 
   const bays = Math.round(len / 15);
   for (let i = 0; i < bays; i++) {
     const a = -len / 2 + (len / bays) * (i + 0.5);
-    // carved glyph panel at eye height
-    out.push({ p: place(a, 5.0, -0.35), s: size(len / bays - 5, 7.2, 0.7), mat: "glyph" });
+    // Carved glyph panel — on ALTERNATE bays only. Carving on every bay of every
+    // wall stopped reading as ornament and started reading as noise: the eye had
+    // nowhere to rest and the room became hard to navigate. Ornament needs plain
+    // stone around it to be ornament.
+    if (i % 2 === 0) {
+      out.push({ p: place(a, 5.0, -0.35), s: size(len / bays - 5, 7.2, 0.7), mat: "glyph" });
+    }
     // pilaster between bays, base and capital
     const pa = -len / 2 + (len / bays) * i;
     out.push({ p: place(pa, wallH / 2, -0.8), s: size(2.6, wallH, 1.6), mat: "wall" });
@@ -145,9 +149,9 @@ function facade(out: Box[], axis: "x" | "z", side: 1 | -1): void {
 function altar(out: Box[], x: number, z: number): void {
   out.push({ p: [x, 1.2, z], s: [12, 2.4, 9], mat: "step" });
   out.push({ p: [x, 3.4, z], s: [10.2, 2.0, 7.4], mat: "wall" });
-  out.push({ p: [x, 5.2, z], s: [7.8, 1.6, 5.4], mat: "glyph" });
+  out.push({ p: [x, 5.2, z], s: [7.8, 1.6, 5.4], mat: "step" });
   // a carved marker on top — a silhouette to read the room by
-  out.push({ p: [x, 6.9, z], s: [1.6, 1.8, 1.6], mat: "frieze" });
+  out.push({ p: [x, 6.9, z], s: [1.6, 1.8, 1.6], mat: "step" });
 }
 
 /** The static solids. One list, so the mesh pass and the collider pass agree.
@@ -255,7 +259,7 @@ function layout(rubbleCount: number): Box[] {
     for (const z of [-30, 30]) {
       boxes.push({ p: [x, 0.6, z], s: [3.6, 1.2, 3.6], mat: "step" });
       boxes.push({ p: [x, wallH / 2, z], s: [2.4, wallH, 2.4], mat: "wall" });
-      boxes.push({ p: [x, wallH - 1.4, z], s: [3.4, 1.2, 3.4], mat: "frieze" });
+      boxes.push({ p: [x, wallH - 1.4, z], s: [3.4, 1.2, 3.4], mat: "step" });
     }
   }
 
@@ -286,7 +290,7 @@ function layout(rubbleCount: number): Box[] {
 function dressing(scene: THREE.Scene, mats: Record<Mat, THREE.Material>, phone: boolean): void {
   const { w, d, wallH } = HALL;
   // VINE_COUNT, not VINES — the exported VINES are the swingable ones
-  const VINE_COUNT = phone ? 40 : 110, LEAVES = phone ? 90 : 260, TREES = phone ? 70 : 150;
+  const VINE_COUNT = phone ? 16 : 34, LEAVES = phone ? 40 : 80, TREES = phone ? 70 : 150;
   let s = 991;
   const rnd = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
 
@@ -464,7 +468,9 @@ export function buildComplex(scene: THREE.Scene, physics: PhysicsWorld): THREE.M
   const stepT = stepStone(px, 1);
 
   const mats: Record<Mat, THREE.Material> = {
-    floor: new THREE.MeshStandardMaterial({ ...floorT, bumpScale: 0.7, roughness: 0.92, metalness: 0.02, vertexColors: true }),
+    // the ground sits a step darker than the walls, so the floor plane and the
+    // architecture never read as the same surface
+    floor: new THREE.MeshStandardMaterial({ ...floorT, color: 0xc9b492, bumpScale: 0.7, roughness: 0.92, metalness: 0.02, vertexColors: true }),
     wall: new THREE.MeshStandardMaterial({ ...wallT, bumpScale: 0.8, roughness: 0.9, metalness: 0.02, vertexColors: true }),
     glyph: new THREE.MeshStandardMaterial({ ...glyphT, bumpScale: 1.0, roughness: 0.88, metalness: 0.02, vertexColors: true }),
     frieze: new THREE.MeshStandardMaterial({ ...friezeT, bumpScale: 1.1, roughness: 0.85, metalness: 0.02, vertexColors: true }),
@@ -563,10 +569,14 @@ export function lightComplex(
   // sky above, hot sandstone bouncing below — the fill has a CAUSE, both ways.
   // Kept deliberately low against the key: the reference's punch is the SPREAD
   // between a hard sunlit face and a shaded one, and a generous fill erases it.
-  scene.add(new THREE.HemisphereLight(0xa6cdf5, 0xb08b56, 1.05));
-  scene.add(new THREE.AmbientLight(0xb9c2d0, 0.16));
+  // Less fill, more key. Everything in the ruin is the same sandstone, so the
+  // ONLY thing separating one surface from another is how much sun it catches —
+  // a generous fill flattens all of it to one tone and that is what made the
+  // space hard to read.
+  scene.add(new THREE.HemisphereLight(0xa6cdf5, 0xb08b56, 0.82));
+  scene.add(new THREE.AmbientLight(0xb9c2d0, 0.11));
 
-  const sun = new THREE.DirectionalLight(0xfff2d4, 4.6);
+  const sun = new THREE.DirectionalLight(0xfff2d4, 5.3);
   sun.position.copy(SUN_DIR).multiplyScalar(120);
   sun.castShadow = shadowMapSize > 0;
   sun.shadow.mapSize.setScalar(shadowMapSize || 1024);
