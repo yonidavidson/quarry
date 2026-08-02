@@ -11,11 +11,21 @@ export type Outcome = "playing" | "won" | "lost" | "abandoned";
 /** HOW the run ended — the end screen has to say something true. */
 export type WinReason = "kill" | "extract" | null;
 
-/** Where the cells sit — spread so collecting them walks you past every part of
- *  the floor, which is what puts you where the Stalker can find you. */
+/** Where the cells sit.
+ *
+ *  These used to sit almost entirely on the floor, which quietly made the whole
+ *  climbing game optional — you could win without ever leaving the ground, so
+ *  every ledge, rope and vine was decoration. Now the run is a LADDER: two are
+ *  cheap and on the floor to get you moving, the rest are on the low ledge ring,
+ *  the high ring at 14 m, a hanging platform and the beam run at the top. The
+ *  last one is up where the beast lives, which is the point — the cell you need
+ *  most is in the place it is most dangerous to be. */
 const CELL_SPOTS: Array<[number, number, number]> = [
-  [-58, 1, 34], [-46, 7, -28], [-6, 1, 34], [14, 7, 22],
-  [34, 1, -34], [-24, 1, -34], [46, 7, 26], [4, 1, -6],
+  [-58, 1, 34], [4, 1, -6],              // ground: the first two, to get you going
+  [-46, 7, -28], [46, 7, 26],            // the 6 m ledge ring — one mantle up
+  [-22, 7.2, 26], [24, 7.2, -28],        // the hanging platforms — a vine or a rope
+  [-48, 15, 0], [48, 15, 0],             // the 14 m ring — a real climb
+  [0, 25.6, -12.3], [-16, 25.6, 12.3],   // the beam run, where the beast crosses
 ];
 
 export interface HuntOpts {
@@ -59,6 +69,20 @@ export class Hunt {
       const glow = new THREE.PointLight(0x35e07a, 5, 9, 2);
       glow.position.y = 0.4;
       cell.add(glow);
+      // A beam standing straight up out of it. Under a midday sun a small green
+      // box thirty metres up a wall is invisible, and a climb you cannot see the
+      // reason for is just a wall — the beacon is what turns the cells on the
+      // high ledges into a plan you make from the floor.
+      const beam = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.30, 0.46, 26, 10, 1, true),
+        new THREE.MeshBasicMaterial({
+          color: 0x4dff96, transparent: true, opacity: 0.11,
+          blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
+        }),
+      );
+      beam.position.y = 13;
+      beam.renderOrder = 2;
+      cell.add(beam);
       this.pickups.push(cell);
     }
 

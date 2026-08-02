@@ -31,6 +31,7 @@ import { initAudio, setMusicIntensity, play } from "./audio.ts";
 import { createPost } from "./render/post.ts";
 import { updateSparks, fadeNearCamera, flashBody, sparkBurst, gradeCreature } from "./fx/hits.ts";
 import { Footsteps } from "./fx/footsteps.ts";
+import { shake, shakeOffset, hitstop, timeScale, landPuff, updateFeel, FallWatch } from "./fx/feel.ts";
 import { Screens } from "./game/phase.ts";
 import { Cling } from "./player/cling.ts";
 import { Traverse } from "./player/traverse.ts";
@@ -296,6 +297,10 @@ async function boot(): Promise<void> {
       // your own body reacts too — in third person you can see yourself take it
       flashBody(character.root, 0xff3a24);
       sparkBurst(scene, character.currPos.clone().setY(character.currPos.y + 1.2), 0xff8a60, 12);
+      // and the CAMERA reacts, which is the part you feel rather than see: a
+      // brief freeze so the hit lands, then a shake scaled to how bad it was
+      hitstop(0.05 + Math.min(0.06, d * 0.03));
+      shake(0.34 + Math.min(0.4, d * 0.2));
     }
   };
 
@@ -527,6 +532,7 @@ async function boot(): Promise<void> {
 
   // Footsteps. Yours are 2D and quiet; everyone else's are positional and are
   // meant to be heard through a wall before they are seen around it.
+  const fall = new FallWatch();
   const myFeet = new Footsteps(asStalker);
   const foeFeet = new Footsteps(!asStalker);
   const remoteFeet = new Map<string, Footsteps>();
@@ -547,14 +553,20 @@ async function boot(): Promise<void> {
 
   function frame(): void {
     const now = performance.now();
-    const delta = Math.min((now - last) / 1000, 0.1);
+    const real = Math.min((now - last) / 1000, 0.1);
     last = now;
+    // Hitstop: the world stops for a few dozen milliseconds on a solid connect,
+    // which is what makes a hit feel like it MET something. The camera and the
+    // post stack keep running on real time, so the freeze reads as impact
+    // rather than as a dropped frame.
+    const delta = timeScale(real) === 0 ? 0 : real;
     if (contextLost) return;
 
     physics.step(delta); // fixed substeps (which run the controller) + mesh sync
 
     // look over the shoulder of whichever body it is, not through its waist
     pivot.copy(character.currPos).addScaledVector(character.bodyYAxis, 0.5 * bodyScale);
+    pivot.add(shakeOffset(real));
     followCam.moveTo(pivot.x, pivot.y, pivot.z, true);
     followCam.setUp(character.upAxis);
     if (physics.stepsLastFrame > 0 && character.isOnPlatform) {
@@ -612,6 +624,22 @@ async function boot(): Promise<void> {
           grab: !!mv.jump,
           drop: !!mv.crouch,
         }, followCam.azimuthAngle);
+      }
+
+      // Landing. This is where the 28 m walls get their stakes: climbing only
+      // means something if being up there can cost you. A mantle, a vine drop
+      // and a hop off the 6 m ledge all land free — only a real fall hurts.
+      if (traverse?.holding) {
+        fall.clear(here.y);
+      } else {
+        const drop = fall.update(here.y, character.isOnGround);
+        if (drop > 1.2) {
+          const hard = Math.min(1, drop / 16);
+          landPuff(scene, here.clone().setY(here.y - 0.85), hard);
+          if (drop > 4) { shake(0.10 + hard * 0.42); play(AUDIO.step, 0.4 + hard * 0.5, 0.7); }
+          const dmg = FallWatch.damageFor(drop);
+          if (dmg > 0) { hitstop(0.06); hurt(dmg); }
+        }
       }
 
       // playing the human: ledge grabs, shimmy, mantle, chain climbs
@@ -698,6 +726,7 @@ async function boot(): Promise<void> {
     }
     arsenal.update(delta, walls);
     updateSparks(delta, scene);
+    updateFeel(real);
     updateAmbience(delta, now / 1000);
     governor.frame(delta * 1000);
 

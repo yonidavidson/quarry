@@ -16,6 +16,7 @@ import { detectTier } from "../controllers/quality/tier.ts";
 import { playAt } from "../audio.ts";
 import { BodyAnim } from "../anim/body-anim.ts";
 import { flashBody, sparkBurst, gradeCreature } from "../fx/hits.ts";
+import { shake, landPuff } from "../fx/feel.ts";
 
 export type StalkerState =
   | "prowl"    // walking the floor toward where it last had you
@@ -255,7 +256,12 @@ export class Stalker {
       this.root.position.y = landY;
       this.vel.set(0, 0, 0);
       playAt(AUDIO.claw, this.root.position, this.scene, 1.0, 20);
+      // Two and a half tonnes of it arriving. The shake falls off with distance,
+      // so a pounce that lands across the hall still registers as something
+      // enormous hitting the floor — which is exactly the information you want.
       const hit = this.root.position.distanceTo(new THREE.Vector3(player.x, landY, player.z));
+      landPuff(this.scene, this.root.position.clone(), 1);
+      shake(Math.max(0.12, 0.85 - hit * 0.06));
       if (hit < 3.2) this.opts.onHitPlayer(this.opts.pounceDamage);
       this.enter("recover");                                 // a missed pounce is your window
     }
