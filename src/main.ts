@@ -20,7 +20,7 @@ import { createAimCue } from "./controllers/character/aim-cue.ts";
 import { KeyboardInput } from "./controllers/character/keyboard-input.ts";
 import { loadPlayerCharacter } from "./controllers/character/player-character.ts";
 import { capsuleFromModel } from "./controllers/character/vrm/capsule-fit.ts";
-import { buildComplex, lightComplex, HALL, LAMP_RIG } from "./world/complex.ts";
+import { buildComplex, lightComplex, updateHoldGlow, HALL, LAMP_RIG } from "./world/complex.ts";
 import { buildAmbience, updateAmbience } from "./world/ambience.ts";
 import { buildHazards, updateHazards } from "./world/hazards.ts";
 import { Stalker } from "./hunter/stalker.ts";
@@ -777,6 +777,7 @@ async function boot(): Promise<void> {
     arsenal.update(delta, walls);
     updateSparks(delta, scene);
     updateFeel(real);
+    if (!asStalker) updateHoldGlow(character.currPos, real);   // ropes light when in reach
     updateAmbience(delta, now / 1000);
     governor.frame(delta * 1000);
 

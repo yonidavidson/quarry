@@ -71,6 +71,23 @@ export const CHAINS: Array<{ x: number; z: number; top: number; foot: number }> 
  *  one you are holding so the vine on screen IS the vine you swing on. */
 export const VINE_PIVOTS: THREE.Object3D[] = [];
 
+/** Every hold's material, for the in-reach glow. A rope you cannot tell you can
+ *  reach is a rope you do not use — and the fix is diegetic (the hold lights up)
+ *  rather than a line of text, because the player is looking at the wall, not at
+ *  the HUD, in the moment they need to know. */
+const HOLD_GLOW: Array<{ at: THREE.Vector3; mat: THREE.MeshStandardMaterial; lit: number }> = [];
+
+/** Call once a frame with the player's position. */
+export function updateHoldGlow(p: THREE.Vector3, dt: number): void {
+  for (const h of HOLD_GLOW) {
+    // in reach horizontally, and roughly at a height you could jump for
+    const flat = Math.hypot(p.x - h.at.x, p.z - h.at.z);
+    const want = flat < 3.4 && p.y > h.at.y - 3.0 && p.y < h.at.y + 14 ? 1 : 0;
+    h.lit += (want - h.lit) * Math.min(1, dt * 6);
+    h.mat.emissiveIntensity = h.lit * 0.55;
+  }
+}
+
 export const VINES: Array<{ x: number; z: number; anchorY: number; length: number }> = (() => {
   const ANCHOR = 28 - 3.4;              // just under the beam run
   const FREE_END = 3.2;
@@ -313,12 +330,18 @@ function dressing(scene: THREE.Scene, mats: Record<Mat, THREE.Material>, phone: 
   const leafBig = new THREE.MeshStandardMaterial({ color: 0x3d5f26, roughness: 0.95, side: THREE.DoubleSide });
   VINE_PIVOTS.length = 0;
   for (const vn of VINES) {
+    const vineRopeOwn = vineRope.clone();
+    vineRopeOwn.emissive = new THREE.Color(0x9dff7a);
+    vineRopeOwn.emissiveIntensity = 0;
+    HOLD_GLOW.push({
+      at: new THREE.Vector3(vn.x, vn.anchorY - vn.length, vn.z), mat: vineRopeOwn, lit: 0,
+    });
     // Built as a GROUP pivoted at the anchor, with everything hanging below it,
     // so swinging is one rotation of the pivot and the vine the player sees is
     // literally the vine they are hanging from.
     const pivot = new THREE.Group();
     pivot.position.set(vn.x, vn.anchorY, vn.z);
-    const rope = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.10, vn.length, 6), vineRope);
+    const rope = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.10, vn.length, 6), vineRopeOwn);
     rope.position.y = -vn.length / 2;
     rope.castShadow = true;
     pivot.add(rope);
@@ -338,8 +361,13 @@ function dressing(scene: THREE.Scene, mats: Record<Mat, THREE.Material>, phone: 
 
   // The climbable chains. Deliberately FATTER than the decorative ones — if the
   // player has to guess which rope takes weight, the route is not readable.
-  const climbMat = new THREE.MeshStandardMaterial({ color: 0x8a7c66, roughness: 0.5, metalness: 0.9 });
+  HOLD_GLOW.length = 0;
   for (const ch of CHAINS) {
+    // one material per rope, so only the one within reach lights
+    const climbMat = new THREE.MeshStandardMaterial({
+      color: 0x8a7c66, roughness: 0.5, metalness: 0.9, emissive: 0xffd08a, emissiveIntensity: 0,
+    });
+    HOLD_GLOW.push({ at: new THREE.Vector3(ch.x, ch.foot, ch.z), mat: climbMat, lit: 0 });
     const len = ch.top - ch.foot;
     const rope = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, len, 7), climbMat);
     rope.position.set(ch.x, ch.foot + len / 2, ch.z);
@@ -582,8 +610,14 @@ export function lightComplex(
   sun.shadow.mapSize.setScalar(shadowMapSize || 1024);
   sun.shadow.camera.near = 1;
   sun.shadow.camera.far = 320;
-  sun.shadow.bias = -0.0009;
-  const s2 = 90;
+  sun.shadow.bias = -0.0004;
+  sun.shadow.normalBias = 0.045;   // stops the tighter map self-shadowing the joints
+  // A tighter shadow frustum. 90 m of half-extent spread a 2048 map over a
+  // 180 m square — about 11 cm per texel, which is why contact shadows under the
+  // rubble and the carved relief were mush. The sun follows the player (its
+  // target is the character), so a 52 m box still covers everything you can see
+  // and quadruples the resolution where it matters.
+  const s2 = 52;
   sun.shadow.camera.left = -s2;
   sun.shadow.camera.right = s2;
   sun.shadow.camera.top = s2;
