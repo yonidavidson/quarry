@@ -34,6 +34,21 @@ const ROOF_KEEP: Array<[number, number]> = [
  *  so the beam has an edge to be cut by. */
 const SHAFT_CELLS: Array<[number, number]> = [[1, 1], [5, 3], [3, 4], [2, 2]];
 
+/** Climbable chains — the authored way UP for a human who cannot cling to bare
+ *  stone. Each hangs from a roof beam to just above head height, and every one
+ *  is placed where climbing it puts you on the ledge ring or a hanging platform,
+ *  so the route is a route and not a rope in a field. `x/z` is the line, `top`
+ *  and `foot` bound it. Consumed by the world builder AND by traversal, so what
+ *  you can see is exactly what you can hold. */
+export const CHAINS: Array<{ x: number; z: number; top: number; foot: number }> = [
+  { x: -44, z: 26, top: 12.4, foot: 1.1 },      // up to the west ledge run
+  { x: 42, z: -26, top: 12.4, foot: 1.1 },      // up to the east ledge run
+  { x: -6, z: -34, top: 12.4, foot: 1.1 },      // the north wall, mid-hall
+  { x: 12, z: 34, top: 12.4, foot: 1.1 },       // the south wall, mid-hall
+  { x: -22, z: 20, top: 12.4, foot: 1.1 },      // onto the west hanging platform
+  { x: 24, z: -22, top: 12.4, foot: 1.1 },      // onto the east hanging platform
+];
+
 /** World-space centres of the shafts, so the dust motes in ambience.ts land in
  *  the beams rather than near them. */
 export const SHAFT_POINTS: Array<[number, number]> = SHAFT_CELLS.map(([c, r]) => [
@@ -226,6 +241,25 @@ function dressing(scene: THREE.Scene, mats: Record<Mat, THREE.Material>, phone: 
       c.position.set(px + ox, 6 + (wallH - 6.4) / 2, pz + oz);
       c.castShadow = true;
       scene.add(c);
+    }
+  }
+
+  // The climbable chains. Deliberately FATTER than the decorative ones — if the
+  // player has to guess which rope takes weight, the route is not readable.
+  const climbMat = new THREE.MeshStandardMaterial({ color: 0x8a7c66, roughness: 0.5, metalness: 0.9 });
+  for (const ch of CHAINS) {
+    const len = ch.top - ch.foot;
+    const rope = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, len, 7), climbMat);
+    rope.position.set(ch.x, ch.foot + len / 2, ch.z);
+    rope.castShadow = true;
+    scene.add(rope);
+    // rungs down its length, so it reads as something with holds on it
+    const rung = new THREE.BoxGeometry(0.46, 0.09, 0.12);
+    for (let y = ch.foot + 0.5; y < ch.top - 0.3; y += 0.72) {
+      const r = new THREE.Mesh(rung, climbMat);
+      r.position.set(ch.x, y, ch.z);
+      r.rotation.y = (y * 1.7) % Math.PI;
+      scene.add(r);
     }
   }
 

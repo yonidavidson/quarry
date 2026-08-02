@@ -238,9 +238,10 @@ export class Screens {
           <button class="card prey" data-side="jack" type="button">
             <span class="role">prey</span>
             <b>Jack</b>
-            <p>A blaster, five hits of health and no way up. Stone stops bullets;
-               nothing stops what is on the beams above you. Find five cells and
-               reach the gate — or kill it first.</p>
+            <p>A blaster and five hits of health. Stone stops bullets; nothing stops
+               what is on the beams above you. Jump for a ledge and pull yourself
+               over it, climb the chains. Find five cells and reach the gate —
+               or kill it first.</p>
           </button>
           <button class="card" data-side="stalker" type="button">
             <span class="role">predator</span>
@@ -253,7 +254,7 @@ export class Screens {
             Play online — hunt a friend
           </button>
         </div>
-        <div class="keys">↑↓ choose · enter commit · wasd move · esc pauses</div>
+        <div class="keys">↑↓ choose · enter commit · wasd move · space jump &amp; grab · esc pauses</div>
       </div>`;
     const jack = this.el.querySelector<HTMLElement>('[data-side="jack"]')!;
     const stalker = this.el.querySelector<HTMLElement>('[data-side="stalker"]')!;

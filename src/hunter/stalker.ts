@@ -11,7 +11,7 @@ import * as THREE from "three";
 import { HALL } from "../world/complex.ts";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { AUDIO, MODELS } from "../assets.ts";
-import { pickModel } from "../controllers/quality/pick-asset.ts";
+import { loadModelWithFallback } from "../controllers/quality/pick-asset.ts";
 import { detectTier } from "../controllers/quality/tier.ts";
 import { playAt } from "../audio.ts";
 import { BodyAnim } from "../anim/body-anim.ts";
@@ -79,7 +79,12 @@ export class Stalker {
   /** Load the generated creature and drop the stand-in. Async on purpose: the
    *  hunt is playable from frame one and the beast swaps in when it arrives. */
   private loadBody(): void {
-    new GLTFLoader().load(pickModel(MODELS.stalker, detectTier()), (gltf) => {
+    // The rung ladder, not a bare pickModel(): this asset has no @<budget>
+    // variants, so asking for one 404s and the silent error handler left the
+    // stand-in capsule on screen forever — the beast was a red pill for the
+    // whole match. loadModelWithFallback tries the rung and then the original.
+    const loader = new GLTFLoader();
+    loadModelWithFallback(MODELS.stalker, detectTier(), (u) => loader.loadAsync(u)).then((gltf) => {
       const body = gltf.scene;
       body.traverse((o) => { if ((o as THREE.Mesh).isMesh) o.castShadow = true; });
       // Meshy bipeds come in at ~1.8m; the Stalker should tower over Jack
@@ -91,7 +96,7 @@ export class Stalker {
       this.root.remove(this.stub);
       this.root.add(body);
       if (gltf.animations.length) this.anim = new BodyAnim(body, gltf.animations);
-    }, undefined, () => { /* keep the stand-in rather than lose the enemy */ });
+    }).catch(() => { /* keep the stand-in rather than lose the enemy entirely */ });
   }
 
   get position(): THREE.Vector3 { return this.root.position; }

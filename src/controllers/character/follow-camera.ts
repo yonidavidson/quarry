@@ -376,7 +376,14 @@ export class FollowCamera {
       if (this._aimState === "unlocked" && e.pointerType === "mouse" && e.button === 0) {
         this._requestLock();
       }
-      this._domElement.setPointerCapture(e.pointerId);
+      // Capturing is an optimisation, never a requirement: once the lock request
+      // above is granted the pointer is no longer active, and capturing an
+      // inactive pointer throws InvalidStateError — which surfaced as a page
+      // error on the player's very first aim click. Same defensive shape the
+      // vendored touch primitives already use.
+      try {
+        this._domElement.setPointerCapture(e.pointerId);
+      } catch { /* lock took the pointer, or it ended before we got here */ }
       this._pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if (this._pointers.size === 1) {
         this._orbiting = true;

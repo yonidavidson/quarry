@@ -33,12 +33,13 @@ import { updateSparks, fadeNearCamera, flashBody, sparkBurst } from "./fx/hits.t
 import { Footsteps } from "./fx/footsteps.ts";
 import { Screens } from "./game/phase.ts";
 import { Cling } from "./player/cling.ts";
+import { Traverse } from "./player/traverse.ts";
 import { JackAI } from "./hunter/jack.ts";
 import { Online } from "./net/online.ts";
 import type { Side as SideT } from "./game/phase.ts";
 import { AUDIO, MODELS, MENU_VIDEO } from "./assets.ts";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { pickModel } from "./controllers/quality/pick-asset.ts";
+import { pickModel, loadModelWithFallback } from "./controllers/quality/pick-asset.ts";
 import { createGltfLoader } from "./controllers/quality/gltf-loader.ts";
 import { BodyAnim } from "./anim/body-anim.ts";
 
@@ -308,13 +309,21 @@ async function boot(): Promise<void> {
   // physics controller — see src/player/cling.ts.
   const cling = asStalker ? new Cling(physics, character, walls, scene) : null;
 
+  // Playing the human: no cling to bare stone, but ledges and chains ARE holds.
+  // The asymmetry survives — the beast goes anywhere, you go where the ruin
+  // offers something to grab — and Jack stops being a man on a flat floor.
+  const traverse = !asStalker ? new Traverse(physics, character, walls) : null;
+  traverse?.setBody(player.scene);
+
   // ...and you wear the beast, not Jack. The platform's character loader always
   // resolves the game's ONE generated character (Jack), so the second playable
   // body is swapped in here rather than fought for upstream.
   let beastAnim: BodyAnim | null = null;
   if (asStalker) {
     player.scene.visible = false;
-    new GLTFLoader().load(pickModel(MODELS.stalker, tier), (gltf) => {
+    // same rung-ladder fix as the AI Stalker: a bare pickModel() 404s on this
+    // asset and leaves you wearing nothing at all
+    loadModelWithFallback(MODELS.stalker, tier, (u) => new GLTFLoader().loadAsync(u)).then((gltf) => {
       const body = gltf.scene;
       body.traverse((o) => { if ((o as THREE.Mesh).isMesh) o.castShadow = true; });
       const box = new THREE.Box3().setFromObject(body);
@@ -325,7 +334,7 @@ async function boot(): Promise<void> {
       character.root.add(body);
       if (gltf.animations.length) beastAnim = new BodyAnim(body, gltf.animations);
       cling?.setBody(body);        // so the arms can reach for the surface
-    });
+    }).catch(() => { /* the VRM body stays visible rather than no body at all */ });
   }
 
   // Gated on the PHASE, never on pointer lock. Locking is a camera convenience;
@@ -553,7 +562,7 @@ async function boot(): Promise<void> {
     // A deliberate look always wins; alignment resumes shortly after you stop.
     const steering = kb.getCharacterMovement();
     const wantsMove = !!(steering.forward || steering.backward || steering.leftward || steering.rightward);
-    if (wantsMove && !cling?.active && performance.now() - lastLook > 850) {
+    if (wantsMove && !cling?.active && !traverse?.active && performance.now() - lastLook > 850) {
       followCam.alignHeading(character.bodyZAxis, delta);
     }
     followCam.update(delta);
@@ -575,6 +584,11 @@ async function boot(): Promise<void> {
     beastAnim?.update(delta, character.currPos, { frozen: !!cling?.active });
     // the reach layers ON TOP of the clip — before the mixer, the clip wins
     cling?.poseArms();
+    // the same rule for the human's hands: after the mixer, or the clip wins
+    traverse?.poseLimbs();
+    // face into what you are holding, so the back is to the camera on a wall
+    const holdYaw = traverse?.facing;
+    if (holdYaw !== null && holdYaw !== undefined) character.root.rotation.y = holdYaw;
 
     // ── the hunt ──
     const here = character.currPos;
@@ -587,6 +601,17 @@ async function boot(): Promise<void> {
           forward: (mv.forward ? 1 : 0) - (mv.backward ? 1 : 0),
           right: (mv.rightward ? 1 : 0) - (mv.leftward ? 1 : 0),
           grab: !!mv.jump,
+          drop: !!mv.crouch,
+        }, followCam.azimuthAngle);
+      }
+
+      // playing the human: ledge grabs, shimmy, mantle, chain climbs
+      if (traverse) {
+        const mv = kb.getCharacterMovement();
+        traverse.update(delta, {
+          forward: (mv.forward ? 1 : 0) - (mv.backward ? 1 : 0),
+          right: (mv.rightward ? 1 : 0) - (mv.leftward ? 1 : 0),
+          jump: !!mv.jump,
           drop: !!mv.crouch,
         }, followCam.azimuthAngle);
       }
