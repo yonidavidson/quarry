@@ -275,7 +275,7 @@ export class Hud {
       : reason === "kill" ? (asStalker ? "prey taken" : "it's dead")
       : "extracted";
     const sub = !won ? (asStalker ? "he got you first" : "it got you")
-      : reason === "kill" ? (asStalker ? "the complex is yours" : "you killed the thing hunting you")
+      : reason === "kill" ? (asStalker ? "the ruin is yours" : "you killed the thing hunting you")
       : `${cells} energy ${cells === 1 ? "cell" : "cells"} recovered`;
     this.endEl.innerHTML = `
       <h1>${head}</h1>

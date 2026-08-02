@@ -34,7 +34,10 @@ body[data-phase="lobby"] #screens, body[data-phase="paused"] #screens { display:
 #screens .menu-bg video { position:absolute; inset:0; width:100%; height:100%;
   object-fit:cover; opacity:0; }
 #screens .panel { position:relative; z-index:2; display:grid; gap:22px;
-  justify-items:center; padding:24px; animation:screenin .45s ease both; }
+  justify-items:center; padding:24px; animation:screenin .45s ease both;
+  /* #104 — the rail ran off the bottom on a short viewport, because the panel
+     is centred in a clipped grid and nothing bounded its height. */
+  max-height:100dvh; overflow-y:auto; align-content:center; }
 @keyframes screenin { from { opacity:0 } to { opacity:1 } }
 #screens .logo { width:min(600px, 74vw); height:auto; filter:drop-shadow(0 4px 22px rgba(232,84,44,.28))
   drop-shadow(0 2px 6px #000); pointer-events:none; }
@@ -82,6 +85,15 @@ body[data-phase="lobby"] #screens, body[data-phase="paused"] #screens { display:
   border:1px solid #333a44; color:#cfd6df; font:600 13px/1.4 "Oswald", sans-serif;
   letter-spacing:.22em; text-transform:uppercase; padding:11px 26px; }
 #screens .pause button.plain:hover, #screens .pause button.plain:focus-visible { border-color:#e8542c; color:#fff; }
+/* Short viewports: the logotype gives way, never the choices. Must stay LAST in
+   this sheet — it has the same specificity as the base rules above, so source
+   order is the only thing that makes it win (#104). */
+@media (max-height:900px) {
+  #screens .panel { gap:12px; padding:12px; }
+  #screens .logo { width:min(400px, 52vw); }
+  #screens .rail { gap:8px; padding:12px 20px; }
+  #screens .card p { font-size:12px; }
+}
 `;
 
 /** Deterministic seamless loop for the menu clip: two stacked <video>s with the
@@ -211,7 +223,7 @@ export class Screens {
     this.el.innerHTML = `
       <div class="panel">
         <img class="logo" src="${LOGO}" alt="QUARRY" />
-        <div class="tag">waking the complex</div>
+        <div class="tag">waking the ruin</div>
         <div class="bar"><i></i></div>
       </div>`;
   }
@@ -226,16 +238,16 @@ export class Screens {
           <button class="card prey" data-side="jack" type="button">
             <span class="role">prey</span>
             <b>Jack</b>
-            <p>A blaster, five hits of health and no way up. Cover stops bullets;
-               nothing stops what is on the ceiling. Find five cells and reach
-               extraction — or kill it first.</p>
+            <p>A blaster, five hits of health and no way up. Stone stops bullets;
+               nothing stops what is on the beams above you. Find five cells and
+               reach the gate — or kill it first.</p>
           </button>
           <button class="card" data-side="stalker" type="button">
             <span class="role">predator</span>
             <b>The Stalker</b>
-            <p>No gun and no need for one. Climb the walls, cross the ceiling,
+            <p>No gun and no need for one. Climb the walls, cross the roof beams,
                drop on him. Six hits of health and the only vertical movement in
-               the complex.</p>
+               the ruin.</p>
           </button>
           <button class="card online" data-act="online" type="button">
             Play online — hunt a friend
@@ -286,7 +298,7 @@ export class Screens {
     this.el.innerHTML = `
       <div class="panel">
         <div class="pause">
-          <div class="head"><b>Paused</b><span class="tag">the complex waits</span></div>
+          <div class="head"><b>Paused</b><span class="tag">the ruin waits</span></div>
           <label class="slider">music
             <input type="range" min="0" max="1" step="0.01" value="${getMusicVolume()}" data-vol="music">
           </label>

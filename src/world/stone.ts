@@ -139,27 +139,70 @@ export function templeWall(size = 512, repeat = 6): StoneMaps {
   }, repeat);
 }
 
-/** Glyph panels — the carved cartouches from the reference's top-left panel. */
+/** Glyph panels — the carved relief from the reference's top-left frame.
+ *
+ *  #103 — the first version drew a stroked rectangle with two or three round
+ *  marks floating inside it, which is precisely what a power socket looks like,
+ *  and the walls read as a substation. Fixed by taking away what made it read
+ *  that way: no border rectangle, no bare circles, and the carving now runs
+ *  edge-to-edge in bands instead of floating in the middle of a faceplate.
+ *  Mesoamerican relief is dense and it touches its own frame. */
 export function glyphWall(size = 512, repeat = 4): StoneMaps {
   return bake(size, (a, h, S) => {
     courses(a, h, S, 4, 3, 90210, (g, _hg, x, y, w, ht, r) => {
-      if (r() > 0.45) return;                       // not every block is carved
+      if (r() > 0.55) return;                       // not every block is carved
       const carved = g === a ? "rgba(66,46,25,0.62)" : "rgba(64,64,64,1)";
-      const lit = g === a ? "rgba(255,240,208,0.35)" : "rgba(255,255,255,0.5)";
-      const px = x + w * 0.16, py = y + ht * 0.16, pw = w * 0.68, ph = ht * 0.68;
-      g.strokeStyle = carved; g.lineWidth = Math.max(2, w * 0.035);
-      g.strokeRect(px, py, pw, ph);
-      const marks = 3 + Math.floor(r() * 4);
-      for (let i = 0; i < marks; i++) {
-        const mx = px + r() * pw * 0.7, my = py + r() * ph * 0.7;
-        const mw = pw * (0.12 + r() * 0.2), mh = ph * (0.1 + r() * 0.18);
+      const lit = g === a ? "rgba(255,240,208,0.32)" : "rgba(255,255,255,0.45)";
+      const cut = Math.max(2, w * 0.035);
+
+      /** A step-fret: the interlocking key meander that says Mesoamerica at a
+       *  glance and cannot be mistaken for anything electrical. */
+      const fret = (fx: number, fy: number, fw: number, fh: number, flip: number): void => {
         g.fillStyle = carved;
-        const kind = Math.floor(r() * 3);
-        if (kind === 0) g.fillRect(mx, my, mw, mh * 0.35);                 // bar
-        else if (kind === 1) { g.beginPath(); g.arc(mx, my, mh * 0.4, 0, Math.PI * 2); g.fill(); }
-        else { g.fillRect(mx, my, mw * 0.3, mh); g.fillRect(mx, my + mh * 0.7, mw, mh * 0.3); }  // step glyph
+        g.fillRect(fx, fy + (flip > 0 ? 0 : fh - cut), fw, cut);          // long rail
+        g.fillRect(fx + fw - cut, fy, cut, fh);                            // riser
+        g.fillRect(fx + fw * 0.3, fy + fh * 0.35, fw * 0.42, cut);         // inner tongue
+        g.fillRect(fx + fw * 0.3, fy + fh * 0.35, cut, fh * 0.4 * flip || cut);
         g.fillStyle = lit;
-        g.fillRect(mx, my - Math.max(1, ph * 0.02), mw * 0.5, Math.max(1, ph * 0.02));
+        g.fillRect(fx, fy + (flip > 0 ? -cut * 0.5 : fh - cut * 1.5), fw, Math.max(1, cut * 0.5));
+      };
+
+      /** A stacked cartouche column — glyph cells butted against each other. */
+      const column = (cx: number, cy: number, cw: number, chh: number): void => {
+        const cells = 2 + Math.floor(r() * 2);
+        const cellH = chh / cells;
+        for (let i = 0; i < cells; i++) {
+          const yy = cy + i * cellH;
+          g.fillStyle = carved;
+          g.fillRect(cx, yy, cw, cut);                                     // cell divider
+          // a blocky profile mark inside the cell: brow, muzzle, jaw
+          const bx = cx + cw * 0.18, by = yy + cellH * 0.28;
+          g.fillRect(bx, by, cw * 0.5, cut);
+          g.fillRect(bx, by, cut, cellH * 0.34);
+          g.fillRect(bx + cw * 0.34, by + cellH * 0.16, cw * 0.3, cut);
+          g.fillStyle = lit;
+          g.fillRect(cx, yy - Math.max(1, cut * 0.5), cw, Math.max(1, cut * 0.5));
+        }
+      };
+
+      // Bands, edge to edge — the block is the frame, so no border is drawn.
+      const bands = 2 + Math.floor(r() * 2);
+      const bandH = ht / bands;
+      for (let i = 0; i < bands; i++) {
+        const by = y + i * bandH;
+        if (r() > 0.45) {
+          const runs = 2 + Math.floor(r() * 2);
+          const runW = w / runs;
+          for (let k = 0; k < runs; k++) {
+            fret(x + k * runW, by + bandH * 0.12, runW * 0.94, bandH * 0.76, k % 2 ? 1 : -1);
+          }
+        } else {
+          const cols = 2 + Math.floor(r() * 2);
+          const colW = w / cols;
+          for (let k = 0; k < cols; k++) {
+            column(x + k * colW + colW * 0.06, by + bandH * 0.1, colW * 0.88, bandH * 0.8);
+          }
+        }
       }
     });
   }, repeat);

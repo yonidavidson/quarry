@@ -49,6 +49,8 @@ type Box = {
   mat: Mat;
   /** yaw, radians — applied to the mesh AND the body, so they agree */
   yaw?: number;
+  /** full euler XYZ, for rubble that came to rest tipped. Wins over `yaw`. */
+  rot?: [number, number, number];
   /** decoration the player can walk through (vines, distant canopy) */
   ghost?: true;
 };
@@ -121,10 +123,13 @@ function layout(rubbleCount: number): Box[] {
   for (const [x, z, sx, sz] of ring) {
     boxes.push({ p: [x, ch, z], s: [sx, 0.8, sz], mat: "step" });
     const outward = sx > sz ? [0, Math.sign(z) * (sz / 2 - 0.25)] : [Math.sign(x) * (sx / 2 - 0.25), 0];
+    // #102 — parapets take plain cut stone. The skull course is ceremonial and
+    // belongs on the wall band at its carved size; on a 0.5m-thick rail it
+    // shrank into a dotted trim strip.
     boxes.push({
       p: [x + outward[0], ch + 0.85, z + outward[1]],
       s: sx > sz ? [sx, 0.9, 0.5] : [0.5, 0.9, sz],
-      mat: "frieze",
+      mat: "step",
     });
   }
 
@@ -189,12 +194,15 @@ function layout(rubbleCount: number): Box[] {
   for (let i = 0; i < rubbleCount; i++) {
     const x = (rnd() - 0.5) * (w - 14), z = (rnd() - 0.5) * (d - 14);
     if (Math.abs(x) < 12 && Math.abs(z) < 12) continue;      // keep spawn clear
+    // #102 — never the frieze. A 1m lump of fallen masonry with four tiny
+    // skulls carved into every face reads as a die, not as debris. And a broken
+    // block is not a cube: the sides are unequal and it came to rest tipped.
     const sz = 0.9 + rnd() * 2.2;
     boxes.push({
-      p: [x, sz * 0.4, z],
-      s: [sz, sz * 0.8, sz * (0.7 + rnd() * 0.6)],
-      mat: rnd() > 0.6 ? "frieze" : "wall",
-      yaw: rnd() * Math.PI,
+      p: [x, sz * 0.34, z],
+      s: [sz * (0.7 + rnd() * 0.7), sz * (0.45 + rnd() * 0.5), sz * (0.7 + rnd() * 0.7)],
+      mat: rnd() > 0.5 ? "step" : "wall",
+      rot: [(rnd() - 0.5) * 0.5, rnd() * Math.PI, (rnd() - 0.5) * 0.5],
     });
   }
 
@@ -353,7 +361,8 @@ export function buildComplex(scene: THREE.Scene, physics: PhysicsWorld): THREE.M
 
   for (const b of layout(phone ? 12 : 46)) {
     const geo = uvBox(b.s[0], b.s[1], b.s[2], TILE[b.mat]).clone();
-    q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), b.yaw ?? 0);
+    const euler = b.rot ?? [0, b.yaw ?? 0, 0];
+    q.setFromEuler(new THREE.Euler(euler[0], euler[1], euler[2]));
     geo.applyMatrix4(m4.compose(
       new THREE.Vector3(b.p[0], b.p[1], b.p[2]), q,
       new THREE.Vector3(b.s[0], b.s[1], b.s[2]),
@@ -363,7 +372,7 @@ export function buildComplex(scene: THREE.Scene, physics: PhysicsWorld): THREE.M
     if (list) list.push(geo); else batches.set(b.mat, [geo]);
     if (b.ghost) continue;
 
-    const body = physics.createBody({ type: "fixed", position: b.p, rotation: [0, b.yaw ?? 0, 0] });
+    const body = physics.createBody({ type: "fixed", position: b.p, rotation: euler });
     cuboidCollider(physics.world, body, [b.s[0] / 2, b.s[1] / 2, b.s[2] / 2]);
   }
 
