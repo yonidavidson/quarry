@@ -239,9 +239,9 @@ export class Screens {
             <span class="role">prey</span>
             <b>Jack</b>
             <p>A blaster and five hits of health. Stone stops bullets; nothing stops
-               what is on the beams above you. Jump for a ledge and pull yourself
-               over it, climb the chains. Find five cells and reach the gate —
-               or kill it first.</p>
+               what is on the beams above you. Jump for a ledge and hang there,
+               then pull over it — or catch a chain and climb, slowly, while it
+               looks for you. Five cells and the gate, or kill it first.</p>
           </button>
           <button class="card" data-side="stalker" type="button">
             <span class="role">predator</span>

@@ -41,12 +41,16 @@ const SHAFT_CELLS: Array<[number, number]> = [[1, 1], [5, 3], [3, 4], [2, 2]];
  *  and `foot` bound it. Consumed by the world builder AND by traversal, so what
  *  you can see is exactly what you can hold. */
 export const CHAINS: Array<{ x: number; z: number; top: number; foot: number }> = [
-  { x: -44, z: 26, top: 12.4, foot: 1.1 },      // up to the west ledge run
-  { x: 42, z: -26, top: 12.4, foot: 1.1 },      // up to the east ledge run
-  { x: -6, z: -34, top: 12.4, foot: 1.1 },      // the north wall, mid-hall
-  { x: 12, z: 34, top: 12.4, foot: 1.1 },       // the south wall, mid-hall
-  { x: -22, z: 20, top: 12.4, foot: 1.1 },      // onto the west hanging platform
-  { x: 24, z: -22, top: 12.4, foot: 1.1 },      // onto the east hanging platform
+  // `foot` is a REACH, not a step: 2.05 m is above Jack's head, so a rope is
+  // caught by jumping for it and can never be strolled onto. `top` runs to the
+  // beams, which makes the full ascent ~11 m at a metre a second — long enough
+  // that starting a climb with the beast in the hall is a real commitment.
+  { x: -44, z: 26, top: 13.1, foot: 2.05 },     // up to the west ledge run
+  { x: 42, z: -26, top: 13.1, foot: 2.05 },     // up to the east ledge run
+  { x: -6, z: -34, top: 13.1, foot: 2.05 },     // the north wall, mid-hall
+  { x: 12, z: 34, top: 13.1, foot: 2.05 },      // the south wall, mid-hall
+  { x: -22, z: 20, top: 13.1, foot: 2.05 },     // onto the west hanging platform
+  { x: 24, z: -22, top: 13.1, foot: 2.05 },     // onto the east hanging platform
 ];
 
 /** World-space centres of the shafts, so the dust motes in ambience.ts land in

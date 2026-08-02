@@ -36,10 +36,19 @@ export interface TraverseInput {
 }
 
 const REACH = 1.05;         // how far in front a wall can be and still be caught
-const SHIMMY = 2.2;         // m/s sideways along a lip
-const CLIMB = 2.6;          // m/s up a chain
-const HANG_DROP = 1.32;     // body centre below the lip while hanging
-const MANTLE_TIME = 0.5;
+// Climbing is SLOW. A person going up a rope does about a metre a second and it
+// costs them; at the 2.6 m/s this shipped with, an 11 m chain went by in four
+// seconds and read as an elevator with arms. The whole point of a climb is that
+// it takes long enough to be a decision while something is hunting you.
+const SHIMMY = 0.85;        // m/s sideways along a lip
+const CLIMB = 0.92;         // m/s up a chain
+const HANG_DROP = 1.34;     // body centre below the lip while hanging
+const MANTLE_TIME = 0.62;
+/** After a catch, the body just HANGS for a moment. Nothing you were already
+ *  holding can act during it — see the edge-detection below. */
+const SETTLE = 0.32;
+/** Metres of travel per full hand-over-hand cycle: one reach, one plant. */
+const CYCLE_M = 0.62;
 
 const _fwd = new THREE.Vector3();
 const _probe = new THREE.Vector3();
@@ -69,6 +78,18 @@ export class Traverse {
    *  elevator. One hand is always PLANTED while the other reaches for its next
    *  hold, and the phase only advances when you actually move. */
   private cycle = 0;
+  /** Edge detection. THE bug this fixes: you grab a rope by pressing Space and
+   *  a ledge by jumping while holding W — so on the very next frame the same
+   *  still-held key was read as "push off the chain" / "mantle over the lip",
+   *  and the hang never existed. A hold that is already down when you catch
+   *  something must be RELEASED before it means anything. */
+  private armedJump = false;
+  private armedFwd = false;
+  /** Counts down after a catch: the body just hangs there and takes its weight. */
+  private settle = 0;
+  /** Swing left over from arriving, and a slow idle sway once it damps out. */
+  private swing = 0;
+  private hangT = 0;
   private gripL = new THREE.Vector3();
   private gripR = new THREE.Vector3();
   private footL = new THREE.Vector3();
@@ -123,24 +144,33 @@ export class Traverse {
     if (Math.abs(n.y) > 0.45) return null;                     // a floor is not a wall
 
     // step past the face and look down for its top edge
-    const over = _probe.copy(wall.point).addScaledVector(_fwd, 0.28).setY(from.y + 2.15);
-    this.ray.far = 2.6;
+    // start ABOVE the highest catchable lip — probing from below the top of the
+    // reach band would silently miss exactly the stretch grabs it is there for
+    const over = _probe.copy(wall.point).addScaledVector(_fwd, 0.28).setY(from.y + 2.7);
+    this.ray.far = 3.2;
     this.ray.set(over, _down);
     const top = this.ray.intersectObjects(this.solids, false)[0];
     this.ray.far = REACH;
     if (!top) return null;
     const lip = top.point.y;
-    // catchable band: roughly between the chest and a full reach overhead
-    if (lip < from.y + 0.45 || lip > from.y + 2.0) return null;
+    // The catchable band is deliberately a STRETCH. Its floor is above anything
+    // you could simply walk or step up, so low blocks stay walk-ups and never
+    // steal a grab; its ceiling is a full reach overhead at the top of a jump,
+    // so catching a high lip is exactly as far as Jack can go and no further.
+    if (lip < from.y + 0.75 || lip > from.y + 2.35) return null;
     // and it has to be a top, not the underside of something
     if (top.face && top.face.normal.y < 0.5) return null;
     return { y: lip, n: n.y < 0 ? n.negate() : n };
   }
 
+  /** A rope you can actually reach. Its foot hangs above head height, so this is
+   *  a reach test, not a proximity test: standing under one is not holding it,
+   *  and the jump is what closes the last of the distance. "Just enough." */
   private findChain(from: THREE.Vector3): (typeof CHAINS)[number] | null {
+    const reachUp = from.y + 1.15;                 // fingertips at full stretch
     for (const c of CHAINS) {
-      if (from.y < c.foot - 0.8 || from.y > c.top + 0.5) continue;
-      if (Math.hypot(from.x - c.x, from.z - c.z) < 1.15) return c;
+      if (reachUp < c.foot || from.y > c.top + 0.4) continue;
+      if (Math.hypot(from.x - c.x, from.z - c.z) < 1.25) return c;
     }
     return null;
   }
@@ -181,21 +211,34 @@ export class Traverse {
     this.pos.set(at.x, lip - HANG_DROP, at.z);
     this.pos.addScaledVector(this.normal, 0.34);
     this.takeBody();
-    this.cycle = 0;
-    play(AUDIO.step, 0.55, 0.5);
+    this.beginHold();
     this.onEvent?.("grab");
   }
 
   private grabChain(c: (typeof CHAINS)[number], at: THREE.Vector3): void {
     this.state = "chain";
     this.chain = c;
-    this.pos.set(c.x, THREE.MathUtils.clamp(at.y, c.foot, c.top - 1.2), c.z);
+    // catch it at the bottom of the rope and HANG there — the body settles just
+    // under its own hands rather than snapping up to the first rung
+    this.pos.set(c.x, THREE.MathUtils.clamp(at.y, c.foot - 0.85, c.top - 1.25), c.z);
     // face the chain's line — arbitrary, but consistent, so the hands read
     this.normal.set(0, 0, 1);
     this.takeBody();
-    this.cycle = 0;
-    play(AUDIO.step, 0.55, 0.5);
+    this.beginHold();
     this.onEvent?.("grab");
+  }
+
+  /** Shared by every catch: hang first, and disarm the keys you caught it with. */
+  private beginHold(): void {
+    this.cycle = 0;
+    this.settle = SETTLE;
+    this.hangT = 0;
+    const v = this.character.body.linvel();
+    // arrive fast, swing hard — the amplitude is the evidence of your momentum
+    this.swing = THREE.MathUtils.clamp(Math.hypot(v.x, v.y, v.z) / 11, 0.05, 0.34);
+    this.armedJump = false;
+    this.armedFwd = false;
+    play(AUDIO.step, 0.55, 0.5);
   }
 
   // ── the loop ─────────────────────────────────────────────────────────────
@@ -228,8 +271,17 @@ export class Traverse {
   }
 
   private stepHang(dt: number, input: TraverseInput, yaw: number): void {
+    this.hangT += dt;
+    this.settle = Math.max(0, this.settle - dt);
+    // a key already down when you caught the lip has to be let go first
+    if (!input.jump) this.armedJump = true;
+    if (input.forward <= 0.2) this.armedFwd = true;
     if (input.drop) { this.release(); return; }
-    if (input.jump || input.forward > 0.2) { this.startMantle(); return; }
+    if (this.settle <= 0 &&
+        ((input.jump && this.armedJump) || (input.forward > 0.2 && this.armedFwd))) {
+      this.startMantle();
+      return;
+    }
 
     // shimmy along the lip — but only where the lip CONTINUES. Probing before
     // the move is what stops you sliding off the end of a ledge into mid-air
@@ -243,7 +295,7 @@ export class Traverse {
       if (still && Math.abs(still.y - this.lipY) < 0.35) {
         this.pos.copy(_v);
         this.lipY = still.y;
-        this.cycle = (this.cycle + Math.abs(step) * 1.5) % 1;   // hands alternate
+        this.cycle = (this.cycle + Math.abs(step) / CYCLE_M) % 1;   // hands alternate
       }
     }
     this.poseHang();
@@ -252,8 +304,13 @@ export class Traverse {
   private stepChain(dt: number, input: TraverseInput): void {
     const c = this.chain;
     if (!c) { this.release(); return; }
+    this.hangT += dt;
+    this.settle = Math.max(0, this.settle - dt);
+    // you catch a rope by PRESSING jump, so the same press must not immediately
+    // throw you off it again — that is why the ropes could not be held at all
+    if (!input.jump) this.armedJump = true;
     if (input.drop) { this.release(); return; }
-    if (input.jump) {
+    if (input.jump && this.armedJump && this.settle <= 0) {
       // push off the chain rather than dropping down it
       const away = _v.set(Math.sin(this.cycle * 6.28) * 3, 5.4, Math.cos(this.cycle * 6.28) * 3);
       this.release({ x: away.x, y: away.y, z: away.z });
@@ -261,8 +318,8 @@ export class Traverse {
     }
     if (Math.abs(input.forward) > 0.15) {
       const step = input.forward * CLIMB * dt;
-      this.pos.y = THREE.MathUtils.clamp(this.pos.y + step, c.foot, c.top - 1.1);
-      this.cycle = (this.cycle + Math.abs(step) * 1.1) % 1;
+      this.pos.y = THREE.MathUtils.clamp(this.pos.y + step, c.foot - 0.85, c.top - 1.15);
+      this.cycle = (this.cycle + Math.abs(step) / CYCLE_M) % 1;
       // stepping off the top onto whatever is up there
       if (this.pos.y >= c.top - 1.15 && input.forward > 0) { this.startMantle(); return; }
     }
@@ -313,10 +370,22 @@ export class Traverse {
    *  0..1 reach amount per hand so the pose can lift and place them. */
   private handPhase(): { l: number; r: number } {
     const c = this.cycle;
-    // smooth triangle: while one hand is up the other is down, never both
-    const l = Math.max(0, Math.sin(c * Math.PI * 2));
-    const r = Math.max(0, -Math.sin(c * Math.PI * 2));
+    // Shaped, not sinusoidal. A raw sine has both hands drifting most of the
+    // time; smoothstepping it gives a hand that sits STILL on its hold, then
+    // moves decisively to the next one — which is what makes a slow climb read
+    // as deliberate rather than as a slide.
+    const ease = (x: number): number => THREE.MathUtils.smoothstep(x, 0.12, 0.88);
+    const l = ease(Math.max(0, Math.sin(c * Math.PI * 2)));
+    const r = ease(Math.max(0, -Math.sin(c * Math.PI * 2)));
     return { l, r };
+  }
+
+  /** How much the body is swinging right now: the momentum you arrived with,
+   *  damping out into a slow idle sway so a held body is never dead still. */
+  private sway(): number {
+    const arrival = Math.sin(this.hangT * 7.2) * this.swing * Math.exp(-this.hangT * 2.4);
+    const idle = Math.sin(this.hangT * 1.15) * 0.035 + Math.sin(this.hangT * 0.63) * 0.022;
+    return arrival + idle;
   }
 
   private poseHang(): void {
@@ -330,9 +399,14 @@ export class Traverse {
       .setY(this.lipY + 0.06 + r * 0.16);
     // feet braced on the wall below, taking some weight — a pure dangle reads
     // as a corpse on a hook
+    // the legs hang and swing — the hands are anchored, so the weight below
+    // them is the only thing that can show that this body has weight at all
+    const sw = this.sway();
     const brace = _v.copy(this.normal).multiplyScalar(-0.16);
-    this.footL.copy(this.pos).addScaledVector(_tan, -0.26).add(brace).setY(this.pos.y - 0.62 + r * 0.12);
-    this.footR.copy(this.pos).addScaledVector(_tan, 0.26).add(brace).setY(this.pos.y - 0.62 + l * 0.12);
+    this.footL.copy(this.pos).addScaledVector(_tan, -0.26 + sw * 1.6).add(brace)
+      .setY(this.pos.y - 0.62 + r * 0.12 - Math.abs(sw) * 0.35);
+    this.footR.copy(this.pos).addScaledVector(_tan, 0.26 + sw * 1.6).add(brace)
+      .setY(this.pos.y - 0.62 + l * 0.12 - Math.abs(sw) * 0.35);
     this.posed = true;
   }
 
@@ -343,8 +417,9 @@ export class Traverse {
     // both hands on the line itself, stacked, alternating up it
     this.gripL.set(c.x - 0.10, this.pos.y + 0.78 + l * 0.34, c.z);
     this.gripR.set(c.x + 0.10, this.pos.y + 0.62 + r * 0.34, c.z);
-    this.footL.set(c.x - 0.16, this.pos.y - 0.66 + r * 0.22, c.z);
-    this.footR.set(c.x + 0.16, this.pos.y - 0.66 + l * 0.22, c.z);
+    const sw = this.sway();
+    this.footL.set(c.x - 0.16 + sw * 1.4, this.pos.y - 0.66 + r * 0.22, c.z + sw * 0.6);
+    this.footR.set(c.x + 0.16 + sw * 1.4, this.pos.y - 0.66 + l * 0.22, c.z + sw * 0.6);
     this.posed = true;
   }
 
