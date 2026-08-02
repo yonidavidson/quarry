@@ -17,11 +17,14 @@ import { buildSky, SUN_DIR } from "./sky.ts";
 import { detectTier } from "../controllers/quality/tier.ts";
 
 /** Interior bounds, metres. Matches DESIGN.md → World & scale. */
-// wallH was 14 and the walls read as low — a hall you could see over rather than
-// a ruin you are inside. At 21 the perimeter is a real climb (Jack goes up a face
-// at ~0.9 m/s, so a full ascent is a commitment), and the beams overhead are far
-// enough up that the beast crossing them is genuinely "above you".
-export const HALL = { w: 140, d: 90, wallH: 21 } as const;
+// The walls kept reading as low. At 28 m the perimeter is a genuine climb —
+// a full ascent at ~0.9 m/s is half a minute of hanging in the open — and the
+// space finally reads as a ruin you are inside rather than a room you can see
+// over. The climb is STAGED rather than one blank face: ledge ring at 6, a
+// second at 14, the beam run at the top, so there is somewhere to pull out at.
+export const HALL = { w: 140, d: 90, wallH: 28 } as const;
+/** The beam run the beast crosses and the ropes hang from. */
+export const BEAM_Y = HALL.wallH - 1.4;
 
 /** The roof is a 7x5 grid of stone panels, and most of it came down centuries
  *  ago. These are the cells that are STILL THERE — a broken ring around the
@@ -49,7 +52,7 @@ export const CHAINS: Array<{ x: number; z: number; top: number; foot: number }> 
   // caught by jumping for it and can never be strolled onto. `top` runs to the
   // beams. Every one is placed where climbing it puts you on the ledge ring, a
   // hanging platform, or the beam run — a rope is a route, never scenery.
-  const TOP = 21 - 2.2, FOOT = 2.05;
+  const TOP = 28 - 3.0, FOOT = 2.05;
   const spots: Array<[number, number]> = [
     [-44, 26], [42, -26], [-6, -34], [12, 34], [-22, 20], [24, -22],
     [-62, 8], [62, -8], [-30, -30], [30, 30], [0, -12], [-12, 40],
@@ -68,7 +71,7 @@ export const CHAINS: Array<{ x: number; z: number; top: number; foot: number }> 
 export const VINE_PIVOTS: THREE.Object3D[] = [];
 
 export const VINES: Array<{ x: number; z: number; anchorY: number; length: number }> = (() => {
-  const ANCHOR = 21 - 2.6;              // just under the beam run
+  const ANCHOR = 28 - 3.4;              // just under the beam run
   const FREE_END = 3.2;
   const spots: Array<[number, number]> = [
     [-34, -37], [-16, -24.7], [2, -12.3], [20, 0], [38, 12.3],
@@ -182,6 +185,26 @@ function layout(rubbleCount: number): Box[] {
     });
   }
 
+  // A SECOND ledge ring, higher and set further in. A 28 m wall with one ledge
+  // at 6 m is 22 m of nothing; this breaks the climb into stages and gives the
+  // hunt another floor to fight on.
+  const ch2 = 14, inset2 = 22;
+  const ring2: Array<[number, number, number, number]> = [
+    [0, -d / 2 + inset2, w - inset2 * 2, cwWidth],
+    [0, d / 2 - inset2, w - inset2 * 2, cwWidth],
+    [-w / 2 + inset2, 0, cwWidth, d - inset2 * 2],
+    [w / 2 - inset2, 0, cwWidth, d - inset2 * 2],
+  ];
+  for (const [x, z, sx, sz] of ring2) {
+    boxes.push({ p: [x, ch2, z], s: [sx, 0.8, sz], mat: "step" });
+    const outward = sx > sz ? [0, Math.sign(z) * (sz / 2 - 0.25)] : [Math.sign(x) * (sx / 2 - 0.25), 0];
+    boxes.push({
+      p: [x + outward[0], ch2 + 0.85, z + outward[1]],
+      s: sx > sz ? [sx, 0.9, 0.5] : [0.5, 0.9, sz],
+      mat: "step",
+    });
+  }
+
   // pyramid stairs up to the ring
   for (let i = 0; i < 8; i++) {
     const y = 0.75 * (i + 1);
@@ -223,8 +246,8 @@ function layout(rubbleCount: number): Box[] {
   // the Stalker actually crosses (#80)
   for (let i = 0; i < 7; i++) {
     const z = -d / 2 + 8 + i * ((d - 16) / 6);
-    boxes.push({ p: [0, wallH - 1.4, z], s: [w - 4, 1.0, 1.4], mat: "step" });
-    boxes.push({ p: [0, wallH - 2.4, z + 1.8], s: [w - 4, 0.5, 0.7], mat: "timber" });
+    boxes.push({ p: [0, BEAM_Y, z], s: [w - 4, 1.0, 1.4], mat: "step" });
+    boxes.push({ p: [0, BEAM_Y - 1.0, z + 1.8], s: [w - 4, 0.5, 0.7], mat: "timber" });
   }
 
   // columns — vertical anchors that give the space depth
@@ -423,24 +446,29 @@ function uvBox(sx: number, sy: number, sz: number, tile: number): THREE.BoxGeome
 
 /** Returns the static meshes the follow camera pulls back against. */
 export function buildComplex(scene: THREE.Scene, physics: PhysicsWorld): THREE.Mesh[] {
+  const tier = detectTier();
+  const phone = tier.name === "phone" || tier.name === "phone-low";
   // The generated temple texture set is blocked on credits (#100); until it
   // lands these are drawn procedurally, with a height channel so the carving is
   // really lit rather than painted on.
   // repeat stays 1: the UVs carry the tiling now (see uvBox), and the material
   // colour stays white so the painted stone is the ONLY thing setting the hue —
   // tinting on top of it is what turned the first pass olive.
-  const floorT = templeFloor(512, 1);
-  const wallT = templeWall(512, 1);
-  const glyphT = glyphWall(512, 1);
-  const friezeT = skullFrieze(512, 1);
-  const stepT = stepStone(512, 1);
+  // 1024 on anything but a phone: the merge bought the draw-call budget to
+  // spend it here, and carved relief is exactly what a soft texture loses.
+  const px = phone ? 512 : 1024;
+  const floorT = templeFloor(px, 1);
+  const wallT = templeWall(px, 1);
+  const glyphT = glyphWall(px, 1);
+  const friezeT = skullFrieze(px, 1);
+  const stepT = stepStone(px, 1);
 
   const mats: Record<Mat, THREE.Material> = {
-    floor: new THREE.MeshStandardMaterial({ ...floorT, bumpScale: 0.5, roughness: 0.92, metalness: 0.02 }),
-    wall: new THREE.MeshStandardMaterial({ ...wallT, bumpScale: 0.55, roughness: 0.9, metalness: 0.02 }),
-    glyph: new THREE.MeshStandardMaterial({ ...glyphT, bumpScale: 0.75, roughness: 0.88, metalness: 0.02 }),
-    frieze: new THREE.MeshStandardMaterial({ ...friezeT, bumpScale: 0.85, roughness: 0.85, metalness: 0.02 }),
-    step: new THREE.MeshStandardMaterial({ ...stepT, bumpScale: 0.4, roughness: 0.88, metalness: 0.02 }),
+    floor: new THREE.MeshStandardMaterial({ ...floorT, bumpScale: 0.7, roughness: 0.92, metalness: 0.02, vertexColors: true }),
+    wall: new THREE.MeshStandardMaterial({ ...wallT, bumpScale: 0.8, roughness: 0.9, metalness: 0.02, vertexColors: true }),
+    glyph: new THREE.MeshStandardMaterial({ ...glyphT, bumpScale: 1.0, roughness: 0.88, metalness: 0.02, vertexColors: true }),
+    frieze: new THREE.MeshStandardMaterial({ ...friezeT, bumpScale: 1.1, roughness: 0.85, metalness: 0.02, vertexColors: true }),
+    step: new THREE.MeshStandardMaterial({ ...stepT, bumpScale: 0.6, roughness: 0.88, metalness: 0.02, vertexColors: true }),
     gold: new THREE.MeshStandardMaterial({ color: 0xd9a441, roughness: 0.24, metalness: 1.0, emissive: 0x39230a, emissiveIntensity: 0.5 }),
     timber: new THREE.MeshStandardMaterial({ color: 0x7a5f38, roughness: 0.95, metalness: 0.0 }),
   };
@@ -452,14 +480,29 @@ export function buildComplex(scene: THREE.Scene, physics: PhysicsWorld): THREE.M
   // Colliders stay per-box, and every consumer of the returned list raycasts
   // (camera collision, the Stalker's cling, shots, line-of-sight), which reads
   // merged geometry exactly the same way.
-  const tier = detectTier();
-  const phone = tier.name === "phone" || tier.name === "phone-low";
   const batches = new Map<Mat, THREE.BufferGeometry[]>();
   const m4 = new THREE.Matrix4();
   const q = new THREE.Quaternion();
 
   for (const b of layout(phone ? 12 : 46)) {
     const geo = uvBox(b.s[0], b.s[1], b.s[2], TILE[b.mat]).clone();
+    // Per-block colour variation, baked into vertex colours. Merging everything
+    // into one mesh per material bought the draw calls but cost the room its
+    // variety: every wall wore an identical tile at identical brightness, which
+    // is most of what reads as "flat" at gameplay distance. Real coursed stone
+    // is a hundred slightly different stones. Deterministic, so a block does not
+    // change colour between loads.
+    const seed = Math.abs(Math.sin((b.p[0] + 1.7) * 12.9898 + (b.p[2] + 3.1) * 78.233 + b.p[1] * 4.1) * 43758.5453) % 1;
+    const warm = 0.90 + seed * 0.20;
+    const cool = 0.90 + ((seed * 7.3) % 1) * 0.18;
+    const vcount = geo.getAttribute("position").count;
+    const col = new Float32Array(vcount * 3);
+    for (let i = 0; i < vcount; i++) {
+      col[i * 3] = warm;
+      col[i * 3 + 1] = (warm + cool) * 0.5;
+      col[i * 3 + 2] = cool * 0.97;
+    }
+    geo.setAttribute("color", new THREE.BufferAttribute(col, 3));
     const euler = b.rot ?? [0, b.yaw ?? 0, 0];
     q.setFromEuler(new THREE.Euler(euler[0], euler[1], euler[2]));
     geo.applyMatrix4(m4.compose(

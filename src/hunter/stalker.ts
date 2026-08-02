@@ -15,7 +15,7 @@ import { loadModelWithFallback } from "../controllers/quality/pick-asset.ts";
 import { detectTier } from "../controllers/quality/tier.ts";
 import { playAt } from "../audio.ts";
 import { BodyAnim } from "../anim/body-anim.ts";
-import { flashBody, sparkBurst } from "../fx/hits.ts";
+import { flashBody, sparkBurst, gradeCreature } from "../fx/hits.ts";
 
 export type StalkerState =
   | "prowl"    // walking the floor toward where it last had you
@@ -87,6 +87,7 @@ export class Stalker {
     loadModelWithFallback(MODELS.stalker, detectTier(), (u) => loader.loadAsync(u)).then((gltf) => {
       const body = gltf.scene;
       body.traverse((o) => { if ((o as THREE.Mesh).isMesh) o.castShadow = true; });
+      gradeCreature(body);
       // Meshy bipeds come in at ~1.8m; the Stalker should tower over Jack
       const box = new THREE.Box3().setFromObject(body);
       const h = box.max.y - box.min.y || 1.8;

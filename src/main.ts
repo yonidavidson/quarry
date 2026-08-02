@@ -29,7 +29,7 @@ import { Hunt } from "./game/hunt.ts";
 import { Hud } from "./ui/hud.ts";
 import { initAudio, setMusicIntensity, play } from "./audio.ts";
 import { createPost } from "./render/post.ts";
-import { updateSparks, fadeNearCamera, flashBody, sparkBurst } from "./fx/hits.ts";
+import { updateSparks, fadeNearCamera, flashBody, sparkBurst, gradeCreature } from "./fx/hits.ts";
 import { Footsteps } from "./fx/footsteps.ts";
 import { Screens } from "./game/phase.ts";
 import { Cling } from "./player/cling.ts";
@@ -326,6 +326,7 @@ async function boot(): Promise<void> {
     loadModelWithFallback(MODELS.stalker, tier, (u) => new GLTFLoader().loadAsync(u)).then((gltf) => {
       const body = gltf.scene;
       body.traverse((o) => { if ((o as THREE.Mesh).isMesh) o.castShadow = true; });
+      gradeCreature(body);
       const box = new THREE.Box3().setFromObject(body);
       const h = box.max.y - box.min.y || 1.8;
       const sc = 2.4 / h;
@@ -584,11 +585,19 @@ async function boot(): Promise<void> {
     beastAnim?.update(delta, character.currPos, { frozen: !!cling?.active });
     // the reach layers ON TOP of the clip — before the mixer, the clip wins
     cling?.poseArms();
-    // the same rule for the human's hands: after the mixer, or the clip wins
-    traverse?.poseLimbs();
-    // face into what you are holding, so the back is to the camera on a wall
+    // ORDER MATTERS, and getting it wrong is what made climbing look wrong: the
+    // IK solves hand and foot targets in WORLD space, so the body has to be
+    // facing the surface BEFORE it runs. Rotating the root afterwards carried
+    // the arms round with it and lifted the hands clean off the stone.
     const holdYaw = traverse?.facing;
-    if (holdYaw !== null && holdYaw !== undefined) character.root.rotation.y = holdYaw;
+    if (holdYaw !== null && holdYaw !== undefined) {
+      character.root.rotation.y = holdYaw;
+      character.root.updateMatrixWorld(true);
+    }
+    // and freeze the gait while holding on — a walk cycle playing under a climb
+    // is the rest of what read as "weird"
+    anims.setPaused(!!traverse?.holding);
+    traverse?.poseLimbs();
 
     // ── the hunt ──
     const here = character.currPos;

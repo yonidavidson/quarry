@@ -105,3 +105,18 @@ export function fadeNearCamera(root: THREE.Object3D, camera: THREE.Camera, from 
     m.opacity = a;
   });
 }
+
+/** Sun-grade the generated creature. The rig came back a saturated fire-engine
+ *  red with a low-roughness sheen, which under a hard midday key reads as wet
+ *  plastic rather than as the ochre brute in the art target. This is a STOPGAP:
+ *  the real answer is a regenerated texture (#96), which is credit-blocked, and
+ *  deleting these four lines restores the asset exactly as generated. */
+export function gradeCreature(root: THREE.Object3D): void {
+  root.traverse((o) => {
+    const m = (o as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined;
+    if (!m || !("color" in m)) return;
+    m.color.lerp(new THREE.Color(0xa8603a), 0.5);   // toward hide, away from paint
+    m.roughness = Math.max(m.roughness ?? 1, 0.78);
+    m.metalness = 0;
+  });
+}

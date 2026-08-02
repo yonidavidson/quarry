@@ -704,26 +704,30 @@ export class Traverse {
     this.posed = true;
   }
 
-  /** Additive limb pose — call AFTER the mixer writes bones, or the clip wins. */
+  /** Additive limb pose — call AFTER the mixer writes bones, or the clip wins.
+   *
+   *  The pole hints are SURFACE-RELATIVE, and that is the difference between a
+   *  climber and a rag doll. Fixed world-space hints broke the elbows and knees
+   *  toward world +X/−X, so the same climb looked right on one wall of the hall
+   *  and inside-out on the wall opposite. Elbows break out and away from the
+   *  surface, knees break out and down. */
   poseLimbs(): void {
     if (!this.posed || this.state === "off") return;
     const b = this.character.root.position;
-    if (this.armL) {
-      solveTwoBone(this.armL.upper, this.armL.lower, this.armL.hand, this.gripL,
-        _pole.copy(b).add(new THREE.Vector3(-2.5, -1.5, 0)));
-    }
-    if (this.armR) {
-      solveTwoBone(this.armR.upper, this.armR.lower, this.armR.hand, this.gripR,
-        _pole.copy(b).add(new THREE.Vector3(2.5, -1.5, 0)));
-    }
-    if (this.legL) {
-      solveTwoBone(this.legL.upper, this.legL.lower, this.legL.hand, this.footL,
-        _pole.copy(b).add(new THREE.Vector3(-2.5, -2, 0)));
-    }
-    if (this.legR) {
-      solveTwoBone(this.legR.upper, this.legR.lower, this.legR.hand, this.footR,
-        _pole.copy(b).add(new THREE.Vector3(2.5, -2, 0)));
-    }
+    // a horizontal axis across the surface, and one pointing away from it
+    if (this.state === "vine") _tan.copy(this.swingAxis);
+    else _tan.set(-this.normal.z, 0, this.normal.x).normalize();
+    const out = this.state === "vine"
+      ? _dir.set(0, 0, 0)                       // a rope has no face to lean off
+      : _dir.copy(this.normal).multiplyScalar(1.35);
+
+    const pole = (side: number, drop: number): THREE.Vector3 =>
+      _pole.copy(b).addScaledVector(_tan, side).add(out).setY(b.y - drop);
+
+    if (this.armL) solveTwoBone(this.armL.upper, this.armL.lower, this.armL.hand, this.gripL, pole(-2.1, 0.7));
+    if (this.armR) solveTwoBone(this.armR.upper, this.armR.lower, this.armR.hand, this.gripR, pole(2.1, 0.7));
+    if (this.legL) solveTwoBone(this.legL.upper, this.legL.lower, this.legL.hand, this.footL, pole(-1.5, 1.9));
+    if (this.legR) solveTwoBone(this.legR.upper, this.legR.lower, this.legR.hand, this.footR, pole(1.5, 1.9));
   }
 
   /** Which way the body should face while holding on — into the wall. */
