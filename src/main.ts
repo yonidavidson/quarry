@@ -34,6 +34,7 @@ import { updateSparks, fadeNearCamera, flashBody, sparkBurst, gradeCreature } fr
 import { Footsteps } from "./fx/footsteps.ts";
 import { shake, shakeOffset, hitstop, timeScale, landPuff, updateFeel, FallWatch } from "./fx/feel.ts";
 import { Screens } from "./game/phase.ts";
+import { buildTouchControls, isTouchDevice, type TouchRig } from "./ui/touch.ts";
 import { Cling } from "./player/cling.ts";
 import { Traverse } from "./player/traverse.ts";
 import { JackAI } from "./hunter/jack.ts";
@@ -160,7 +161,13 @@ async function boot(): Promise<void> {
   // the controller's brain runs once per FIXED substep, before world.step()
   physics.onBeforeStep(() => {
     const mv = kb.getCharacterMovement();
-    character.setMovement(mv);
+    if (touch) {
+      // the controller merges a joystick vector with the key flags, so both work
+      // at once and neither has to know the other exists
+      character.setMovement({ ...mv, jump: mv.jump || touch.jumpHeld, joystick: { x: touch.joystick.x, y: touch.joystick.y } });
+    } else {
+      character.setMovement(mv);
+    }
     character.update();
 
     // Shift is a HOLD, and the input layer honours that — but the controller only
@@ -274,11 +281,18 @@ async function boot(): Promise<void> {
     if (Math.abs(e.movementX) + Math.abs(e.movementY) > 2) lastLook = performance.now();
   });
 
+  // #101 — the control hint has to match the device that is reading it. Telling
+  // a phone to press WASD is how the game looked playable and was not.
+  const touchDevice = isTouchDevice();
   const hintEl = document.querySelector<HTMLElement>("#hint");
   if (hintEl) {
-    hintEl.textContent = asStalker
-      ? "WASD move · Shift run · Space grab wall · Left click CLAW · Esc pause"
-      : "WASD move · Shift run · Space jump · Left click FIRE · Esc pause";
+    hintEl.textContent = touchDevice
+      ? (asStalker
+        ? "Left stick move · drag right to look · JUMP grabs · FIRE claws"
+        : "Left stick move · drag right to look · JUMP grabs & climbs · FIRE shoots")
+      : (asStalker
+        ? "WASD move · Shift run · Space grab wall · Left click CLAW · Esc pause"
+        : "WASD move · Shift run · Space jump/grab · Left click FIRE · Esc pause");
   }
 
   // ── the hunt ──
@@ -431,7 +445,7 @@ async function boot(): Promise<void> {
     if (mine < radius) hurt(Math.round(damage * (1 - mine / radius) * 0.6));
   };
 
-  addEventListener("pointerdown", () => {
+  const fireNow = (): void => {
     if (hunt.outcome !== "playing" || screens.current !== "playing") return;
     // from a hang, a click is the dive — the AI's pounce, in the player's hands
     if (asStalker && cling?.state === "ceiling") { cling.pounce(followCam.azimuthAngle); return; }
@@ -458,7 +472,27 @@ async function boot(): Promise<void> {
         if (entry) dealTo(entry[0], entry[1], damage);
       }
     }
+  };
+
+  // A mouse click fires; so does the on-screen FIRE cap. One code path either
+  // way — a touch build that fires through a different function is a touch build
+  // that quietly drifts out of step with the mouse one.
+  addEventListener("pointerdown", (e) => {
+    // On a phone the window-level listener would also catch taps on the stick
+    // and the caps, so every jump would fire the blaster too. Only the canvas
+    // itself is a shot; the FIRE cap calls fireNow() directly.
+    if (touchDevice && e.target !== canvas) return;
+    fireNow();
   });
+
+  const touch: TouchRig | null = touchDevice
+    ? buildTouchControls({
+      fire: fireNow,
+      jump: () => {},
+      pause: () => { if (hunt.outcome === "playing") screens.set(screens.current === "paused" ? "playing" : "paused"); },
+      look: (dAz, dPol) => followCam.rotate(dAz, dPol, true),
+    })
+    : null;
 
   // Q cycles, 1-4 select directly. Both are ignored playing the beast, which
   // has claws and nothing to swap between.
@@ -581,6 +615,7 @@ async function boot(): Promise<void> {
     if (wantsMove && !cling?.active && !traverse?.active && performance.now() - lastLook > 850) {
       followCam.alignHeading(character.bodyZAxis, delta);
     }
+    touch?.update();          // drain the look drag before the camera integrates it
     followCam.update(delta);
 
     anims.update(character, delta);
