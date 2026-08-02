@@ -20,12 +20,12 @@ import * as THREE from "three";
 import RAPIER from "@dimforge/rapier3d-compat";
 import type { CharacterController } from "../controllers/character/character-controller.ts";
 import type { PhysicsWorld } from "../controllers/shared/physics-world.ts";
-import { CHAINS } from "../world/complex.ts";
+import { CHAINS, VINES, VINE_PIVOTS } from "../world/complex.ts";
 import { AUDIO } from "../assets.ts";
 import { play } from "../audio.ts";
 import { solveTwoBone, findArm, findLeg } from "../anim/two-bone-ik.ts";
 
-export type TraverseState = "off" | "hang" | "chain" | "mantle";
+export type TraverseState = "off" | "hang" | "wall" | "chain" | "vine" | "mantle";
 
 /** What the keys are asking for, already resolved into intent. */
 export interface TraverseInput {
@@ -49,6 +49,14 @@ const MANTLE_TIME = 0.62;
 const SETTLE = 0.32;
 /** Metres of travel per full hand-over-hand cycle: one reach, one plant. */
 const CYCLE_M = 0.62;
+/** Swing gravity, deliberately far above 9.81. A 16 m vine under real gravity has
+ *  an eight-second period — physically right and completely dead to play. At 30
+ *  the same vine swings in about four and a half seconds, which is the arc an
+ *  action game actually wants. */
+const SWING_G = 30;
+const SWING_DAMP = 0.32;    // per second — a swing dies out if you stop working
+const PUMP = 1.35;          // rad/s² you can add by leaning into the swing
+const VINE_CLIMB = 1.15;    // m/s up or down the vine itself
 
 const _fwd = new THREE.Vector3();
 const _probe = new THREE.Vector3();
@@ -56,6 +64,12 @@ const _down = new THREE.Vector3(0, -1, 0);
 const _tan = new THREE.Vector3();
 const _pole = new THREE.Vector3();
 const _v = new THREE.Vector3();
+/** faceAt() gets its OWN scratch. It used to borrow `_v` — and callers pass `_v`
+ *  in as the position to test, so the function overwrote its own argument and
+ *  every climb step snapped the body to the foot of the wall. Shared temporaries
+ *  are fine until one of them is also a parameter. */
+const _dir = new THREE.Vector3();
+const _IDENTITY = new THREE.Quaternion();
 
 export class Traverse {
   state: TraverseState = "off";
@@ -67,6 +81,13 @@ export class Traverse {
   private ray = new THREE.Raycaster();
   private cooldown = 0;
   private chain: (typeof CHAINS)[number] | null = null;
+  /** Vine pendulum: which one, how much rope is out, and the swing itself. */
+  private vine = -1;
+  private ropeLen = 1;
+  private theta = 0;          // radians from straight down
+  private omega = 0;          // rad/s
+  private swingAxis = new THREE.Vector3(1, 0, 0);   // the plane it swings in
+  private lastVine = -1;      // so a released vine settles instead of freezing bent
 
   /** Mantle is a short authored arc, not a state you steer. */
   private mantleT = 0;
@@ -123,7 +144,9 @@ export class Traverse {
 
   get active(): boolean { return this.state !== "off"; }
   /** True while the body is held — the locomotion animator should stop walking. */
-  get holding(): boolean { return this.state === "hang" || this.state === "chain"; }
+  get holding(): boolean {
+    return this.state === "hang" || this.state === "chain" || this.state === "wall" || this.state === "vine";
+  }
 
   // ── finding something to hold ────────────────────────────────────────────
 
@@ -166,6 +189,36 @@ export class Traverse {
   /** A rope you can actually reach. Its foot hangs above head height, so this is
    *  a reach test, not a proximity test: standing under one is not holding it,
    *  and the jump is what closes the last of the distance. "Just enough." */
+  /** A bare wall face in front of you — no lip needed. This is what lets Jack
+   *  go UP and DOWN a wall rather than only hanging off its top edge. The
+   *  asymmetry with the beast survives in the SPEED and the reach: it crosses
+   *  bare stone and ceilings at running pace, Jack goes up a face at a metre a
+   *  second, in the open, with both hands busy. */
+  private findFace(from: THREE.Vector3, yaw: number): { p: THREE.Vector3; n: THREE.Vector3 } | null {
+    _fwd.set(-Math.sin(yaw), 0, -Math.cos(yaw));
+    this.ray.far = REACH;
+    this.ray.set(_probe.copy(from).setY(from.y + 0.55), _fwd);
+    const hit = this.ray.intersectObjects(this.solids, false)[0];
+    if (!hit) return null;
+    const n = hit.face ? hit.face.normal.clone().normalize() : _fwd.clone().negate();
+    if (Math.abs(n.y) > 0.45) return null;
+    return { p: hit.point.clone(), n: n.y < 0 ? n.negate() : n };
+  }
+
+  /** A vine you can reach. Same "just enough" rule as the ropes: its free end
+   *  hangs at 3.2 m and Jack's fingertips top out around 3.25 m at the peak of a
+   *  jump, so catching one is a committed leap, never a step. */
+  private findVine(from: THREE.Vector3): number {
+    const reachUp = from.y + 1.15;
+    for (let i = 0; i < VINES.length; i++) {
+      const v = VINES[i];
+      const free = v.anchorY - v.length;
+      if (reachUp < free - 0.15 || from.y > v.anchorY - 1.2) continue;
+      if (Math.hypot(from.x - v.x, from.z - v.z) < 1.5) return i;
+    }
+    return -1;
+  }
+
   private findChain(from: THREE.Vector3): (typeof CHAINS)[number] | null {
     const reachUp = from.y + 1.15;                 // fingertips at full stretch
     for (const c of CHAINS) {
@@ -228,6 +281,40 @@ export class Traverse {
     this.onEvent?.("grab");
   }
 
+  private grabFace(p: THREE.Vector3, n: THREE.Vector3, at: THREE.Vector3): void {
+    this.state = "wall";
+    this.normal.copy(n).setY(0).normalize();
+    this.pos.copy(p).addScaledVector(this.normal, 0.42).setY(at.y);
+    this.takeBody();
+    this.beginHold();
+    this.onEvent?.("grab");
+  }
+
+  private grabVine(i: number, at: THREE.Vector3): void {
+    const v = VINES[i];
+    this.state = "vine";
+    this.vine = i;
+    this.lastVine = i;
+    // grab it WHERE YOU ARE on its length, not at a fixed point
+    this.ropeLen = THREE.MathUtils.clamp(v.anchorY - at.y, 2.2, v.length);
+    // the swing plane is the way you were already going — a leap carries into
+    // the arc instead of stalling and starting over
+    const lv = this.character.body.linvel();
+    _v.set(lv.x, 0, lv.z);
+    if (_v.lengthSq() < 0.04) _v.set(at.x - v.x, 0, at.z - v.z);
+    if (_v.lengthSq() < 1e-4) _v.set(1, 0, 0);
+    this.swingAxis.copy(_v).normalize();
+    const off = Math.hypot(at.x - v.x, at.z - v.z);
+    this.theta = THREE.MathUtils.clamp(Math.asin(Math.min(1, off / this.ropeLen)), -1.2, 1.2);
+    // carry your speed in as angular velocity — this is what makes a running
+    // jump onto a vine swing hard and a standing grab barely move
+    this.omega = Math.hypot(lv.x, lv.z) / this.ropeLen;
+    this.pos.copy(at);
+    this.takeBody();
+    this.beginHold();
+    this.onEvent?.("grab");
+  }
+
   /** Shared by every catch: hang first, and disarm the keys you caught it with. */
   private beginHold(): void {
     this.cycle = 0;
@@ -248,22 +335,37 @@ export class Traverse {
     if (this.cooldown > 0) this.cooldown -= dt;
 
     if (this.state === "off") {
+      // a vine you let go of swings itself back down instead of hanging bent
+      if (this.lastVine >= 0) {
+        const pivot = VINE_PIVOTS[this.lastVine];
+        if (pivot) {
+          pivot.quaternion.slerp(_IDENTITY, Math.min(1, dt * 1.6));
+          if (pivot.quaternion.angleTo(_IDENTITY) < 0.01) this.lastVine = -1;
+        } else this.lastVine = -1;
+      }
       if (this.cooldown > 0) return;
       const at = this.character.currPos;
+      const vine = this.findVine(at);
+      if (vine >= 0 && !this.character.isOnGround) { this.grabVine(vine, at); return; }
       const chain = this.findChain(at);
       if (chain && (input.jump || !this.character.isOnGround)) { this.grabChain(chain, at); return; }
       // A ledge is caught in the AIR, the way it is in every game that does
       // this well — you jump at a lip and the hands find it. Grabbing from
       // standing would let you climb the world by walking into it.
       if (this.character.isOnGround) return;
+      // a lip wins over a face: if there is something to pull over, hang off it
       const led = this.findLedge(at, yaw);
-      if (led) this.grabLedge(led.y, led.n, at);
+      if (led) { this.grabLedge(led.y, led.n, at); return; }
+      const face = this.findFace(at, yaw);
+      if (face) this.grabFace(face.p, face.n, at);
       return;
     }
 
     if (this.state === "mantle") { this.stepMantle(dt); return; }
     if (this.state === "hang") this.stepHang(dt, input, yaw);
+    else if (this.state === "wall") this.stepWall(dt, input, yaw);
     else if (this.state === "chain") this.stepChain(dt, input);
+    else if (this.state === "vine") this.stepVine(dt, input);
 
     // drive the kinematic body wherever the state put it
     this.character.body.setNextKinematicTranslation({ x: this.pos.x, y: this.pos.y, z: this.pos.z });
@@ -301,6 +403,72 @@ export class Traverse {
     this.poseHang();
   }
 
+  /** Is the held face still there at `p`? Probed along the face's own normal,
+   *  NOT along the camera — you must be able to look around while climbing
+   *  without the wall appearing to vanish. */
+  private faceAt(p: THREE.Vector3): THREE.Intersection | null {
+    _dir.copy(this.normal).multiplyScalar(-1);
+    this.ray.far = 1.2;
+    this.ray.set(_probe.copy(p).setY(p.y + 0.35), _dir);
+    const hit = this.ray.intersectObjects(this.solids, false)[0] ?? null;
+    this.ray.far = REACH;
+    return hit;
+  }
+
+  /** On a bare face: up, down, and sideways across it. The sideways move is the
+   *  one the reference frame is actually of — a body traversing a wall rather
+   *  than only going straight up it. */
+  private stepWall(dt: number, input: TraverseInput, yaw: number): void {
+    this.hangT += dt;
+    this.settle = Math.max(0, this.settle - dt);
+    if (!input.jump) this.armedJump = true;
+    if (input.drop) { this.release(); return; }
+    if (input.jump && this.armedJump && this.settle <= 0) {
+      // shove off backwards off the face, the way you kick away from a wall
+      _v.copy(this.normal).multiplyScalar(4.2);
+      this.release({ x: _v.x, y: 4.6, z: _v.z });
+      return;
+    }
+
+    // up / down
+    if (Math.abs(input.forward) > 0.15) {
+      const step = input.forward * CLIMB * dt;
+      _v.copy(this.pos).setY(this.pos.y + step);
+      // going up, a lip within reach means STOP climbing and hang off it, so the
+      // top of a wall hands you straight into the mantle instead of a dead end
+      if (input.forward > 0) {
+        const led = this.findLedge(_v, yaw);
+        if (led) { this.grabLedge(led.y, led.n, _v); return; }
+      }
+      if (this.faceAt(_v)) {
+        this.pos.copy(_v);
+        this.cycle = (this.cycle + Math.abs(step) / CYCLE_M) % 1;
+      } else if (input.forward < 0) {
+        this.release();                       // climbed off the bottom
+        return;
+      }
+    }
+
+    // sideways across the face
+    if (Math.abs(input.right) > 0.15) {
+      _tan.set(-this.normal.z, 0, this.normal.x).normalize();
+      const step = input.right * SHIMMY * dt;
+      _v.copy(this.pos).addScaledVector(_tan, step);
+      const hit = this.faceAt(_v);
+      if (hit) {
+        this.pos.copy(_v);
+        // hug whatever the face does as it turns — hit.point keeps the body at a
+        // constant distance instead of drifting away from a wall that bends
+        const keepY = _v.y;                       // _v is scratch; hold the height
+        const n = hit.face ? hit.face.normal.clone().normalize() : this.normal;
+        if (Math.abs(n.y) < 0.45) this.normal.copy(n.setY(0).normalize());
+        this.pos.copy(hit.point).addScaledVector(this.normal, 0.42).setY(keepY);
+        this.cycle = (this.cycle + Math.abs(step) / CYCLE_M) % 1;
+      }
+    }
+    this.poseWall();
+  }
+
   private stepChain(dt: number, input: TraverseInput): void {
     const c = this.chain;
     if (!c) { this.release(); return; }
@@ -324,6 +492,87 @@ export class Traverse {
       if (this.pos.y >= c.top - 1.15 && input.forward > 0) { this.startMantle(); return; }
     }
     this.poseChain();
+  }
+
+  /** The vine: a pendulum you can pump, climb, and let go of at the right moment.
+   *
+   *  W/S climb the vine itself (shortening the rope speeds the swing up, the way
+   *  a skater pulling their arms in spins faster — angular momentum is conserved
+   *  explicitly below, and it is the difference between a rope that feels alive
+   *  and a rope that is a moving platform). A/D pump. Space lets go, and what you
+   *  get is the tangent — so WHEN you release decides where you land. */
+  private stepVine(dt: number, input: TraverseInput): void {
+    const v = VINES[this.vine];
+    if (!v) { this.release(); return; }
+    this.hangT += dt;
+    this.settle = Math.max(0, this.settle - dt);
+    if (!input.jump) this.armedJump = true;
+    if (input.drop) { this.release(); return; }
+
+    // ── the pendulum ──
+    this.omega += -(SWING_G / this.ropeLen) * Math.sin(this.theta) * dt;
+    this.omega -= SWING_DAMP * this.omega * dt;
+    // pumping only bites while you are moving — you cannot start a swing from
+    // dead still by mashing, you lean INTO one that already exists
+    if (Math.abs(input.right) > 0.15) {
+      this.omega += PUMP * input.right * dt * (0.35 + Math.min(1, Math.abs(this.omega)));
+    }
+    this.theta += this.omega * dt;
+    // a hard stop so it cannot wind over the top of the anchor
+    if (Math.abs(this.theta) > 1.35) {
+      this.theta = Math.sign(this.theta) * 1.35;
+      this.omega *= -0.35;
+    }
+
+    // ── climbing the rope ──
+    if (Math.abs(input.forward) > 0.15 && this.settle <= 0) {
+      const before = this.ropeLen;
+      this.ropeLen = THREE.MathUtils.clamp(this.ropeLen - input.forward * VINE_CLIMB * dt, 2.2, v.length);
+      if (this.ropeLen !== before) {
+        this.omega *= (before / this.ropeLen) ** 2;   // conserve angular momentum
+        this.cycle = (this.cycle + Math.abs(before - this.ropeLen) / CYCLE_M) % 1;
+      }
+    }
+
+    // ── where that puts the body ──
+    _v.copy(this.swingAxis).multiplyScalar(Math.sin(this.theta) * this.ropeLen);
+    this.pos.set(v.x + _v.x, v.anchorY - Math.cos(this.theta) * this.ropeLen, v.z + _v.z);
+
+    // let go: you leave on the TANGENT, carrying the swing's speed
+    if (input.jump && this.armedJump && this.settle <= 0) {
+      const speed = this.omega * this.ropeLen;
+      _v.copy(this.swingAxis).multiplyScalar(Math.cos(this.theta) * speed);
+      const up = Math.sin(this.theta) * speed;
+      this.release({ x: _v.x, y: Math.max(3.2, up + 3.4), z: _v.z });
+      return;
+    }
+    this.swingVine();
+    this.poseVine();
+  }
+
+  /** Rotate the vine the player is actually holding, so the thing on screen is
+   *  the thing being simulated. */
+  private swingVine(): void {
+    const pivot = VINE_PIVOTS[this.vine];
+    if (!pivot) return;
+    _dir.copy(this.swingAxis).multiplyScalar(Math.sin(this.theta)).setY(-Math.cos(this.theta)).normalize();
+    pivot.quaternion.setFromUnitVectors(_down, _dir);
+  }
+
+  private poseVine(): void {
+    const v = VINES[this.vine];
+    const { l, r } = this.handPhase();
+    // both hands stacked on the rope above the head, alternating as you climb
+    _dir.copy(this.swingAxis).multiplyScalar(Math.sin(this.theta)).setY(-Math.cos(this.theta)).normalize();
+    const on = (up: number, side: number): THREE.Vector3 =>
+      new THREE.Vector3(v.x, v.anchorY, v.z)
+        .addScaledVector(_dir, this.ropeLen - up)
+        .addScaledVector(this.swingAxis, side);
+    this.gripL.copy(on(0.92 + l * 0.30, -0.10));
+    this.gripR.copy(on(0.74 + r * 0.30, 0.10));
+    this.footL.copy(on(-0.62, -0.16));
+    this.footR.copy(on(-0.62, 0.16));
+    this.posed = true;
   }
 
   private startMantle(): void {
@@ -420,6 +669,26 @@ export class Traverse {
     const sw = this.sway();
     this.footL.set(c.x - 0.16 + sw * 1.4, this.pos.y - 0.66 + r * 0.22, c.z + sw * 0.6);
     this.footR.set(c.x + 0.16 + sw * 1.4, this.pos.y - 0.66 + l * 0.22, c.z + sw * 0.6);
+    this.posed = true;
+  }
+
+  private poseWall(): void {
+    const { l, r } = this.handPhase();
+    _tan.set(-this.normal.z, 0, this.normal.x).normalize();
+    const face = _v.copy(this.normal).multiplyScalar(-0.34);
+    // hands high on the face, one planted while the other reaches for its next
+    // hold; the body hangs off whichever one is taking the weight
+    this.gripL.copy(this.pos).addScaledVector(_tan, -0.30).add(face)
+      .setY(this.pos.y + 0.86 + l * 0.34);
+    this.gripR.copy(this.pos).addScaledVector(_tan, 0.30).add(face)
+      .setY(this.pos.y + 0.86 + r * 0.34);
+    // feet find the face too — a climber pushes with the legs, and without this
+    // the whole body reads as dead weight dragged up by the arms
+    const toe = _v.copy(this.normal).multiplyScalar(-0.26);
+    this.footL.copy(this.pos).addScaledVector(_tan, -0.24).add(toe)
+      .setY(this.pos.y - 0.70 + r * 0.30);
+    this.footR.copy(this.pos).addScaledVector(_tan, 0.24).add(toe)
+      .setY(this.pos.y - 0.70 + l * 0.30);
     this.posed = true;
   }
 

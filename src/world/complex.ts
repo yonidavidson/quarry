@@ -17,7 +17,11 @@ import { buildSky, SUN_DIR } from "./sky.ts";
 import { detectTier } from "../controllers/quality/tier.ts";
 
 /** Interior bounds, metres. Matches DESIGN.md → World & scale. */
-export const HALL = { w: 140, d: 90, wallH: 14 } as const;
+// wallH was 14 and the walls read as low — a hall you could see over rather than
+// a ruin you are inside. At 21 the perimeter is a real climb (Jack goes up a face
+// at ~0.9 m/s, so a full ascent is a commitment), and the beams overhead are far
+// enough up that the beast crossing them is genuinely "above you".
+export const HALL = { w: 140, d: 90, wallH: 21 } as const;
 
 /** The roof is a 7x5 grid of stone panels, and most of it came down centuries
  *  ago. These are the cells that are STILL THERE — a broken ring around the
@@ -40,18 +44,39 @@ const SHAFT_CELLS: Array<[number, number]> = [[1, 1], [5, 3], [3, 4], [2, 2]];
  *  so the route is a route and not a rope in a field. `x/z` is the line, `top`
  *  and `foot` bound it. Consumed by the world builder AND by traversal, so what
  *  you can see is exactly what you can hold. */
-export const CHAINS: Array<{ x: number; z: number; top: number; foot: number }> = [
+export const CHAINS: Array<{ x: number; z: number; top: number; foot: number }> = (() => {
   // `foot` is a REACH, not a step: 2.05 m is above Jack's head, so a rope is
   // caught by jumping for it and can never be strolled onto. `top` runs to the
-  // beams, which makes the full ascent ~11 m at a metre a second — long enough
-  // that starting a climb with the beast in the hall is a real commitment.
-  { x: -44, z: 26, top: 13.1, foot: 2.05 },     // up to the west ledge run
-  { x: 42, z: -26, top: 13.1, foot: 2.05 },     // up to the east ledge run
-  { x: -6, z: -34, top: 13.1, foot: 2.05 },     // the north wall, mid-hall
-  { x: 12, z: 34, top: 13.1, foot: 2.05 },      // the south wall, mid-hall
-  { x: -22, z: 20, top: 13.1, foot: 2.05 },     // onto the west hanging platform
-  { x: 24, z: -22, top: 13.1, foot: 2.05 },     // onto the east hanging platform
-];
+  // beams. Every one is placed where climbing it puts you on the ledge ring, a
+  // hanging platform, or the beam run — a rope is a route, never scenery.
+  const TOP = 21 - 2.2, FOOT = 2.05;
+  const spots: Array<[number, number]> = [
+    [-44, 26], [42, -26], [-6, -34], [12, 34], [-22, 20], [24, -22],
+    [-62, 8], [62, -8], [-30, -30], [30, 30], [0, -12], [-12, 40],
+    [52, 14], [-52, -14], [8, -40], [-38, 38],
+  ];
+  return spots.map(([x, z]) => ({ x, z, top: TOP, foot: FOOT }));
+})();
+
+/** Swingable vines. The decorative scatter in `dressing()` stays scatter; these
+ *  are the ones the game means — they hang from the beam runs into open floor
+ *  between the altars, so a swing carries you across a gap rather than along a
+ *  wall. Their free end sits at 3.2 m: the top of a jump puts Jack's fingertips
+ *  at ~3.25 m, so catching one is exactly a full stretch and never a walk-up. */
+/** The scene objects for {@link VINES}, index-aligned — traversal rotates the
+ *  one you are holding so the vine on screen IS the vine you swing on. */
+export const VINE_PIVOTS: THREE.Object3D[] = [];
+
+export const VINES: Array<{ x: number; z: number; anchorY: number; length: number }> = (() => {
+  const ANCHOR = 21 - 2.6;              // just under the beam run
+  const FREE_END = 3.2;
+  const spots: Array<[number, number]> = [
+    [-34, -37], [-16, -24.7], [2, -12.3], [20, 0], [38, 12.3],
+    [-38, 12.3], [-20, 24.7], [-2, 37], [16, 24.7], [34, -24.7],
+    [56, 0], [-56, 0],
+  ];
+  return spots.map(([x, z]) => ({ x, z, anchorY: ANCHOR, length: ANCHOR - FREE_END }));
+})();
 
 /** World-space centres of the shafts, so the dust motes in ambience.ts land in
  *  the beams rather than near them. */
@@ -89,21 +114,26 @@ function facade(out: Box[], axis: "x" | "z", side: 1 | -1): void {
     axis === "x" ? [a, y, o] : [o, y, a];
 
   out.push({ p: place(0, wallH / 2, 0), s: size(len, wallH, t), mat: "wall" });
-  // the frieze band — the skull course from the reference, running the whole wall
-  out.push({ p: place(0, 10.6, -0.45), s: size(len, 2.3, 0.9), mat: "frieze" });
+  // the frieze band — the skull course from the reference, running the whole
+  // wall. Positioned OFF the wall height, not at a magic number, so raising the
+  // hall does not leave the ornament stranded halfway up.
+  out.push({ p: place(0, wallH - 3.4, -0.45), s: size(len, 2.3, 0.9), mat: "frieze" });
   // a moulding under it, so the band sits on something
-  out.push({ p: place(0, 9.2, -0.6), s: size(len, 0.55, 1.2), mat: "step" });
+  out.push({ p: place(0, wallH - 4.8, -0.6), s: size(len, 0.55, 1.2), mat: "step" });
+  // a second, lower course — a 21m wall with one band near the top reads as a
+  // blank slab for its bottom two thirds
+  out.push({ p: place(0, 9.4, -0.4), s: size(len, 1.1, 0.8), mat: "step" });
 
   const bays = Math.round(len / 15);
   for (let i = 0; i < bays; i++) {
     const a = -len / 2 + (len / bays) * (i + 0.5);
     // carved glyph panel at eye height
-    out.push({ p: place(a, 4.6, -0.35), s: size(len / bays - 5, 6.4, 0.7), mat: "glyph" });
+    out.push({ p: place(a, 5.0, -0.35), s: size(len / bays - 5, 7.2, 0.7), mat: "glyph" });
     // pilaster between bays, base and capital
     const pa = -len / 2 + (len / bays) * i;
     out.push({ p: place(pa, wallH / 2, -0.8), s: size(2.6, wallH, 1.6), mat: "wall" });
     out.push({ p: place(pa, 0.7, -1.1), s: size(3.4, 1.4, 2.2), mat: "step" });
-    out.push({ p: place(pa, 12.6, -1.0), s: size(3.4, 1.1, 2.0), mat: "step" });
+    out.push({ p: place(pa, wallH - 1.4, -1.0), s: size(3.4, 1.1, 2.0), mat: "step" });
   }
 }
 
@@ -232,7 +262,8 @@ function layout(rubbleCount: number): Box[] {
  *  added straight to the scene so it never enters the solids list. */
 function dressing(scene: THREE.Scene, mats: Record<Mat, THREE.Material>, phone: boolean): void {
   const { w, d, wallH } = HALL;
-  const VINES = phone ? 40 : 110, LEAVES = phone ? 90 : 260, TREES = phone ? 70 : 150;
+  // VINE_COUNT, not VINES — the exported VINES are the swingable ones
+  const VINE_COUNT = phone ? 40 : 110, LEAVES = phone ? 90 : 260, TREES = phone ? 70 : 150;
   let s = 991;
   const rnd = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
 
@@ -246,6 +277,36 @@ function dressing(scene: THREE.Scene, mats: Record<Mat, THREE.Material>, phone: 
       c.castShadow = true;
       scene.add(c);
     }
+  }
+
+  // The swingable vines — thicker and browner than the decorative scatter, and
+  // they reach down into the room. Same readability rule as the chains: the
+  // player must never have to guess which green thread takes weight.
+  const vineRope = new THREE.MeshStandardMaterial({ color: 0x4a6b2c, roughness: 0.95 });
+  const leafBig = new THREE.MeshStandardMaterial({ color: 0x3d5f26, roughness: 0.95, side: THREE.DoubleSide });
+  VINE_PIVOTS.length = 0;
+  for (const vn of VINES) {
+    // Built as a GROUP pivoted at the anchor, with everything hanging below it,
+    // so swinging is one rotation of the pivot and the vine the player sees is
+    // literally the vine they are hanging from.
+    const pivot = new THREE.Group();
+    pivot.position.set(vn.x, vn.anchorY, vn.z);
+    const rope = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.10, vn.length, 6), vineRope);
+    rope.position.y = -vn.length / 2;
+    rope.castShadow = true;
+    pivot.add(rope);
+    const tip = new THREE.Mesh(new THREE.SphereGeometry(0.34, 8, 6), leafBig);
+    tip.position.y = -vn.length;
+    tip.scale.set(1, 0.7, 1);
+    pivot.add(tip);
+    for (let k = 0; k < 5; k++) {
+      const leaf = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 0.44), leafBig);
+      leaf.position.set((k - 2) * 0.16, -vn.length + 0.3 + k * 0.55, 0);
+      leaf.rotation.set(k * 0.7, k * 1.3, k * 0.4);
+      pivot.add(leaf);
+    }
+    scene.add(pivot);
+    VINE_PIVOTS.push(pivot);
   }
 
   // The climbable chains. Deliberately FATTER than the decorative ones — if the
@@ -271,14 +332,14 @@ function dressing(scene: THREE.Scene, mats: Record<Mat, THREE.Material>, phone: 
   const vineMat = new THREE.MeshStandardMaterial({ color: 0x3c5c2c, roughness: 0.9, side: THREE.DoubleSide });
   const leafGeo = new THREE.PlaneGeometry(0.7, 0.4);
   const vineGeo = new THREE.CylinderGeometry(0.06, 0.04, 1, 4);
-  const vines = new THREE.InstancedMesh(vineGeo, vineMat, VINES);
+  const vines = new THREE.InstancedMesh(vineGeo, vineMat, VINE_COUNT);
   const leaves = new THREE.InstancedMesh(leafGeo, vineMat, LEAVES);
   const m = new THREE.Matrix4();
   let li = 0;
   // Vines hang from the BEAMS, not from open air — the first pass left them
   // dangling in the middle of a hole in the roof with nothing above them.
   const beamZ = Array.from({ length: 7 }, (_, i) => -d / 2 + 8 + i * ((d - 16) / 6));
-  for (let i = 0; i < VINES; i++) {
+  for (let i = 0; i < VINE_COUNT; i++) {
     const x = (rnd() - 0.5) * (w - 10);
     const z = beamZ[Math.floor(rnd() * beamZ.length)] + (rnd() - 0.5) * 1.4;
     const len = 2 + rnd() * 7;
