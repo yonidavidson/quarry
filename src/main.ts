@@ -68,7 +68,8 @@ async function boot(): Promise<void> {
   renderer.toneMappingExposure = 1.15;
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x12161d);
+  // background + environment come from the sky in lightComplex — a flat clear
+  // colour under a midday sun is exactly the flatness #100 is about
   const camera = new THREE.PerspectiveCamera(
     62,
     window.innerWidth / window.innerHeight,
@@ -76,7 +77,7 @@ async function boot(): Promise<void> {
     260 * tier.drawDistanceScale,
   );
 
-  const sun = lightComplex(scene, tier.shadowMapSize);
+  const sun = lightComplex(scene, tier.shadowMapSize, renderer);
   const post = createPost(renderer, scene, camera, tier);
   // Audio belongs to the camera and must exist before the menu — the menu needs
   // its bed and its ticks, and the unlock listener rides the first gesture.

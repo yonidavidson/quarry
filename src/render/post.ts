@@ -15,9 +15,9 @@ import { ShaderPass } from "three/addons/postprocessing/ShaderPass.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import type { QualityTier } from "../controllers/quality/tier.ts";
 
-/** Grade + vignette in one pass: push the image toward the key art's palette —
- *  cold shadows, warm sodium highlights — and darken the corners so the eye goes
- *  where the light is. */
+/** Grade + vignette in one pass: push the image toward the art target's palette
+ *  (#100) — jungle-green shade, hot ochre sun — and darken the corners a little
+ *  so the eye goes where the light is. */
 const GradeShader = {
   uniforms: {
     tDiffuse: { value: null as THREE.Texture | null },
@@ -35,18 +35,22 @@ const GradeShader = {
       vec4 src = texture2D(tDiffuse, vUv);
       vec3 c = src.rgb;
 
-      // lift the shadows toward blue, carry the highlights toward sodium
+      // shade takes the sky (cool, faintly blue), sun goes ochre. It must NOT
+      // take the canopy's green — that turned the whole ruin olive.
       float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
-      vec3 shadowTint = vec3(0.84, 0.92, 1.10);
-      vec3 highTint   = vec3(1.02, 0.99, 0.94);
-      c *= mix(shadowTint, highTint, smoothstep(0.05, 0.6, l));
+      vec3 shadowTint = vec3(0.95, 0.97, 1.04);
+      vec3 highTint   = vec3(1.09, 1.02, 0.88);
+      c *= mix(shadowTint, highTint, smoothstep(0.04, 0.55, l));
 
-      // a little more contrast than the raw render, pivoted at mid grey
-      c = (c - 0.5) * 1.07 + 0.5;
+      // the reference is punchy — more contrast, and saturation the old dark
+      // grade could not afford
+      c = (c - 0.46) * 1.08 + 0.46;
+      float g = dot(c, vec3(0.2126, 0.7152, 0.0722));
+      c = mix(vec3(g), c, 1.10);
 
-      // vignette
+      // a light vignette only: a bright exterior scene should not tunnel
       vec2 d = vUv - 0.5;
-      c *= 1.0 - smoothstep(0.40, 0.92, dot(d, d) * 2.0) * 0.42;
+      c *= 1.0 - smoothstep(0.45, 0.98, dot(d, d) * 2.0) * 0.26;
 
       gl_FragColor = vec4(mix(src.rgb, max(c, 0.0), amount), src.a);
     }
@@ -96,11 +100,12 @@ export function createPost(
   composer.setPixelRatio(Math.min(window.devicePixelRatio, tier.dprCap));
   composer.addPass(new RenderPass(scene, camera));
 
-  // Bloom carries the whole mood: it is what turns the lamps into light sources
-  // and the beast's eye into a thing you notice across a dark hall. Threshold
-  // above the lit floor so surfaces do not smear — only genuine emitters bloom.
+  // Bloom picks out the sun shafts, the braziers, the gold and the tracers.
+  // #100 — the threshold is HIGH now: under a midday sun, sunlit sandstone is
+  // already near white, and a dark-room threshold smears the entire hall into
+  // haze. Only things brighter than lit stone are allowed to glow.
   const full = tier.postLevel === "full";
-  composer.addPass(new UnrealBloomPass(size, full ? 0.38 : 0.24, full ? 0.5 : 0.4, 0.95));
+  composer.addPass(new UnrealBloomPass(size, full ? 0.30 : 0.20, full ? 0.62 : 0.45, 1.15));
 
   const grade = new ShaderPass(GradeShader);
   grade.uniforms.amount.value = full ? 1.0 : 0.6;

@@ -6,13 +6,18 @@ bottom._
 ## Concept
 
 A hunt where both sides are armed and only one of you is meant to walk out. You
-are Jack, a human loose in a dead industrial complex with a blaster and no room
-for error — or you are the Stalker, a horned thing that climbs walls, crawls
-ceilings and does not need a weapon. Third-person, over the shoulder, in the
-dark. The tension is asymmetry: Jack's advantage is range and nerve; the
+are Jack, a human loose in a ruined jungle temple with a blaster and no room for
+error — or you are the Stalker, a horned thing that climbs walls, crawls the
+roof beams and does not need a weapon. Third-person, over the shoulder, under a
+midday sun. The tension is asymmetry: Jack's advantage is range and nerve; the
 Stalker's is that it can be anywhere above you. A 3D rebuild of the shipped 2D
 game (tagged `quarry-2d-final`), carrying over its premise, its two characters
 and its ledge-and-vent movement vocabulary.
+
+Art target: `docs/reference/art-target-temple.png` — the player's own reference,
+and the frame every screenshot is judged against (#100). Sculpted sandstone,
+skull friezes, moss in the joints, hard sun through a collapsed roof, jungle
+past the walls.
 
 Concept image: _pending — the UI plan gate has not run yet; the character concept
 (candidate 2 of cms4enx33007a2pqlpfflj82e) is approved and rigging._
@@ -32,7 +37,7 @@ Concept image: _pending — the UI plan gate has not run yet; the character conc
 
 ## Build plan & status
 
-Now: ▶ 5. Screens + 6. HUD sprites — menu still, logotype, fonts, settings and the sprite HUD are wired; **menu video + threat-mask clean-up wait on the Aug 4 credit refill** (recorded commands in Decisions).
+Now: ▶ 9. The temple reskin ([#100](https://github.com/yonidavidson/quarry/issues/100)) — the world's geometry, sun rig and post stack are rebuilt against the player's art reference and previewed; **every generation lane in it (temple textures, skybox, props, character reskins, new key art, jungle audio) waits on the Aug 4 credit refill**, along with the menu video and threat mask from milestone 5/6.
 
 1. Boot, identity, and a walkable floor — ✅ → previewed
 2. Jack moves and shoots; the Stalker hunts — ✅ → previewed
@@ -41,7 +46,8 @@ Now: ▶ 5. Screens + 6. HUD sprites — menu still, logotype, fonts, settings a
 5. Screens: loader, title, side select, pause ([#77](https://github.com/yonidavidson/quarry/issues/77)) — ◐ machine + side select done; menu video, branded loader and settings still open
 6. HUD sprite swap from the landed concept ([#78](https://github.com/yonidavidson/quarry/issues/78)) — ⬜
 7. 1v1 asymmetric online ([#83](https://github.com/yonidavidson/quarry/issues/83)) — ◐ seating, sides and remote bodies verified with two identities; feel gate not run
-8. World dressing — the ceiling the Stalker crosses ([#80](https://github.com/yonidavidson/quarry/issues/80)) — ⬜
+8. World dressing — the ceiling the Stalker crosses ([#80](https://github.com/yonidavidson/quarry/issues/80)) — ◐ stone beams, vines and roof collapse landed with the reskin; props still owed
+9. The temple reskin ([#100](https://github.com/yonidavidson/quarry/issues/100)) — ◐ geometry, sun rig, sky and grade previewed; the generated asset half is credit-blocked
 
 Open defects:
 [#79](https://github.com/yonidavidson/quarry/issues/79) phone budgets ·
@@ -60,8 +66,9 @@ After any break, resume from `Now:`.
   bought
 - **Enemies besides the other hunter:** 2 kinds — a patrol drone and a crawlbot;
   neither hunts you, both punish carelessness
-- **Locations:** 1 floor of the complex for v0 — machine hall, catwalk ring,
-  vent crawl, pump room, extraction bay
+- **Locations:** 1 floor of the ruin for v0 — great hall, stone ledge ring,
+  hanging platforms, burial chamber, the gate (same footprints as the machine
+  hall / catwalk ring / pump room / extraction bay they replaced, #100)
 - **Grows:** weapons found mid-match; no meta-progression in v0
 - **Ten minutes in, I am:** learning the floor's sightlines well enough to
   choose where the fight happens instead of being found in the open.
@@ -86,18 +93,32 @@ Menu video: yes.
 | Concept + HUD mockup | image | landed (cms4fujmg00bm2ensvgzgdfqj) — confirms the sprites lane | n/a |
 | Jack — player character | character | landed (cms4fbaky009f2ens0f1kmmbi) | yes |
 | The Stalker — rigged hunter | creature | landed (cms4fiv3a008x2pqlshvq5jnp) | yes |
-| Complex floor — wet concrete | texture | landed | yes |
-| Steel catwalk / plate | texture | landed | yes |
-| Hall walls — chipped paint | texture | landed | yes |
-| Machine casings — oiled metal | texture | landed | yes |
-| Ceiling — corrugated + pipes | texture | landed | yes |
+| Complex floor — wet concrete | texture | landed — **retired by #100**, unwired | no |
+| Steel catwalk / plate | texture | landed — **retired by #100**, unwired | no |
+| Hall walls — chipped paint | texture | landed — **retired by #100**, unwired | no |
+| Machine casings — oiled metal | texture | landed — **retired by #100**, unwired | no |
+| Ceiling — corrugated + pipes | texture | landed — **retired by #100**, unwired | no |
+| Temple flagstone floor | texture | planned (#100) — credit-blocked to Aug 4; procedural stand-in in `src/world/stone.ts` | stand-in |
+| Carved glyph wall | texture | planned (#100) — same | stand-in |
+| Skull frieze block | texture | planned (#100) — same | stand-in |
+| Cut step / ledge stone | texture | planned (#100) — same | stand-in |
+| Mossy boulder / rubble | texture | planned (#100) — same | — |
+| Ancient gold | texture | planned (#100) — same | — |
+| Jungle sky + distant pyramids | skybox | planned (#100) — credit-blocked; procedural equirect stand-in in `src/world/sky.ts`, also the environment map | stand-in |
+| Carved idol / god head | model | planned (#100) | — |
+| Broken column + capital | model | planned (#100) | — |
+| Stone brazier | model | planned (#100) — procedural stand-in in `lightComplex` | stand-in |
+| Offering chest (weapon crate) | model | planned (#100) | — |
 | Patrol drone | model | planned | — |
 | Energy cell pickup | model | planned | — |
 | Blaster shot | sfx | landed | yes |
 | Claw strike | sfx | landed | yes |
 | Boot on steel grating | sfx | landed | yes |
 | Stalker roar | sfx | landed | yes |
-| Industrial dread bed | music | landed | yes |
+| Industrial dread bed | music | landed — replaced by the jungle bed when credits allow (#100) | yes |
+| Jungle dread bed | music | planned (#100) | — |
+| Temple ambience (birds, insects, stone) | sfx | planned (#100) | — |
+| Boot on stone | sfx | planned (#100) | — |
 | Key art (loader + title + cover) | image | landed (cms4m26n400iy2pqliielme17) | yes |
 | Menu still | image | landed (cms9cfc2y00a82tmkpp4splh6) | yes |
 | Menu video | video | declined (this pass) — credit-blocked at balance 0 until the Aug 4 refill; verbatim command recorded in Decisions | — |
@@ -125,9 +146,17 @@ an eyeball first.
 ## World & scale
 
 One floor, roughly 140 × 90 m of interior, walled — no streaming. Vertical
-interest comes from a catwalk ring above the machine hall and a vent crawl
-between them, not from multiple storeys. The 2D game's multi-floor complex,
-atrium wells and underdeep are explicitly out of v0 and are the growth path.
+interest comes from the stone ledge ring above the great hall, two chain-hung
+platforms and the roof beams, not from multiple storeys. Most of the roof has
+collapsed: a broken ring of panels survives at the edges, the middle is open to
+the sky, and the beams still span the whole hall so the Stalker's ceiling route
+is intact. The 2D game's multi-floor complex, atrium wells and underdeep are
+explicitly out of v0 and are the growth path.
+
+Draw-call note (#79): the reskin took the static solid count from ~40 boxes to
+~270, because carved facades, altars and rubble are what stops a wall reading as
+a plane. Desktop is fine; the phone tier has NOT been re-measured since, and it
+is the first thing to check when the generated texture set lands.
 
 ## Multiplayer
 
@@ -153,6 +182,13 @@ does not apply. Rows stay as the split to hand out the moment that changes.
 | Netcode | `src/net/**` | main agent (shared) | two seats, feel gate passed |
 
 ## Decisions & changes
+
+- 2026-08-02 — **The hunt moves to sunlit temple ruins** ([#100](https://github.com/yonidavidson/quarry/issues/100)). The player gave a reference frame (saved at `docs/reference/art-target-temple.png`) and, asked the two forking questions, chose **replace the industrial complex with the ruins** and **bright warm midday sun over the dark**. So: the machine hall is a temple hall, the sodium-lamp premise retires, and the hunt is now about sightlines and cover rather than about darkness — fire survives only in the burial chamber and the deep bays. This re-points [#86](https://github.com/yonidavidson/quarry/issues/86): its gap analysis still holds, but the target it measures against is the reference, not the industrial key art.
+  - **Footprints are unchanged on purpose.** The six machine blocks became stepped altars on the same centres, the catwalk ring became a stone ledge at the same height and width, the ramps became pyramid stairs, the pump room became the burial chamber, the extraction bay became the gate. Every sightline, patrol path and cling surface the hunt was tuned around survives the reskin; only what the room is made of changed.
+  - **Landed this pass, no credits needed:** carved facades (base course, glyph panels, skull-frieze band, pilasters), stepped altars, ledge ring with parapet, two chain-hung platforms, the great arch, a collapsed roof (14 of 35 panels survive, in a broken ring — the middle is open sky), stone beams + timber under the whole span, columns with base and capital, 46 rubble blocks, hanging vines, an instanced jungle ring past the walls, dust motes in the shafts, roof-grit trickles, water drips, and braziers that flicker like fire instead of like a failing tube.
+  - **Sun rig:** one 4.6-intensity key aimed down `SUN_DIR`, hard shadows, sky/ground hemisphere fill at 1.05, ambient at 0.16, warm `FogExp2` haze. Post retuned for a bright scene — bloom threshold up to 1.15 (a dark-room threshold smears sunlit sandstone into haze), lighter vignette, ochre-highlight/cool-shade grade.
+  - **Three real bugs found by looking, not by reasoning:** (1) `BoxGeometry` UVs are 0..1 per face regardless of face size, so a 12m altar and a 1m rubble block wore identical blockwork — fixed with `uvBox`, which pre-scales UVs to world size for constant texel density; (2) the first pass came out olive because the procedural moss was too strong AND the sky's saturated jungle-green lower hemisphere was feeding the environment map — moss cut, ground band desaturated, `scene.environmentIntensity` dialled to 0.55; (3) vines were hanging in open air where the roof had collapsed — they hang from the beams now.
+  - **Stand-ins, and they are labelled as such:** the temple texture set and the jungle skybox are drawn procedurally in `src/world/stone.ts` and `src/world/sky.ts` because the balance is 0 until the Aug 4 refill. They carry a real height channel so the carving is lit rather than painted, and they are a rung to be replaced — not the destination. Everything queued behind the refill is listed in #100's task breakdown.
 
 - 2026-07-31 — **Milestone 5/6 wired, minus credits.** The menu now opens on the generated **still** (UI-free, calm lower third) with the **logotype** wordmark, Black Ops One + Oswald loaded, keyboard side-select (↑↓ + Enter), and pause-hosted **settings** (music/sfx/look sliders, persisted). The sprite **HUD** is wired: health slots, energy-cell counter panel, weapon frame, and the segmented threat meter with a fill **derived from the frame art** (channel rows 22–48, ~15px separator pitch, fillBox `0.0222,0.2716,0.9511,0.3210`) because the sheet's green twin was drawn shaded + off-registration and the model-edit fix needs credits. Smoke pass (local test mode): menu renders with still + logo, HUD reads live (danger reached "above you", threat fill tracked pressure), pause/settings open + resume, zero page errors. Not exercised: auth/saves/multiplayer (local mode), the menu video, and the real mask. Pre-existing noise: 6 status-0 loads of the fallback VRM character's animation GLBs (200 over curl — client-side abort, unrelated to this milestone).\n- 2026-07-31 — **The style chain fires late** ([#77](https://github.com/yonidavidson/quarry/issues/77), [#78](https://github.com/yonidavidson/quarry/issues/78)). When the UI concept landed (2026-07-28) the Stage-2 HUD sheet, menu still and logotype should have enqueued `--no-wait` behind it and never did; the menu video's event triple also never fired. Pushed now: Stage-2 sheet `cms9cfbzo00a32tmky8munqs7` (asset list from the game contract — health segments, segmented threat meter, energy-cell counter chrome, weapon readout frame), menu still `cms9cfc2y00a82tmkpp4splh6`, logotype `cms9cfc07009d2qqfxrylzrtt`. The menu still anchors to the **key art** (`cms4m26n…`, already UI-free and recorded as the canonical frame) rather than the mockup — the mockup has a HUD baked in and must never seed UI into the menu frame; one-line reason recorded per menu-skill rule.
 - 2026-07-31 — **Menu video blocked on credits; the still ships.** The video costs 20 credits and the balance is 0 (refills Aug 4). The still menu is live — key art → still backdrop with a slow breathing pan/zoom, logotype, cinematic side-select rail, keyboard nav, and settings (music/sfx/look) in pause. The hover/confirm `genex sfx` ticks (5 credits each) are blocked the same way — procedural WebAudio blips keep the menu from being silent until then. Fires on the refill, recorded verbatim: `npx genex video "slow drifting fog moves across the floor and settles back, a hanging lamp sways a hair and steadies, dust motes drift and return, steam pulses from a vent and thins, the beast on the ceiling stirs and returns to stillness — every motion ends where it began" --frame https://assets.genex.technology/generations/cms9cfc2y00a82tmkpp4splh6/image-main --duration 8 --no-wait` then paste the URL into `src/assets.ts` `MENU_VIDEO`.

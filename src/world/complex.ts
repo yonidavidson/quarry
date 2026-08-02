@@ -1,205 +1,456 @@
-// One floor of the complex: machine hall, catwalk ring, pump room, extraction
-// bay. Boxes and planes for now — every solid here is both a mesh and a static
-// Rapier collider, so the walkable shape and the visible shape can never drift.
+// One floor of the ruin: the great hall, the ledge ring, the burial chamber and
+// the gate. Every solid here is both a mesh and a static Rapier collider, built
+// from one list, so the walkable shape and the visible shape can never drift.
+//
+// #100 — this was an industrial machine hall until the art target moved to the
+// temple reference (docs/reference/art-target-temple.png). The FOOTPRINTS are
+// deliberately unchanged: the machine blocks became stepped altars in the same
+// places, the catwalk ring became a stone ledge at the same height, so every
+// sightline, patrol path and cling surface the hunt was tuned around survives
+// the reskin. What changed is what the room is made of and how it is lit.
 import * as THREE from "three";
 import type { PhysicsWorld } from "../controllers/shared/physics-world.ts";
 import { cuboidCollider } from "../controllers/shared/colliders.ts";
-import { TEXTURES } from "../assets.ts";
-import { pickAsset } from "../controllers/quality/pick-asset.ts";
-import { detectTier } from "../controllers/quality/tier.ts";
+import { templeWall, glyphWall, skullFrieze, templeFloor, stepStone } from "./stone.ts";
+import { buildSky, SUN_DIR } from "./sky.ts";
 
 /** Interior bounds, metres. Matches DESIGN.md → World & scale. */
 export const HALL = { w: 140, d: 90, wallH: 14 } as const;
 
+/** The roof is a 7x5 grid of stone panels, and most of it came down centuries
+ *  ago. These are the cells that are STILL THERE — a broken ring around the
+ *  edges with the middle open to the sky, which is what puts sun on the floor
+ *  and keeps deep shade in the bays. The Stalker still has the stone beams
+ *  under the whole span to cross, so the ceiling route survives the collapse. */
+const ROOF_GRID = { cols: 7, rows: 5 } as const;
+const ROOF_KEEP: Array<[number, number]> = [
+  [0, 0], [0, 1], [0, 2], [1, 0], [2, 0],
+  [6, 4], [6, 3], [6, 2], [5, 4], [4, 4],
+  [0, 4], [6, 0], [3, 0], [1, 4],
+];
+/** Cells whose light shaft is worth drawing: open, but with roof beside them,
+ *  so the beam has an edge to be cut by. */
+const SHAFT_CELLS: Array<[number, number]> = [[1, 1], [5, 3], [3, 4], [2, 2]];
+
+/** World-space centres of the shafts, so the dust motes in ambience.ts land in
+ *  the beams rather than near them. */
+export const SHAFT_POINTS: Array<[number, number]> = SHAFT_CELLS.map(([c, r]) => [
+  -HALL.w / 2 + (HALL.w / ROOF_GRID.cols) * (c + 0.5),
+  -HALL.d / 2 + (HALL.d / ROOF_GRID.rows) * (r + 0.5),
+]);
+
+type Mat = "floor" | "wall" | "glyph" | "frieze" | "step" | "gold" | "timber";
+
 type Box = {
   /** centre */ p: [number, number, number];
   /** full size */ s: [number, number, number];
-  mat: "floor" | "catwalk" | "wall" | "machine" | "ceiling" | "pipe";
+  mat: Mat;
+  /** yaw, radians — applied to the mesh AND the body, so they agree */
+  yaw?: number;
+  /** decoration the player can walk through (vines, distant canopy) */
+  ghost?: true;
 };
+
+/** A carved facade rather than a flat slab: base course, glyph panels at eye
+ *  height, a skull-frieze band above them, and pilasters breaking the run. This
+ *  is the single biggest difference between the reference and a textured box. */
+function facade(out: Box[], axis: "x" | "z", side: 1 | -1): void {
+  const { w, d, wallH } = HALL;
+  const t = 1;
+  const len = axis === "x" ? w : d;
+  const at = (axis === "x" ? d : w) / 2 * side;
+  // place([along, up, out-of-wall]) → world, so one description serves all four walls
+  const place = (a: number, y: number, o: number): [number, number, number] =>
+    axis === "x" ? [a, y, at - o * side] : [at - o * side, y, a];
+  const size = (a: number, y: number, o: number): [number, number, number] =>
+    axis === "x" ? [a, y, o] : [o, y, a];
+
+  out.push({ p: place(0, wallH / 2, 0), s: size(len, wallH, t), mat: "wall" });
+  // the frieze band — the skull course from the reference, running the whole wall
+  out.push({ p: place(0, 10.6, -0.45), s: size(len, 2.3, 0.9), mat: "frieze" });
+  // a moulding under it, so the band sits on something
+  out.push({ p: place(0, 9.2, -0.6), s: size(len, 0.55, 1.2), mat: "step" });
+
+  const bays = Math.round(len / 15);
+  for (let i = 0; i < bays; i++) {
+    const a = -len / 2 + (len / bays) * (i + 0.5);
+    // carved glyph panel at eye height
+    out.push({ p: place(a, 4.6, -0.35), s: size(len / bays - 5, 6.4, 0.7), mat: "glyph" });
+    // pilaster between bays, base and capital
+    const pa = -len / 2 + (len / bays) * i;
+    out.push({ p: place(pa, wallH / 2, -0.8), s: size(2.6, wallH, 1.6), mat: "wall" });
+    out.push({ p: place(pa, 0.7, -1.1), s: size(3.4, 1.4, 2.2), mat: "step" });
+    out.push({ p: place(pa, 12.6, -1.0), s: size(3.4, 1.1, 2.0), mat: "step" });
+  }
+}
+
+/** A stepped altar mass — the cover the hunt is built around, in temple form.
+ *  Same 12x9 footprint and 6m height as the machine block it replaces. */
+function altar(out: Box[], x: number, z: number): void {
+  out.push({ p: [x, 1.2, z], s: [12, 2.4, 9], mat: "step" });
+  out.push({ p: [x, 3.4, z], s: [10.2, 2.0, 7.4], mat: "wall" });
+  out.push({ p: [x, 5.2, z], s: [7.8, 1.6, 5.4], mat: "glyph" });
+  // a carved marker on top — a silhouette to read the room by
+  out.push({ p: [x, 6.9, z], s: [1.6, 1.8, 1.6], mat: "frieze" });
+}
 
 /** The static solids. One list, so the mesh pass and the collider pass agree. */
 function layout(): Box[] {
   const { w, d, wallH } = HALL;
-  const t = 1; // wall thickness
-  const boxes: Box[] = [
-    // floor slab + the four walls that close the hall in
-    { p: [0, -0.5, 0], s: [w, 1, d], mat: "floor" },
-    { p: [0, wallH / 2, -d / 2], s: [w, wallH, t], mat: "wall" },
-    { p: [0, wallH / 2, d / 2], s: [w, wallH, t], mat: "wall" },
-    { p: [-w / 2, wallH / 2, 0], s: [t, wallH, d], mat: "wall" },
-    { p: [w / 2, wallH / 2, 0], s: [t, wallH, d], mat: "wall" },
-  ];
+  const boxes: Box[] = [{ p: [0, -0.5, 0], s: [w, 1, d], mat: "floor" }];
 
-  // Machine blocks down the middle of the hall — cover, and the thing that
-  // makes sightlines matter. Staggered so no straight line crosses the room.
-  for (let i = 0; i < 6; i++) {
-    const x = -50 + i * 20;
-    const z = i % 2 === 0 ? -14 : 12;
-    boxes.push({ p: [x, 3, z], s: [12, 6, 9], mat: "machine" });
+  facade(boxes, "x", 1); facade(boxes, "x", -1);
+  facade(boxes, "z", 1); facade(boxes, "z", -1);
+
+  // the altars, on the machine blocks' exact centres
+  for (let i = 0; i < 6; i++) altar(boxes, -50 + i * 20, i % 2 === 0 ? -14 : 12);
+
+  // Ledge ring: cut stone where the catwalk was, 6m up, with a low parapet on
+  // the outside so it reads as architecture and you cannot walk off backwards.
+  const ch = 6, cwWidth = 4, inset = 10;
+  const ring: Array<[number, number, number, number]> = [
+    [0, -d / 2 + inset, w - inset * 2, cwWidth],
+    [0, d / 2 - inset, w - inset * 2, cwWidth],
+    [-w / 2 + inset, 0, cwWidth, d - inset * 2],
+    [w / 2 - inset, 0, cwWidth, d - inset * 2],
+  ];
+  for (const [x, z, sx, sz] of ring) {
+    boxes.push({ p: [x, ch, z], s: [sx, 0.8, sz], mat: "step" });
+    const outward = sx > sz ? [0, Math.sign(z) * (sz / 2 - 0.25)] : [Math.sign(x) * (sx / 2 - 0.25), 0];
+    boxes.push({
+      p: [x + outward[0], ch + 0.85, z + outward[1]],
+      s: sx > sz ? [sx, 0.9, 0.5] : [0.5, 0.9, sz],
+      mat: "frieze",
+    });
   }
 
-  // Catwalk ring: a raised walkway around the hall, 6m up, with the four
-  // ramps that get you onto it.
-  const ch = 6, cwWidth = 4, inset = 10;
-  boxes.push(
-    { p: [0, ch, -d / 2 + inset], s: [w - inset * 2, 0.4, cwWidth], mat: "catwalk" },
-    { p: [0, ch, d / 2 - inset], s: [w - inset * 2, 0.4, cwWidth], mat: "catwalk" },
-    { p: [-w / 2 + inset, ch, 0], s: [cwWidth, 0.4, d - inset * 2], mat: "catwalk" },
-    { p: [w / 2 - inset, ch, 0], s: [cwWidth, 0.4, d - inset * 2], mat: "catwalk" },
-  );
-  // stepped ramps up to the ring (a stack of slabs — cheap stairs)
+  // pyramid stairs up to the ring
   for (let i = 0; i < 8; i++) {
     const y = 0.75 * (i + 1);
-    boxes.push({ p: [-56 + i * 2.2, y - 0.2, 34], s: [2.2, 0.4, 4], mat: "catwalk" });
-    boxes.push({ p: [56 - i * 2.2, y - 0.2, -34], s: [2.2, 0.4, 4], mat: "catwalk" });
+    boxes.push({ p: [-56 + i * 2.2, y - 0.2, 34], s: [2.2, 0.5, 4.4], mat: "step" });
+    boxes.push({ p: [56 - i * 2.2, y - 0.2, -34], s: [2.2, 0.5, 4.4], mat: "step" });
   }
 
-  // Pump room — a walled annex in one corner, one way in.
+  // Two chain-hung platforms over the middle of the hall — the reference's
+  // bottom-left panel, and a route across open air for both hunters.
+  for (const [x, z] of [[-22, 26], [24, -28]] as Array<[number, number]>) {
+    boxes.push({ p: [x, 6, z], s: [6, 0.7, 6], mat: "step" });
+  }
+
+  // Burial chamber — the dark annex, one way in, where the braziers are.
   boxes.push(
-    { p: [-52, 4, -32], s: [26, 8, t], mat: "wall" },
-    { p: [-39, 4, -38], s: [t, 8, 12], mat: "wall" },
+    { p: [-52, 4, -32], s: [26, 8, 1], mat: "glyph" },
+    { p: [-39, 4, -38], s: [1, 8, 12], mat: "glyph" },
   );
 
-  // Extraction bay platform, far end.
-  boxes.push({ p: [58, 1, 0], s: [18, 2, 26], mat: "catwalk" });
+  // The gate platform at the far end, and the great arch over it.
+  boxes.push({ p: [58, 1, 0], s: [18, 2, 26], mat: "step" });
+  boxes.push(
+    { p: [64, 7, -9], s: [3, 12, 3], mat: "wall" },
+    { p: [64, 7, 9], s: [3, 12, 3], mat: "wall" },
+    { p: [64, 13.4, 0], s: [3.4, 2.4, 21], mat: "frieze" },
+  );
 
-  // The ceiling. Without it the camera looks into black void above head height
-  // and the hall reads as a floor floating in nothing — and it is the surface
-  // the whole game asks you to watch.
-  boxes.push({ p: [0, wallH + 0.5, 0], s: [w, 1, d], mat: "ceiling" });
-
-  // Pipe runs across it, so the Stalker crosses something instead of an
-  // invisible plane, and so there is structure overhead to read against.
+  // Roof: panels with cells missing. Without a roof the hall reads as a floor
+  // floating in nothing; without holes there is no sun, and the sun IS the look.
+  const pw = w / ROOF_GRID.cols, pd = d / ROOF_GRID.rows;
+  for (let c = 0; c < ROOF_GRID.cols; c++) {
+    for (let r = 0; r < ROOF_GRID.rows; r++) {
+      if (!ROOF_KEEP.some(([kc, kr]) => kc === c && kr === r)) continue;
+      const x = -w / 2 + pw * (c + 0.5), z = -d / 2 + pd * (r + 0.5);
+      boxes.push({ p: [x, wallH + 0.5, z], s: [pw, 1, pd], mat: "step" });
+    }
+  }
+  // stone beams under it — structure overhead to read against, and the surface
+  // the Stalker actually crosses (#80)
   for (let i = 0; i < 7; i++) {
     const z = -d / 2 + 8 + i * ((d - 16) / 6);
-    boxes.push({ p: [0, wallH - 1.9, z], s: [w - 6, 0.9, 0.9], mat: "pipe" });
-    boxes.push({ p: [0, wallH - 2.9, z + 1.6], s: [w - 6, 0.55, 0.55], mat: "pipe" });
+    boxes.push({ p: [0, wallH - 1.4, z], s: [w - 4, 1.0, 1.4], mat: "step" });
+    boxes.push({ p: [0, wallH - 2.4, z + 1.8], s: [w - 4, 0.5, 0.7], mat: "timber" });
   }
-  // support columns — vertical anchors that give the space a sense of depth
+
+  // columns — vertical anchors that give the space depth
   for (const x of [-46, -16, 16, 46]) {
     for (const z of [-30, 30]) {
-      boxes.push({ p: [x, wallH / 2, z], s: [2.2, wallH, 2.2], mat: "machine" });
+      boxes.push({ p: [x, 0.6, z], s: [3.6, 1.2, 3.6], mat: "step" });
+      boxes.push({ p: [x, wallH / 2, z], s: [2.4, wallH, 2.4], mat: "wall" });
+      boxes.push({ p: [x, wallH - 1.4, z], s: [3.4, 1.2, 3.4], mat: "frieze" });
     }
+  }
+
+  // Rubble — fallen blocks from the collapsed roof. Ruins are not tidy, and the
+  // reference has broken stone in every frame.
+  let s = 20260802;
+  const rnd = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
+  for (let i = 0; i < 46; i++) {
+    const x = (rnd() - 0.5) * (w - 14), z = (rnd() - 0.5) * (d - 14);
+    if (Math.abs(x) < 12 && Math.abs(z) < 12) continue;      // keep spawn clear
+    const sz = 0.9 + rnd() * 2.2;
+    boxes.push({
+      p: [x, sz * 0.4, z],
+      s: [sz, sz * 0.8, sz * (0.7 + rnd() * 0.6)],
+      mat: rnd() > 0.6 ? "frieze" : "wall",
+      yaw: rnd() * Math.PI,
+    });
   }
 
   return boxes;
 }
 
-function loadTiling(url: string, repeat: number): THREE.Texture {
-  // #79 — phones take the small rung. A phone fetching the full-size basecolor
-  // for six surfaces is how iOS silently kills the page.
-  const tex = new THREE.TextureLoader().load(pickAsset(url, detectTier()));
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(repeat, repeat);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = 4;
-  return tex;
+/** Chains, vines and the canopy past the walls — decoration with no collider,
+ *  added straight to the scene so it never enters the solids list. */
+function dressing(scene: THREE.Scene, mats: Record<Mat, THREE.Material>): void {
+  const { w, d, wallH } = HALL;
+  let s = 991;
+  const rnd = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
+
+  // chains holding the two hanging platforms
+  const chainMat = new THREE.MeshStandardMaterial({ color: 0x6b6257, roughness: 0.55, metalness: 0.85 });
+  const link = new THREE.CylinderGeometry(0.09, 0.09, wallH - 6.4, 6);
+  for (const [px, pz] of [[-22, 26], [24, -28]] as Array<[number, number]>) {
+    for (const [ox, oz] of [[-2.6, -2.6], [2.6, -2.6], [-2.6, 2.6], [2.6, 2.6]]) {
+      const c = new THREE.Mesh(link, chainMat);
+      c.position.set(px + ox, 6 + (wallH - 6.4) / 2, pz + oz);
+      c.castShadow = true;
+      scene.add(c);
+    }
+  }
+
+  // vines down from the broken roof — the vertical texture the ceiling needs
+  const vineMat = new THREE.MeshStandardMaterial({ color: 0x3c5c2c, roughness: 0.9, side: THREE.DoubleSide });
+  const leafGeo = new THREE.PlaneGeometry(0.7, 0.4);
+  const vineGeo = new THREE.CylinderGeometry(0.06, 0.04, 1, 4);
+  const vines = new THREE.InstancedMesh(vineGeo, vineMat, 110);
+  const leaves = new THREE.InstancedMesh(leafGeo, vineMat, 260);
+  const m = new THREE.Matrix4();
+  let li = 0;
+  // Vines hang from the BEAMS, not from open air — the first pass left them
+  // dangling in the middle of a hole in the roof with nothing above them.
+  const beamZ = Array.from({ length: 7 }, (_, i) => -d / 2 + 8 + i * ((d - 16) / 6));
+  for (let i = 0; i < 110; i++) {
+    const x = (rnd() - 0.5) * (w - 10);
+    const z = beamZ[Math.floor(rnd() * beamZ.length)] + (rnd() - 0.5) * 1.4;
+    const len = 2 + rnd() * 7;
+    m.compose(
+      new THREE.Vector3(x, wallH - 2 - len / 2, z),
+      new THREE.Quaternion().setFromEuler(new THREE.Euler(0, rnd() * 3, (rnd() - 0.5) * 0.25)),
+      new THREE.Vector3(1, len, 1),
+    );
+    vines.setMatrixAt(i, m);
+    for (let k = 0; k < 2 && li < 260; k++, li++) {
+      m.compose(
+        new THREE.Vector3(x + (rnd() - 0.5) * 0.5, wallH - 2 - rnd() * len, z + (rnd() - 0.5) * 0.5),
+        new THREE.Quaternion().setFromEuler(new THREE.Euler(rnd(), rnd() * 3, rnd())),
+        new THREE.Vector3(1, 1, 1),
+      );
+      leaves.setMatrixAt(li, m);
+    }
+  }
+  vines.instanceMatrix.needsUpdate = true;
+  leaves.instanceMatrix.needsUpdate = true;
+  scene.add(vines, leaves);
+
+  // the jungle past the ruin — seen over the walls and through the roof holes,
+  // so the world does not stop at a wall face
+  const canopyMat = new THREE.MeshStandardMaterial({ color: 0x2f5228, roughness: 1 });
+  const trunkMat = new THREE.MeshStandardMaterial({ color: 0x40331f, roughness: 1 });
+  const crown = new THREE.SphereGeometry(1, 7, 5);
+  const trunk = new THREE.CylinderGeometry(0.5, 0.8, 1, 5);
+  const crowns = new THREE.InstancedMesh(crown, canopyMat, 150);
+  const trunks = new THREE.InstancedMesh(trunk, trunkMat, 150);
+  for (let i = 0; i < 150; i++) {
+    const ang = (i / 150) * Math.PI * 2 + rnd() * 0.3;
+    const rad = 88 + rnd() * 46;
+    const x = Math.cos(ang) * rad * 1.25, z = Math.sin(ang) * rad;
+    const hgt = 16 + rnd() * 16, cr = 5 + rnd() * 5;
+    m.compose(new THREE.Vector3(x, hgt, z), new THREE.Quaternion(), new THREE.Vector3(cr * 1.3, cr * 0.8, cr * 1.3));
+    crowns.setMatrixAt(i, m);
+    m.compose(new THREE.Vector3(x, hgt / 2, z), new THREE.Quaternion(), new THREE.Vector3(1, hgt, 1));
+    trunks.setMatrixAt(i, m);
+  }
+  crowns.instanceMatrix.needsUpdate = true;
+  trunks.instanceMatrix.needsUpdate = true;
+  scene.add(crowns, trunks);
+
+  void mats;
+}
+
+/** How many metres of wall one texture tile covers, per material. A BoxGeometry
+ *  UV-maps 0..1 across every face regardless of how big the face is, so without
+ *  this a 12m altar and a 1m rubble block wear identically-sized blockwork and
+ *  the whole room reads as one repeating pattern rather than as masonry. */
+const TILE: Record<Mat, number> = {
+  floor: 6, wall: 7, glyph: 6.5, frieze: 3.4, step: 5, gold: 1, timber: 2,
+};
+
+const geoCache = new Map<string, THREE.BoxGeometry>();
+
+/** A unit box whose UVs are pre-scaled to the world size it will be stretched
+ *  to, so texel density is constant across the whole ruin. */
+function uvBox(sx: number, sy: number, sz: number, tile: number): THREE.BoxGeometry {
+  const k = `${sx.toFixed(2)}|${sy.toFixed(2)}|${sz.toFixed(2)}|${tile}`;
+  const hit = geoCache.get(k);
+  if (hit) return hit;
+  const geo = new THREE.BoxGeometry(1, 1, 1);
+  const uv = geo.getAttribute("uv") as THREE.BufferAttribute;
+  // BoxGeometry face order: +x, -x, +y, -y, +z, -z — 4 verts each
+  const spans: Array<[number, number]> = [
+    [sz, sy], [sz, sy], [sx, sz], [sx, sz], [sx, sy], [sx, sy],
+  ];
+  for (let f = 0; f < 6; f++) {
+    const [su, sv] = spans[f];
+    for (let v = 0; v < 4; v++) {
+      const i = f * 4 + v;
+      uv.setXY(i, uv.getX(i) * (su / tile), uv.getY(i) * (sv / tile));
+    }
+  }
+  uv.needsUpdate = true;
+  geoCache.set(k, geo);
+  return geo;
 }
 
 /** Returns the static meshes the follow camera pulls back against. */
 export function buildComplex(scene: THREE.Scene, physics: PhysicsWorld): THREE.Mesh[] {
-  const floorTex = loadTiling(TEXTURES.floor, 24);
-  const plateTex = loadTiling(TEXTURES.catwalk, 6);
+  // The generated temple texture set is blocked on credits (#100); until it
+  // lands these are drawn procedurally, with a height channel so the carving is
+  // really lit rather than painted on.
+  // repeat stays 1: the UVs carry the tiling now (see uvBox), and the material
+  // colour stays white so the painted stone is the ONLY thing setting the hue —
+  // tinting on top of it is what turned the first pass olive.
+  const floorT = templeFloor(512, 1);
+  const wallT = templeWall(512, 1);
+  const glyphT = glyphWall(512, 1);
+  const friezeT = skullFrieze(512, 1);
+  const stepT = stepStone(512, 1);
 
-  const mats = {
-    // the generated concrete reads warm; pull it back toward wet grey
-    floor: new THREE.MeshStandardMaterial({ map: floorTex, color: 0x8e94a0, roughness: 0.62, metalness: 0.12 }),
-    catwalk: new THREE.MeshStandardMaterial({ map: plateTex, color: 0xb8bcc4, roughness: 0.7, metalness: 0.45 }),
-    wall: new THREE.MeshStandardMaterial({ map: loadTiling(TEXTURES.wall, 10), color: 0x9aa0a6, roughness: 0.88, metalness: 0.2 }),
-    machine: new THREE.MeshStandardMaterial({ map: loadTiling(TEXTURES.machine, 3), color: 0x9fa4ac, roughness: 0.72, metalness: 0.55 }),
-    ceiling: new THREE.MeshStandardMaterial({ map: loadTiling(TEXTURES.ceiling, 16), color: 0x6e737c, roughness: 0.9, metalness: 0.3 }),
-    pipe: new THREE.MeshStandardMaterial({ color: 0x4a4038, roughness: 0.75, metalness: 0.6 }),
+  const mats: Record<Mat, THREE.Material> = {
+    floor: new THREE.MeshStandardMaterial({ ...floorT, bumpScale: 0.5, roughness: 0.92, metalness: 0.02 }),
+    wall: new THREE.MeshStandardMaterial({ ...wallT, bumpScale: 0.55, roughness: 0.9, metalness: 0.02 }),
+    glyph: new THREE.MeshStandardMaterial({ ...glyphT, bumpScale: 0.75, roughness: 0.88, metalness: 0.02 }),
+    frieze: new THREE.MeshStandardMaterial({ ...friezeT, bumpScale: 0.85, roughness: 0.85, metalness: 0.02 }),
+    step: new THREE.MeshStandardMaterial({ ...stepT, bumpScale: 0.4, roughness: 0.88, metalness: 0.02 }),
+    gold: new THREE.MeshStandardMaterial({ color: 0xd9a441, roughness: 0.24, metalness: 1.0, emissive: 0x39230a, emissiveIntensity: 0.5 }),
+    timber: new THREE.MeshStandardMaterial({ color: 0x7a5f38, roughness: 0.95, metalness: 0.0 }),
   };
 
-  const box = new THREE.BoxGeometry(1, 1, 1);
   const solids: THREE.Mesh[] = [];
   for (const b of layout()) {
-    const mesh = new THREE.Mesh(box, mats[b.mat]);
+    const mesh = new THREE.Mesh(uvBox(b.s[0], b.s[1], b.s[2], TILE[b.mat]), mats[b.mat]);
     mesh.position.set(b.p[0], b.p[1], b.p[2]);
     mesh.scale.set(b.s[0], b.s[1], b.s[2]);
-    mesh.castShadow = b.mat !== "floor" && b.mat !== "ceiling";
+    if (b.yaw) mesh.rotation.y = b.yaw;
+    mesh.castShadow = b.mat !== "floor";
     mesh.receiveShadow = true;
     scene.add(mesh);
+    if (b.ghost) continue;
 
-    const body = physics.createBody({ type: "fixed", position: b.p });
+    const body = physics.createBody({ type: "fixed", position: b.p, rotation: [0, b.yaw ?? 0, 0] });
     cuboidCollider(physics.world, body, [b.s[0] / 2, b.s[1] / 2, b.s[2] / 2]);
     solids.push(mesh);
   }
+
+  dressing(scene, mats);
   return solids;
 }
 
-/** Sodium emergency lighting. The rule this follows: every pool of light has a
- *  FIXTURE you can see making it. A scene lit by invisible point lights reads as
- *  flat no matter how the numbers are tuned, and in a hunt the dark between the
- *  pools is the gameplay — so the fill is deliberately low and the falloff is
- *  short. Fixtures are emissive so the bloom pass turns them into real lamps. */
+/** Fire in the ruin — braziers, kept as `Lamp` so the flicker rig in ambience.ts
+ *  drives them unchanged. The sun does the lighting now; these are for the
+ *  burial chamber and the deep bays the roof still covers. */
 export interface Lamp { light: THREE.PointLight; glass: THREE.MeshStandardMaterial }
 export const LAMP_RIG: Lamp[] = [];
 
-export function lightComplex(scene: THREE.Scene, shadowMapSize: number): THREE.DirectionalLight {
+/** Light it from the sun. The old rig was fifteen sodium lamps in the dark; the
+ *  art target is midday jungle sun through a collapsed roof, so there is ONE key
+ *  with hard shadows, a sky fill that is genuinely blue, a warm bounce off the
+ *  sandstone, and visible shafts where the roof is open. Fire is the exception,
+ *  not the rule. */
+export function lightComplex(
+  scene: THREE.Scene,
+  shadowMapSize: number,
+  renderer: THREE.WebGLRenderer,
+): THREE.DirectionalLight {
   LAMP_RIG.length = 0;
-  // a true fill, not a wash — enough to keep shapes from going to pure black
-  scene.add(new THREE.AmbientLight(0x3d4b63, 1.7));
-  scene.add(new THREE.HemisphereLight(0x6f83a6, 0x2b2014, 1.3));
+  const { w, d, wallH } = HALL;
 
-  // one cold overhead key, mostly for shadow shape rather than illumination
-  const key = new THREE.DirectionalLight(0xb4c6de, 1.25);
-  key.position.set(30, 44, 20);
-  key.castShadow = shadowMapSize > 0;
-  key.shadow.mapSize.setScalar(shadowMapSize || 1024);
-  key.shadow.camera.near = 1;
-  key.shadow.camera.far = 180;
-  key.shadow.bias = -0.0012;
-  const s2 = 80;
-  key.shadow.camera.left = -s2;
-  key.shadow.camera.right = s2;
-  key.shadow.camera.top = s2;
-  key.shadow.camera.bottom = -s2;
-  scene.add(key);
+  const sky = buildSky(renderer);
+  scene.background = sky.background;
+  scene.environment = sky.environment;      // this is what makes the gold read as gold
+  // …but at full strength the canopy's green washes every downward-facing stone
+  // face olive. Dial it to a specular hint rather than a second light source.
+  scene.environmentIntensity = 0.55;
 
-  // the sodium lamps — geometry first, light second
-  const housing = new THREE.MeshStandardMaterial({ color: 0x14161a, roughness: 0.9, metalness: 0.4 });
-  const glass = new THREE.MeshStandardMaterial({
-    color: 0xffb060, emissive: 0xff8a2c, emissiveIntensity: 0.8, roughness: 0.35,
+  // sky above, hot sandstone bouncing below — the fill has a CAUSE, both ways.
+  // Kept deliberately low against the key: the reference's punch is the SPREAD
+  // between a hard sunlit face and a shaded one, and a generous fill erases it.
+  scene.add(new THREE.HemisphereLight(0xa6cdf5, 0xb08b56, 1.05));
+  scene.add(new THREE.AmbientLight(0xb9c2d0, 0.16));
+
+  const sun = new THREE.DirectionalLight(0xfff2d4, 4.6);
+  sun.position.copy(SUN_DIR).multiplyScalar(120);
+  sun.castShadow = shadowMapSize > 0;
+  sun.shadow.mapSize.setScalar(shadowMapSize || 1024);
+  sun.shadow.camera.near = 1;
+  sun.shadow.camera.far = 320;
+  sun.shadow.bias = -0.0009;
+  const s2 = 90;
+  sun.shadow.camera.left = -s2;
+  sun.shadow.camera.right = s2;
+  sun.shadow.camera.top = s2;
+  sun.shadow.camera.bottom = -s2;
+  scene.add(sun);
+
+  // The shafts. One per collapsed roof cell, aimed down the sun's own axis, so
+  // the pools on the floor sit exactly where the holes are.
+  const pw = w / ROOF_GRID.cols, pd = d / ROOF_GRID.rows;
+  const shaftMat = new THREE.MeshBasicMaterial({
+    color: 0xffe6b4, transparent: true, opacity: 0.05,
+    blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
   });
-  const shade = new THREE.ConeGeometry(1.25, 1.1, 12, 1, true);
-  const bulb = new THREE.SphereGeometry(0.3, 10, 8);
-
-  // A grid, not a scatter. Ten lamps across 140x90m left most of the hall in
-  // black void with nothing to read; the space needs enough sources that the
-  // architecture is legible, and the DARK still has to live between them.
-  const LAMPS: Array<[number, number]> = [];
-  for (const x of [-58, -29, 0, 29, 58]) {
-    for (const z of [-32, 0, 32]) LAMPS.push([x, z]);
+  const len = wallH / SUN_DIR.y + 6;
+  const shaftGeo = new THREE.CylinderGeometry(Math.min(pw, pd) * 0.34, Math.min(pw, pd) * 0.52, len, 14, 1, true);
+  const align = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), SUN_DIR);
+  for (const [x, z] of SHAFT_POINTS) {
+    const shaft = new THREE.Mesh(shaftGeo, shaftMat);
+    shaft.quaternion.copy(align);
+    shaft.position.set(x, wallH, z).addScaledVector(SUN_DIR, -len / 2 + 2);
+    shaft.renderOrder = 2;
+    scene.add(shaft);
   }
-  for (const [x, z] of LAMPS) {
+
+  // Braziers: the fixture makes the pool, same rule as before — a light with no
+  // visible source reads as flat no matter how it is tuned.
+  const stone = new THREE.MeshStandardMaterial({ color: 0x8f7c5c, roughness: 0.95 });
+  const coals = new THREE.MeshStandardMaterial({
+    color: 0xff8c33, emissive: 0xff6a12, emissiveIntensity: 2.4, roughness: 0.6,
+  });
+  const bowl = new THREE.CylinderGeometry(0.85, 0.45, 0.7, 10);
+  const plinth = new THREE.CylinderGeometry(0.42, 0.62, 2.2, 8);
+  const ember = new THREE.SphereGeometry(0.62, 10, 6);
+
+  const SPOTS: Array<[number, number]> = [
+    [-52, -36], [-42, -30],            // the burial chamber
+    [-64, 34], [64, 34], [-64, -6], [10, -38], [40, 30],
+  ];
+  for (const [x, z] of SPOTS) {
     const rig = new THREE.Group();
-    rig.position.set(x, 9.4, z);
-
-    const cone = new THREE.Mesh(shade, housing);
-    cone.rotation.x = Math.PI;      // open end down
-    rig.add(cone);
-    const glow = new THREE.Mesh(bulb, glass);
-    glow.position.y = -0.35;
-    rig.add(glow);
-
-    // a short stem up to the ceiling, so the lamp hangs from something
-    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 3.4, 6), housing);
-    stem.position.y = 2.1;
-    rig.add(stem);
+    rig.position.set(x, 0, z);
+    const col = new THREE.Mesh(plinth, stone);
+    col.position.y = 1.1; col.castShadow = true;
+    const dish = new THREE.Mesh(bowl, stone);
+    dish.position.y = 2.5; dish.castShadow = true;
+    const glow = new THREE.Mesh(ember, coals.clone());
+    glow.position.y = 2.65; glow.scale.y = 0.55;
+    rig.add(col, dish, glow);
     scene.add(rig);
 
-    // Short range and quadratic falloff: the pool ends, and between pools it is
-    // genuinely dark. That darkness is where the hunt happens.
-    const lamp = new THREE.PointLight(0xffa862, 260, 46, 1.7);
-    lamp.position.set(x, 8.6, z);
-    scene.add(lamp);
-    // each fixture keeps its own glass material so one can fail alone
-    const ownGlass = glass.clone();
-    glow.material = ownGlass;
-    LAMP_RIG.push({ light: lamp, glass: ownGlass });
+    const light = new THREE.PointLight(0xffa04a, 90, 26, 1.8);
+    light.position.set(x, 3.1, z);
+    scene.add(light);
+    LAMP_RIG.push({ light, glass: glow.material as THREE.MeshStandardMaterial });
   }
 
-  scene.fog = new THREE.FogExp2(0x141a24, 0.0048);
-  return key;
+  // warm heat haze, not a dark room: distance goes pale and golden
+  scene.fog = new THREE.FogExp2(0xc9c2a2, 0.0042);
+  void d;
+  return sun;
 }
