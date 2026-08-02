@@ -22,6 +22,7 @@ import { loadPlayerCharacter } from "./controllers/character/player-character.ts
 import { capsuleFromModel } from "./controllers/character/vrm/capsule-fit.ts";
 import { buildComplex, lightComplex, HALL, LAMP_RIG } from "./world/complex.ts";
 import { buildAmbience, updateAmbience } from "./world/ambience.ts";
+import { buildHazards, updateHazards } from "./world/hazards.ts";
 import { Stalker } from "./hunter/stalker.ts";
 import { Arsenal, WEAPONS } from "./combat/arsenal.ts";
 import { Crates } from "./combat/crates.ts";
@@ -88,7 +89,8 @@ async function boot(): Promise<void> {
   // ── physics + the floor you walk on ──
   const physics = await PhysicsWorld.create();
   const walls = buildComplex(scene, physics);
-  buildAmbience(scene, LAMP_RIG);   // steam, sparks, failing lamps, fans (#95)
+  buildAmbience(scene, LAMP_RIG);   // dust, drips, braziers
+  buildHazards(scene);              // swinging logs and scarab swarms (#95)
 
   // ── the player's body: this game's character once it lands, the visiting
   // player's avatar until then. One shape either way — no rewrite later. ──
@@ -533,6 +535,7 @@ async function boot(): Promise<void> {
   // Footsteps. Yours are 2D and quiet; everyone else's are positional and are
   // meant to be heard through a wall before they are seen around it.
   const fall = new FallWatch();
+  let hazardDebt = 0;
   const myFeet = new Footsteps(asStalker);
   const foeFeet = new Footsteps(!asStalker);
   const remoteFeet = new Map<string, Footsteps>();
@@ -624,6 +627,18 @@ async function boot(): Promise<void> {
           grab: !!mv.jump,
           drop: !!mv.crouch,
         }, followCam.azimuthAngle);
+      }
+
+      // The ruin itself, which does not hunt you but does punish carelessness.
+      // Damage accumulates in fractions (the swarms bleed) so it is banked and
+      // spent a whole hit at a time rather than rounding away to nothing.
+      if (!asStalker) {
+        hazardDebt += updateHazards(delta, now / 1000, here, scene, (dir) => {
+          const v = character.body.linvel();
+          character.body.setLinvel({ x: dir.x * 9, y: 5.5, z: dir.z * 9 }, true);
+          void v;
+        });
+        if (hazardDebt >= 1) { const n = Math.floor(hazardDebt); hazardDebt -= n; hurt(n); }
       }
 
       // Landing. This is where the 28 m walls get their stakes: climbing only
